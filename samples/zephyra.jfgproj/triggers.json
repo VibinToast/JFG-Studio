@@ -89,6 +89,19 @@
     {
      "do": "music",
      "track": "zephyra_landing"
+    },
+    {
+     "do": "spawn",
+     "fields": {
+      "amount": 2
+     },
+     "near_player": true,
+     "pos": [
+      0,
+      30,
+      -80
+     ],
+     "type": "stock:objtype/0xa9"
     }
    ],
    "when": {

@@ -18,13 +18,15 @@ jfg.flag(n) / jfg.set_flag(n, on) the game's flags
 jfg.unlock_door(id)               as a squadron's death does
 jfg.door_locked(id)               true while that door is locked, nil if there is none
 jfg.warp(level, start_point)      change level
+jfg.spawn(id, x, y, z [, bytes])  an object as if in the level's list (bytes from entry +0x0A)
 jfg.log(...)                      a line in the port's jfg_mods.log"""
 
 ACTIONS = {"message": {"do": "message", "text": "Hello", "seconds": 4}, "music": {"do": "music", "track": ""},
            "music_stop": {"do": "music_stop"},
            "fog": {"do": "fog", "rgb": [120, 120, 160], "near": 990, "far": 1022, "ticks": 60},
            "flag": {"do": "flag", "flag": 0, "on": True}, "unlock_door": {"do": "unlock_door", "door": 1},
-           "warp": {"do": "warp", "level": "", "start": 0}}
+           "warp": {"do": "warp", "level": "", "start": 0},
+           "spawn": {"do": "spawn", "type": "", "pos": [0, 20, -100], "near_player": True}}
 
 
 def _app():
@@ -174,6 +176,20 @@ def _action_fields(a: dict) -> bool:
     elif kind == "unlock_door":
         imgui.set_next_item_width(hello_imgui.em_size(6))
         c, a["door"] = imgui.input_int("door id", int(a.get("door", 1)))
+        changed |= c
+    elif kind == "spawn":
+        imgui.set_next_item_width(hello_imgui.em_size(12))
+        c, a["type"] = imgui.input_text("type##spawn", a.get("type", ""))
+        changed |= c
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("stock:objtype/<id>: the Inspector shows a selected object's type. Its fields can be set "
+                              "in triggers.json (\"fields\")")
+        imgui.same_line()
+        imgui.set_next_item_width(hello_imgui.em_size(12))
+        c, a["pos"] = imgui.input_float3("##spawnpos", [float(v) for v in a.get("pos", [0, 0, 0])], "%.0f")
+        changed |= c
+        imgui.same_line()
+        c, a["near_player"] = imgui.checkbox("from hero", bool(a.get("near_player", False)))
         changed |= c
     elif kind == "warp":
         from jfgstudio.gui import level_tools

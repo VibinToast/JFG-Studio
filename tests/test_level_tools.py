@@ -174,3 +174,15 @@ class Triggers(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertIn("music/nope.ogg", problems[0])
             self.assertIn("scripts/_triggers.lua", scr.pack_scripts(p))
+
+    def test_spawn(self):
+        from jfgstudio import scripts as scr
+        oid, tail = scr.spawn_entry({"do": "spawn", "type": "stock:objtype/0xA9", "fields": {"amount": 2}})
+        self.assertEqual(oid, 0xA9)
+        self.assertEqual(tail[0], 2)
+        self.assertEqual(len(tail) % 2, 0)
+        lua = scr._action({"do": "spawn", "type": "stock:objtype/0xA9", "pos": [0, 20, -60], "near_player": True},
+                          None)
+        self.assertIn("jfg.spawn(169, px + 0.0, py + 20.0, pz + -60.0, {", lua)
+        with self.assertRaises(ValueError):
+            scr.spawn_entry({"do": "spawn", "type": "stock:objtype/5"})

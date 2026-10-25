@@ -15,7 +15,12 @@ A trigger:
               {"do": "music", "track": "<music/ name>"}, {"do": "music_stop"},
               {"do": "fog", "rgb": [r, g, b], "near": 990, "far": 1022, "ticks": 60},
               {"do": "flag", "flag": n, "on": true}, {"do": "unlock_door", "door": id},
-              {"do": "warp", "level": "pack:level/<name>", "start": 0}]}
+              {"do": "warp", "level": "pack:level/<name>", "start": 0},
+              {"do": "spawn", "type": "stock:objtype/<id>", "pos": [x, y, z], "near_player": false,
+               "fields": {<the type's schema fields>}}]}
+A spawn makes the object as if it were in the level's list (pickups, crates, props). With "near_player", "pos" is an
+offset from the hero. Spawned objects are not saved: don't spawn types with saved flags (squadrons, crates that
+remember being opened); enemies belong in squads.
 """
 
 import json
@@ -24,7 +29,8 @@ from pathlib import Path
 from jfgstudio import refs
 
 WHEN = ("level start", "enter", "flag", "door opens")
-DO = ("message", "music", "music_stop", "fog", "flag", "unlock_door", "warp")
+DO = ("message", "music", "music_stop", "fog", "flag", "unlock_door", "warp", "spawn")
+NO_SPAWN = {5, 0x60, 0x61, 0x69}  # region and patrol data: the game refuses them
 
 
 def triggers_path(project) -> Path:
@@ -76,7 +82,35 @@ def _action(a: dict, project) -> str:
         return f"jfg.unlock_door({int(a['door'])})"
     if kind == "warp":
         return f"jfg.warp({_level_expr(a['level'], project)}, {int(a.get('start', 0))})"
+    if kind == "spawn":
+        return _spawn(a)
     raise ValueError(f"unknown action {kind!r}")
+
+
+def spawn_entry(a: dict) -> tuple[int, bytes]:
+    """A spawn action's object id and its entry's parameter bytes (from 0x0A)."""
+    from jfgstudio import objects as obj
+    r = refs.parse(a.get("type", ""), "objtype")
+    if not r.is_stock:
+        raise ValueError("spawn: only stock object types can be spawned (a kind's id is given at load)")
+    oid = r.number()
+    if oid in NO_SPAWN:
+        raise ValueError(f"spawn: object {oid} is region or patrol data, the game refuses it")
+    schema = obj.schema_for_id(oid, obj.load_schemas())
+    size = schema.min_size if schema else 0x10
+    size += size & 1
+    fields = {**(schema.defaults() if schema else {}), **a.get("fields", {})}
+    return oid, obj.encode_entry(oid, (0, 0, 0), size, schema, fields)[obj.PARAMS_OFFSET:]
+
+
+def _spawn(a: dict) -> str:
+    oid, tail = spawn_entry(a)
+    x, y, z = (float(v) for v in a.get("pos", (0, 0, 0)))
+    params = "{" + ", ".join(str(b) for b in tail) + "}"
+    if a.get("near_player"):
+        return (f"do local px, py, pz = jfg.player(); if px then jfg.spawn({oid}, px + {x}, py + {y}, pz + {z}, "
+                f"{params}) end end")
+    return f"jfg.spawn({oid}, {x}, {y}, {z}, {params})"
 
 
 def compile_triggers(triggers: list[dict], project=None) -> str:
@@ -157,4 +191,9 @@ def check(project) -> list[str]:
                 out.append(f"{where}: unknown action {a.get('do')!r}")
             elif a["do"] == "music" and a.get("track") not in tracks:
                 out.append(f"{where}: music/{a.get('track')}.ogg does not exist")
+            elif a["do"] == "spawn":
+                try:
+                    spawn_entry(a)
+                except (ValueError, refs.RefError) as e:
+                    out.append(f"{where}: {e}")
     return out
