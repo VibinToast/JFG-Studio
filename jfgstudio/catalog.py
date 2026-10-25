@@ -141,6 +141,20 @@ class Catalog:
                 doc = json.load(f)
         return {int(k, 16): v for k, v in doc["types"].items()}
 
+    def definition_models(self, d: int) -> list[int]:
+        """The model ids of object definition `d` (by definition index, as a level's sky at header +0x58 names it)."""
+        table, count = self.jf.read_table(self.assets.section(OBJDEF_TABLE))
+        if not 0 <= d < count:
+            return []
+        raw = self.assets.section(OBJDEF_DATA)[table[d]:table[d + 1]]
+        if len(raw) < 0x34 or raw[0x1E] != 0:
+            return []
+        n = raw[0x1F]
+        at = struct.unpack_from(">i", raw, 0x30)[0]
+        if not (0 <= at and at + 4 * n <= len(raw)):
+            return []
+        return [struct.unpack_from(">i", raw, at + 4 * i)[0] & 0x7FFF for i in range(n)]
+
     def levels(self) -> list[dict]:
         """levels.json (built with objtypes.json)."""
         self.objtypes()

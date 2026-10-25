@@ -293,7 +293,10 @@ class Viewport:
         self.fog = None  # (rgb 0-1, near, far) in world units, or None
         self.show_fog = True
         self.show_hidden = True
+        self.show_sky = True
         self.error = ""
+        self.sky = None  # (dome model .glb, mode): mode 0 follows the camera, 1 stays at the origin (MSR "Sky")
+        self.clear = None  # the level's clear colour (rgb 0-1), shown where there is no sky
         self.models = {}  # .glb path -> TrackMesh (or None when it could not be read)
         self.model_parts = {}  # .glb path -> uploaded parts
 
@@ -352,6 +355,29 @@ class Viewport:
             out.append((vao, len(data), tex, kind))
         return out
 
+    def _draw_sky(self, mvp, camera) -> None:
+        """The level's sky dome, behind everything and unfogged: around the camera (mode 0) or at the origin."""
+        path, mode = self.sky
+        if path not in self.model_parts:
+            mesh = self.model(path)
+            self.model_parts[path] = self._upload(mesh) if mesh is not None else []
+        prog = self.track_prog
+        prog["mvp"].write(mvp.T.tobytes())
+        m = np.identity(4, "f4")
+        if mode == 0:
+            m[:3, 3] = camera.pos
+        prog["model"].write(m.T.tobytes())
+        prog["fog_on"].value = False
+        prog["tint"].value = (0.0, 0.0, 0.0, 0.0)
+        prog["alpha"].value = 1.0
+        self.ctx.disable(moderngl.DEPTH_TEST)
+        self.ctx.depth_mask = False
+        for vao, count, tex, _ in self.model_parts[path]:
+            prog["textured"].value = tex is not None
+            (tex or self.white).use(0)
+            vao.render(moderngl.TRIANGLES, vertices=count)
+        self.ctx.depth_mask = True
+
     def render(self, width: int, height: int, camera: Camera, lines: np.ndarray, instances=()) -> int | None:
         """Draws into the off-screen texture; returns its GL id, or None when there is nothing to show.
         `instances`: (model .glb path, 4x4 model matrix, tint rgba) for every object drawn with its model."""
@@ -371,9 +397,11 @@ class Viewport:
             self.fbo = self.ctx.framebuffer([self.colour], self.depth)
             self.size = (width, height)
         self.fbo.use()
-        sky = self.fog[0] if self.fog else (0.02, 0.04, 0.11)
-        self.fbo.clear(*sky, 1.0, depth=1.0)
+        back = self.fog[0] if self.fog and self.show_fog else self.clear or (0.02, 0.04, 0.11)
+        self.fbo.clear(*back, 1.0, depth=1.0)
         mvp = (camera.projection(width / height) @ camera.view()).astype("f4")
+        if self.sky:
+            self._draw_sky(mvp, camera)
         self.ctx.enable(moderngl.DEPTH_TEST)
         prog = self.track_prog
         prog["mvp"].write(mvp.T.tobytes())

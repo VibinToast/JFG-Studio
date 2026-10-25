@@ -208,6 +208,22 @@ class State:
             self.model_paths[oid] = path
         return self.model_paths[oid]
 
+    def sky_for(self, level: dict):
+        """(dome .glb, mode) for a level's sky (header +0x58 is a definition index; +0x69 the mode), or None."""
+        d = level.get("sky", -1)
+        mode = level["header"].get("loadTexture", 0)
+        if d is None or d < 0 or mode not in (0, 1) or self.catalog() is None:
+            return None
+        key = ("sky", d)
+        if key not in self.model_paths:
+            ids = self.cat.definition_models(d)
+            try:
+                self.model_paths[key] = str(self.cat.model_glb(ids[0])) if ids else None
+            except Exception:  # noqa: BLE001 (a dome jfgformats can't export: no sky in the preview)
+                self.model_paths[key] = None
+        path = self.model_paths[key]
+        return (path, mode) if path else None
+
     def type_name(self, oid: int) -> str:
         t = self.objtypes.get(oid) if self.catalog() else None
         return t["name"] if t else f"0x{oid:X}"
@@ -384,12 +400,17 @@ def scene() -> None:
         S.view.load_track(None)
         S.view.error = f"stock track: {e}"
     S.view.fog = vp.decode_fog(level.level["header"])
+    hd = level.level["header"]
+    S.view.clear = tuple(hd.get(k, 0) / 255 for k in ("clearR", "clearG", "clearB"))
+    S.view.sky = S.sky_for(level.level) if S.view.show_sky else None
     if S.framed_level != S.level and S.view.mesh is not None:
         S.camera.look_from_above(S.view.mesh.bounds)
         S.framed_level = S.level
     _, S.view.show_fog = imgui.checkbox("Fog", S.view.show_fog)
     imgui.same_line()
     _, S.view.show_hidden = imgui.checkbox("Invisible colliders", S.view.show_hidden)
+    imgui.same_line()
+    _, S.view.show_sky = imgui.checkbox("Sky", S.view.show_sky)
     imgui.same_line()
     imgui.text_disabled(f"   {level.level['name']}  ({level.level['track']})   speed {S.camera.speed:.0f}")
     if S.view.error:
