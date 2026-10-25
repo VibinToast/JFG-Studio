@@ -70,6 +70,9 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   - So, to keep the player out (a locked gate, the edge of the level): seal it completely, as even a 20 gap beside
     a door lets the hero through; walls must be well over 250 high and gaps well over 300 across, or end in a kill
     floor. Slopes over 45 degrees (55 tested) can't be walked up: use them for walls the player shouldn't climb.
+  - **No ledge grabs yet**: the heroes can't grab the edges of new geometry (the track importer doesn't mark ledges
+    yet; the decomp is finding the rule). Don't make a route depend on grabbing a ledge: use ramps, steps or blocks
+    the hero can get onto.
 - **Facing**: `place`, `update_object` and `connect` take degrees (0 = towards -z, the way a start point at yaw 0
   faces). Types store it in their own steps: `describe_type` gives each angle field's `perTurn` (64 for angle10,
   256 for angle8, 65536 for angle16).
