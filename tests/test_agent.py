@@ -248,16 +248,10 @@ class Reimport(AgentTest):
         with self.assertRaises(agent.AgentError):
             self.s.reimport_geometry("home", str(Path(self.tmp.name) / "missing.glb"))
 
-    def test_stock_track_levels_are_refused(self):
+    def test_stock_tracks_are_not_reimported(self):
         self.s.set_level("home", {"track": "stock:track/3"})
-        with self.assertRaises(agent.AgentError):
+        with self.assertRaises(agent.AgentError):  # the game's own track: not the pack's file to replace
             self.s.reimport_geometry("home", "x.glb")
-        for call in (lambda: self.s.check_placement("home"), lambda: self.s.surface_at("home", [[0, 0]]),
-                     lambda: self.s.place("home", "health", [0, 0])):  # the export's heights aren't the game's
-            with self.assertRaises(agent.AgentError):
-                call()
-        self.assertEqual(self.s.place("home", "health", [0, 15, 0], on_floor=False)[0]["pos"], [0, 15, 0])
-        self.assertNotIn("placement", {p["rule"] for p in self.s.validate()["problems"]})
 
 
 class Server(AgentTest):

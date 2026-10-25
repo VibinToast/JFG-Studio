@@ -49,7 +49,7 @@ SQUADS = {  # baddy type -> (stock squadron entry, stock member entry); squadron
     "BigShieldAnt": (0x9C, (409, 60), (413, 22)),
     "Cyborg": (0x143, (431, 1), (431, 146)),
 }
-FOREST_FIRST, FOREST_FIRST_TRACK = 21, 18
+FOREST_FIRST = 21
 SKY = {"landing": 180, "caverns": 194, "arena": 205, "glacia": 180, "nimbus": 205}
 YAW_NORTH, YAW_SOUTH = 32, 0  # start point facing (angle10: 64 = a full turn): the hero faces -z at yaw 0
 
@@ -549,7 +549,8 @@ def main() -> int:
     e.objects["objects"] = pl.made
 
     # Goldwood's first level: the portal, just ahead of where a new game puts Juno
-    f = proj.edit_stock_level(p, "forest_portal", FOREST_FIRST, "Forest First", FOREST_FIRST_TRACK)
+    f = proj.edit_stock_level(p, "forest_portal", FOREST_FIRST, "Forest First",
+                             cat.levels()[FOREST_FIRST]["track"])  # its track from the header (+0x54)
     pl = w.placer(f)
     import struct
     start0 = next(e for e in cat.objlist(cat.levels()[FOREST_FIRST]["objectList1"]) if e[0] == START

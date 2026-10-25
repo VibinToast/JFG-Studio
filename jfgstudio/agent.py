@@ -261,24 +261,13 @@ class Session:
         self._meshes[str(path)] = (stamp, mesh)
         return mesh
 
-    def _ground(self, level: str):
-        """The mesh to take heights from: the level's own geometry. The game's tracks as the catalog exports them don't
-        sit at the game's heights (checked 2026-10-25: most of a stock level's own objects had no floor under them in
-        the export, the rest were 288 units over it), so floors there would be wrong."""
-        lv = self._level(level)
-        if lv.level.get("track", "").startswith("stock:"):
-            raise AgentError(f"{level} is on one of the game's own tracks, whose exported heights don't match the "
-                             "game's yet: give positions as [x, y, z] with on_floor false (y from a stock object "
-                             "nearby), and placement can't be checked there")
-        return self._mesh(level)
-
     def _floor(self, mesh, x: float, z: float, below: float | None = None) -> float | None:
         return mesh.floor_height(x, z, below)
 
     def surface_at(self, level: str, points: list, below: float | None = None) -> list[dict]:
         """For each [x, z]: the floor's height and kind, and water or a kill floor over or instead of it."""
         from jfgstudio.gui.viewport import floor_of
-        mesh = self._ground(level)
+        mesh = self._mesh(level)
         kinds = {k: mesh.kind_triangles(k) for k in SURFACES}
         out = []
         for pt in points:
@@ -307,7 +296,7 @@ class Session:
     def find_flat(self, level: str, x: float, z: float, radius: float = 60, search: float = 600,
                   step: float = 50, tolerance: float = 8, count: int = 5) -> list[dict]:
         """Spots near (x, z) whose floor is level within `tolerance` over a disc of `radius`, dry, nearest first."""
-        mesh = self._ground(level)
+        mesh = self._mesh(level)
         from jfgstudio.gui.viewport import floor_of
         water, kill = mesh.kind_triangles("water"), mesh.kind_triangles("kill")
         ring = [(0.0, 0.0)] + [(radius * math.cos(a), radius * math.sin(a))
@@ -332,7 +321,7 @@ class Session:
 
     def raycast(self, level: str, origin, direction) -> dict:
         from jfgstudio.gui.viewport import raycast
-        mesh = self._ground(level)
+        mesh = self._mesh(level)
         d = [float(v) for v in direction]
         length = math.sqrt(sum(v * v for v in d))
         if length == 0:
@@ -413,7 +402,7 @@ class Session:
     def check_placement(self, level: str) -> list[dict]:
         """The level's objects that should stand on the floor but are buried, floating, sunk or over a pit."""
         lv = self._level(level)
-        return placement.check(self._ground(level), lv.objects["objects"], self.schemas, self._behaviours())
+        return placement.check(self._mesh(level), lv.objects["objects"], self.schemas, self._behaviours())
 
     def settle_objects(self, level: str, uids: list[str] | None = None) -> dict:
         """Puts objects back on the floor where check_placement found one for them (all of its findings, or `uids`),
@@ -569,7 +558,7 @@ class Session:
         if not on_floor:
             return [round(x), round(float(pos[1]) + lift), round(z)]
         below = float(pos[1]) if len(pos) == 3 else None
-        y = self._floor(self._ground(level.name), x, z, below)
+        y = self._floor(self._mesh(level.name), x, z, below)
         if y is None:
             where = f" at or below y {below:g}" if below is not None else ""
             raise AgentError(f"no floor under ({x:g}, {z:g}){where}: check surface_at, or give on_floor false")

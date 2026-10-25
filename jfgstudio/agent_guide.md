@@ -48,9 +48,6 @@ before modelling.
   deck with no ramp onto it is walked under, not onto.
 - Objects that walk (enemies, start points) stand a few units above the floor (`place` does this): a spawn even a
   fraction below a sloped floor falls through it.
-- Levels that edit one of the game's own levels are on the game's own track: its exported heights don't match the
-  game's yet, so the floor tools refuse there. Give such positions as [x, y, z] with `on_floor` false, taking y from
-  an object of that level near the spot.
 
 ## Objects
 
