@@ -1,0 +1,19 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "JFG-Studio kinds/<name>.json: an object type made from a stock one (a reskin)",
+ "type": "object",
+ "required": ["format", "name", "base"],
+ "additionalProperties": false,
+ "properties": {
+  "format": {"const": 1},
+  "name": {"type": "string", "minLength": 1, "description": "the name the editor shows"},
+  "base": {"type": "string", "pattern": "^stock:objtype/", "description": "the stock object type it is made from: its definition, model, animations and behaviour"},
+  "scale": {"type": "number", "exclusiveMinimum": 0, "maximum": 8, "description": "size against the base (1 = the same)"},
+  "textures": {
+   "type": "object",
+   "description": "the base model's texture slots this kind replaces: slot number -> a PNG in kinds/<name>/ (the same size as the slot)",
+   "patternProperties": {"^[0-9]+$": {"type": "string"}},
+   "additionalProperties": false
+  }
+ }
+}

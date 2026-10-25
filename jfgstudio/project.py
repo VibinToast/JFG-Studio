@@ -5,6 +5,8 @@
     levels/<name>/level.json        header fields by name, track, sky, music
     levels/<name>/objects.json      placed objects
     geometry/<name>.glb             tracks from Blender (pack:track/<name>)
+    music/<name>.ogg                music (pack:music/<name>)
+    kinds/<name>.json, kinds/<name>/  object types made from stock ones, with their textures (pack:kind/<name>)
 
 Files are saved deterministically (sorted keys, one-space indent, LF, a final newline), so a load followed by a save
 gives the same bytes and projects diff cleanly in git.
@@ -33,7 +35,7 @@ def _schema(name: str) -> dict:
                       .read_text(encoding="utf-8"))
 
 
-_SCHEMAS = {name: _schema(name) for name in ("project", "level", "objects", "planet")}
+_SCHEMAS = {name: _schema(name) for name in ("project", "level", "objects", "planet", "kind")}
 
 
 def dumps(doc: dict) -> str:
@@ -71,6 +73,7 @@ class Project:
     meta: dict
     levels: dict[str, Level] = field(default_factory=dict)
     planets: dict[str, dict] = field(default_factory=dict)
+    kinds: dict[str, dict] = field(default_factory=dict)
 
     @property
     def id(self) -> str:
@@ -78,6 +81,9 @@ class Project:
 
     def geometry_path(self, name: str) -> Path:
         return self.path / "geometry" / f"{name}.glb"
+
+    def kind_texture(self, name: str, slot: int | str) -> Path:
+        return self.path / "kinds" / name / f"{int(slot)}.png"
 
     def music_path(self, name: str) -> Path:
         """music/<name>.ogg: a pack's own music (OGG Vorbis), streamed by the port in place of the game's tune."""
@@ -90,6 +96,8 @@ class Project:
             write_json(self.path / "levels" / level.name / "objects.json", level.objects)
         for name, planet in self.planets.items():
             write_json(self.path / "planets" / f"{name}.json", planet)
+        for name, kind in self.kinds.items():
+            write_json(self.path / "kinds" / f"{name}.json", kind)
 
 
 def _read(path: Path, schema: str, problems: list[str]) -> dict | None:
@@ -135,9 +143,19 @@ def load(path: Path | str) -> Project:
             planet = _read(f, "planet", problems)
             if planet is not None:
                 planets[f.stem] = planet
+    kinds = {}
+    kinds_dir = path / "kinds"
+    if kinds_dir.is_dir():
+        for f in sorted(kinds_dir.glob("*.json")):
+            if not NAME_RE.match(f.stem):
+                problems.append(f"{f}: kind file names use lower case letters, digits, _ and -")
+                continue
+            kind = _read(f, "kind", problems)
+            if kind is not None:
+                kinds[f.stem] = kind
     if problems:
         raise ProjectError(problems)
-    return Project(path, meta, levels, planets)
+    return Project(path, meta, levels, planets, kinds)
 
 
 def create(path: Path | str, mod_id: str, name: str, author: str = "") -> Project:
@@ -153,7 +171,7 @@ def create(path: Path | str, mod_id: str, name: str, author: str = "") -> Projec
     if problems:
         raise ProjectError(problems)
     project = Project(path, meta)
-    for folder in ("levels", "planets", "geometry", "music", "textures", "text", "scripts", "prefabs"):
+    for folder in ("levels", "planets", "geometry", "music", "kinds", "textures", "text", "scripts", "prefabs"):
         (path / folder).mkdir(parents=True, exist_ok=True)
     project.save()
     return project

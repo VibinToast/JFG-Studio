@@ -184,19 +184,25 @@ class World:
         o["target"] = target
         return o
 
-    def squad(self, pl, mesh, kind, centre, members, corners, door_id=0, spread=150):
+    def squad(self, pl, mesh, kind, centre, members, corners, door_id=0, spread=150, reskin=None):
+        """A squadron of stock members (or, with `reskin` "pack:kind/<name>", of the pack's kind made from them)."""
         baddy, squad_ex, member_ex = SQUADS[kind]
         n = pl.free("squadron", "squadronId")
         region = pl.polygon([self.drop(mesh, x, z) for x, z in corners])
         cx, cz = centre
-        pl.single(0x4F, self.drop(mesh, cx, cz), squad_ex, name=f"{kind} squad",
-                  fields={"squadronId": n, "doorId": door_id, "region": region, "count": members,
-                          "baddyType": baddy})
+        label = reskin.rsplit("/", 1)[1].replace("_", " ").title() if reskin else kind
+        squadron = pl.single(0x4F, self.drop(mesh, cx, cz), squad_ex, name=f"{label} squad",
+                             fields={"squadronId": n, "doorId": door_id, "region": region, "count": members,
+                                     "baddyType": baddy})
+        if reskin:
+            squadron["kindFields"] = {"baddyType": reskin}
         for k in range(members):
             a = 2 * math.pi * k / members
             m = pl.single(baddy, self.drop(mesh, cx + spread * math.sin(a), cz + spread * math.cos(a)), member_ex,
-                          name=kind, fields={"squadron": n})
+                          name=label, fields={"squadron": n})
             m["schema"] = "squadmember"
+            if reskin:
+                m["type"] = reskin
         return n
 
     def door(self, pl, mesh, x, z, name, fields):
@@ -217,6 +223,31 @@ class World:
     def pickup(self, pl, mesh, oid, x, z, below=None, **fields):
         name = {HEALTH: "health", AMMO: "ammo", KEY_YELLOW: "yellow key"}.get(oid, "pickup")
         return pl.single(oid, self.drop(mesh, x, z, below), name=name, fields=fields or None)
+
+
+def fire_ant(p, cat) -> None:
+    """kinds/fire_ant: the BlueAnt reskinned with fiery textures drawn here, one per texture slot of its model, at the
+    slot's own size (the textures are this script's; the model, animations and behaviour stay the player's own)."""
+    from jfgformats import models, png
+    base = cat.objtypes()[0x78]
+    model = models.ModelData(cat.assets).model(base["assets"][0])
+    textures = {}
+    for slot, (w, h, _) in enumerate(model.textures):
+        px = bytearray()
+        rng = __import__("random").Random(100 + slot)
+        for y in range(h):
+            for x in range(w):
+                heat = (math.sin(x * 0.9 + slot) + math.sin(y * 0.7 - slot * 2) + rng.random() * 1.5) / 3.5
+                r = 200 + int(55 * heat)
+                g = 40 + int(150 * max(0.0, heat))
+                b = 10 + int(30 * max(0.0, heat - 0.5))
+                px += bytes((max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)), 255))
+        path = p.kind_texture("fire_ant", slot)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(png.write_png("RGBA", w, h, bytes(px)))
+        textures[str(slot)] = path.name
+    p.kinds["fire_ant"] = {"format": 1, "name": "Fire Ant", "base": "stock:objtype/0x78", "scale": 1.0,
+                           "textures": textures}
 
 
 def level_header(level, fog, clear, extra=None):
@@ -253,6 +284,7 @@ def main() -> int:
     for name, data in keep.items():
         (OUT / "music" / name).write_bytes(data)
     w = World(p, cat)
+    fire_ant(p, cat)
 
     meshes = {"landing": landing_mesh(), "caverns": caverns_mesh(), "arena": arena_mesh()}
     for name, m in meshes.items():
@@ -296,7 +328,7 @@ def main() -> int:
     w.exit(pl, mv, 0, -1760, "pack:level/landing", 1, "back to Zephyra Landing", radius=50)
     w.exit(pl, mv, 0, 1660, "pack:level/arena", 0, "to Sky Arena")
     plaza = [(-240, -490), (240, -490), (240, -10), (-240, -10)]  # 4-corner regions: the tested kind
-    w.squad(pl, mv, "YellowAnt", (0, -250), 3, plaza)
+    w.squad(pl, mv, "BlueAnt", (0, -250), 3, plaza, reskin="pack:kind/fire_ant")
     w.squad(pl, mv, "ZombieAnt", (0, 1120), 3, [(-1200, 980), (1200, 980), (1200, 1270), (-1200, 1270)], spread=220)
     w.door(pl, mv, 0, 1300, "yellow-key door", {"doorId": 0, "keyLock": 2, "yaw": 0})
     for x, z in ((300, -1500), (-500, 560), (500, 1100)):

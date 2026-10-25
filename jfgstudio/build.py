@@ -39,6 +39,7 @@ SETS = (
     (0x24, 0x25, "track", "packed"),
     (0x01, 0x00, "texture", "texture"),
 )
+MODEL_TABLE, MODEL_DATA, OBJDEF_TABLE, OBJDEF_DATA = 0x26, 0x27, 0x2E, 0x2F
 
 
 class BuildError(Exception):
@@ -111,8 +112,13 @@ class _Builder:
     # objects
     def entry(self, o: dict, level_name: str) -> bytes:
         t = refs.parse(o["type"])
-        if not t.is_stock or t.category != "objtype":
-            raise BuildError([f"levels/{level_name} [{o['uid']}]: {o['type']}: only stock object types in phase 0"])
+        if t.is_pack and t.category == "kind":
+            kind = self.p.kinds.get(t.name)
+            if kind is None:
+                raise BuildError([f"levels/{level_name} [{o['uid']}]: {o['type']}: the project has no kind {t.name}"])
+            t = refs.parse(kind["base"])  # written with the base's id; a fixup gives it the kind's (entry_fixups)
+        elif not t.is_stock or t.category != "objtype":
+            raise BuildError([f"levels/{level_name} [{o['uid']}]: {o['type']}: not an object type"])
         schema = obj.schema_for(o, self.schemas)
         base = b""
         if "stock" in o:
@@ -124,6 +130,77 @@ class _Builder:
             n = self.level_number(o["target"])
             fields.update({"levelLow": n & 0xFF, "levelHigh": 0xFF if n < 0x100 else n >> 8})
         return obj.encode_entry(t.number(), o["pos"], size, schema, fields, raw)
+
+    def entry_fixups(self, o: dict, at: int) -> list[dict]:
+        """Numbers an entry names that the port gives at load: an exit's pack level, a kind's object id (the entry's
+        own id, a squadron's baddy type)."""
+        out = []
+        target = refs.parse(o["target"], "level") if o.get("target") else None
+        if target and target.is_pack and self.p.levels[target.name].base is None:
+            # An exit to a pack level: the level's number is the port's to give (lohi = levelLow, levelHigh).
+            out.append({"at": at + 0x0A, "type": "lohi", "ref": f"level_{target.name}"})
+        t = refs.parse(o["type"])
+        if t.is_pack and t.category == "kind":
+            out.append({"at": at, "type": "u16", "ref": f"objtype_{t.name}"})
+        schema = obj.schema_for(o, self.schemas)
+        for field_name, ref in (o.get("kindFields") or {}).items():
+            f = schema.field(field_name) if schema else None
+            if f is None or f.type not in ("u16", "s16"):
+                raise BuildError([f"[{o['uid']}]: kindFields: {field_name} is not a 16-bit field of {o['type']}"])
+            out.append({"at": at + f.offset, "type": "u16", "ref": f"objtype_{refs.parse(ref, 'kind').name}"})
+        return out
+
+    def kinds(self) -> tuple[list[dict], list[dict], list[dict]]:
+        """The pack's kinds as the port builds them from the player's own data: (entries, objtypes, animRows). Each
+        kind copies its base's model ("copyOf") with the kind's textures in its texture slots, and its base's
+        definition pointing at that model, at the kind's size; the pack carries only the kind's own images."""
+        entries, objtypes, animrows = [], [], []
+        if not self.p.kinds:
+            return entries, objtypes, animrows
+        types = self.catalog.objtypes()
+        defs_table, _ = self.jf.read_table(self.catalog.assets.section(OBJDEF_TABLE))
+        defs_data = self.catalog.assets.section(OBJDEF_DATA)
+        data = self.models.ModelData(self.catalog.assets)
+        for name, kind in sorted(self.p.kinds.items()):
+            base = refs.parse(kind["base"], "objtype").number()
+            t = types.get(base)
+            if t is None or t["kind"] != "models" or not t["assets"]:
+                raise BuildError([f"kinds/{name}.json: {kind['base']} has no model to reskin"])
+            model_id = t["assets"][0]
+            plain = data.model(model_id).data
+            tex_at = struct.unpack_from(">I", plain, 0x18)[0]
+            slots = plain[0x10]
+            sets, fixups = [], []
+            for slot, file in sorted((kind.get("textures") or {}).items(), key=lambda kv: int(kv[0])):
+                k = int(slot)
+                if not 0 <= k < slots:
+                    raise BuildError([f"kinds/{name}.json: texture slot {k}: the base model has {slots}"])
+                png_bytes = (self.p.path / "kinds" / name / file).read_bytes()
+                from jfgformats import png as pngmod
+                w, h, _ = pngmod.read_png(png_bytes)
+                ref = f"texture_kind_{name}_{k}"
+                entries.append({"table": 0x01, "data": 0x00, "what": "texture", "index": None,
+                                "raw": self.textures.pack_new_texture(png_bytes), "append": ref})
+                sets.append({"at": tex_at + 8 * k + 4, "hex": bytes([w & 0xFF, h & 0xFF]).hex()})
+                fixups.append({"at": tex_at + 8 * k + 6, "type": "u16", "ref": ref, "add": 0x8000})
+            entries.append({"table": MODEL_TABLE, "data": MODEL_DATA, "what": "model", "index": None, "raw": None,
+                            "append": f"model_{name}", "copyOf": model_id, "packed": True, "set": sets,
+                            "fixups": fixups})
+            d = t["def"]
+            raw = defs_data[defs_table[d]:defs_table[d + 1]]
+            count = raw[0x1F]
+            arr = struct.unpack_from(">i", raw, 0x30)[0]
+            scale = struct.unpack_from(">f", raw, 0)[0] * float(kind.get("scale", 1.0))
+            entries.append({"table": OBJDEF_TABLE, "data": OBJDEF_DATA, "what": "objdef", "index": None, "raw": None,
+                            "append": f"objdef_{name}", "copyOf": d,
+                            "set": [{"at": 0, "hex": struct.pack(">f", scale).hex()}],
+                            "fixups": [{"at": arr + 4 * i, "type": "u32", "ref": f"model_{name}"}
+                                       for i in range(count)]})
+            animrows.append({"model": f"model_{name}", "from": model_id})
+            objtypes.append({"append": f"objtype_{name}", "def": f"objdef_{name}", "like": base})
+            self.log(f"kind {name}: {kind['name']}, made from {t['name']} (0x{base:X}) with "
+                     f"{len(kind.get('textures') or {})} new textures")
+        return entries, objtypes, animrows
 
     # the asset side
     def assets(self) -> list[dict]:
@@ -167,10 +244,7 @@ class _Builder:
             entries, list_fixups, at = [], [], 0x10
             for o in level.objects["objects"]:
                 entry = self.entry(o, name)
-                target = refs.parse(o["target"], "level") if o.get("target") else None
-                if target and target.is_pack:
-                    # An exit to a pack level: the level's number is the port's to give (lohi = levelLow, levelHigh).
-                    list_fixups.append({"at": at + 0x0A, "type": "lohi", "ref": f"level_{target.name}"})
+                list_fixups += self.entry_fixups(o, at)
                 entries.append(entry)
                 at += len(entry)
             lists = {slots["slot1"]: (_list_raw(entries), list_fixups, f"objlist_{name}"),
@@ -245,9 +319,9 @@ class _Builder:
             for o in level.objects["objects"]:
                 entry = self.entry(o, name)
                 op = {"op": "append", "hex": entry.hex()}
-                target = refs.parse(o["target"], "level") if o.get("target") else None
-                if target and target.is_pack and self.p.levels[target.name].base is None:
-                    op["fixups"] = [{"at": 0x0A, "type": "lohi", "ref": f"level_{target.name}"}]
+                fixups = self.entry_fixups(o, 0)
+                if fixups:
+                    op["fixups"] = fixups
                 ops.append(op)
             if ops:
                 out.append({"table": self.lv.OBJLIST_TABLE, "data": self.lv.OBJLIST_DATA,
@@ -337,6 +411,7 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
         raise BuildError(b.problems)
     try:
         changes = b.assets()
+        kind_entries, objtypes, animrows = b.kinds()
         level_patches = b.patches()
         patched = b.map_image()
     except b.jf.FormatError as e:
@@ -344,6 +419,16 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
 
     result = BuildResult(Path(out))
     files, entries = {}, []
+    for c in kind_entries:  # copies of the player's own data with the kind's textures: only the images are files
+        e = {"table": c["table"], "data": c["data"], "append": c["append"]}
+        if c["raw"] is not None:
+            fname = f"assets/{c['append']}.bin"
+            files[fname] = c["raw"]
+            e["file"] = fname
+        for key in ("copyOf", "packed", "set", "fixups"):
+            if c.get(key):
+                e[key] = c[key]
+        entries.append(e)
     for c in changes:
         fname = f"assets/{c['what']}_{c['index']}.bin"
         files[fname] = c["raw"]
@@ -383,6 +468,8 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
             doc = {"entries": entries}
             if level_patches:
                 doc["patches"] = level_patches
+            if objtypes:
+                doc["objtypes"], doc["animRows"] = objtypes, animrows
             z.writestr("jfg_assets.json", json.dumps(doc, indent=1))
         if music["levels"]:
             z.writestr("jfg_music.json", json.dumps(music, indent=1, sort_keys=True))
@@ -422,6 +509,8 @@ def _self_check(b: _Builder, path: Path) -> None:
         if "jfg_assets.json" not in z.namelist():
             return
         for e in json.loads(z.read("jfg_assets.json"))["entries"]:
+            if "file" not in e:
+                continue  # a copy of the player's own data ("copyOf"), made by the port
             raw = z.read(e["file"])
             if e["table"] == 0x1E:
                 b.lv.decode_header(raw)

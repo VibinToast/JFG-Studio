@@ -21,7 +21,7 @@ from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
 from jfgstudio import validate as val
-from jfgstudio.gui import level_tools, model_viewer, planet_tools, theme
+from jfgstudio.gui import kind_tools, level_tools, model_viewer, planet_tools, theme
 from jfgstudio.gui import viewport as vp
 
 gz = imguizmo.im_guizmo
@@ -64,6 +64,8 @@ class State:
         self.water_auto = True  # the water height follows the floor where the drag starts (+15)
         self.exit_filter = ""
         self.stock_pick = {"open": False, "filter": "", "id": None}
+        self.kind: str | None = None  # the Kinds window's kind
+        self.kind_pick = {"open": False, "filter": "", "base": None, "name": ""}
         self.planet: str | None = None  # the Planet window's planet
         self.planets_dirty = False  # planet edits are saved with the project (they have no undo yet)
         self.map_doc = None
@@ -316,6 +318,10 @@ def _title(text: str) -> None:
 
 
 def _object_label(o: dict) -> str:
+    if o["type"].startswith("pack:kind/") and S.project:
+        kind = S.project.kinds.get(o["type"].split("/", 1)[1])
+        if kind:
+            return f"{o.get('name') or kind['name']}  ##{o['uid']}"
     oid = obj.stock_id(o)
     schema = S.schema(o)
     kind = S.type_name(oid) if oid is not None else (schema.name if schema else o["type"].split("/", 1)[-1])
@@ -419,7 +425,7 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
     if pickable:
         S.instances = []
     for o in objs:
-        oid = obj.stock_id(o)
+        oid = kind_tools.base_oid(o)
         schema = S.schema(o)
         if oid is None or (schema and schema.hidden):
             continue
@@ -428,6 +434,9 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
         if mesh is None or not mesh.parts:
             continue
         m = _matrix(o, schema, oid)
+        if o["type"].startswith("pack:kind/"):
+            kind = S.project.kinds.get(o["type"].split("/", 1)[1], {})
+            m = m @ np.diag([kind.get("scale", 1.0)] * 3 + [1.0])
         tint = (1.0, 1.0, 0.2, 0.35) if o["uid"] in S.selection else (0.0, 0.0, 0.0, 0.0)
         out.append((path, m, tint))
         boxes[o["uid"]] = vp.box_corners(mesh.bounds, m)
@@ -892,6 +901,7 @@ def project_window() -> None:
 
 
 PREFAB_PAYLOAD = "JFG_PREFAB"
+KIND_BASE = -100  # prefab ids -100, -101 ...: the project's kinds, in name order
 GROUPS = {-1: ("Squad, region and locked door", "A squadron of stock members, a square navigation region they keep "
                                                  "to, and a door that stays locked until they are dead"),
           -2: ("Exit and return start point", "An exit (set where it leads in the Inspector) and a start point in "
@@ -933,6 +943,13 @@ def prefabs() -> None:
             continue
         groups.setdefault(schema.category if schema else "Other (fields not decoded)", []).append((oid, t, schema))
     order = sorted(groups, key=lambda c: (c.startswith("Other"), c))
+    if S.project and S.project.kinds:
+        flags = imgui.TreeNodeFlags_.default_open
+        if imgui.tree_node_ex(f"Pack kinds ({len(S.project.kinds)})##packkinds", flags):
+            for k, (name, kind) in enumerate(sorted(S.project.kinds.items())):
+                _prefab_row(KIND_BASE - k, f"{kind['name']}  (pack:kind/{name})",
+                            f"Made from {kind['base']}: placed with its base's stock entry and fields")
+            imgui.tree_pop()
     for category in order:
         flags = imgui.TreeNodeFlags_.default_open if search else 0
         if imgui.tree_node_ex(f"{category} ({len(groups[category])})##{category}", flags):
@@ -960,7 +977,7 @@ def _details_height(width: float) -> float:
     """How much of a tall Prefabs window the selected entry's options take, so the list gets the rest."""
     row = imgui.get_frame_height_with_spacing()
     pid = S.prefab["oid"]
-    text = HINT if pid is None else GROUPS[pid][1] if pid in (-2, -3) else ""
+    text = HINT if pid is None else GROUPS[pid][1] if pid in (-2, -3) else "x" * 60 if pid <= KIND_BASE else ""
     wrapped = imgui.calc_text_size(text, False, max(width, 1.0)).y + imgui.get_style().item_spacing.y if text else 0
     rows = 0 if pid is None else 4 if pid == -1 else 1 if pid < 0 else 2
     return wrapped + rows * row + imgui.get_style().item_spacing.y * 2 + 2
@@ -1010,6 +1027,8 @@ def _prefab_details() -> None:
                 imgui.set_tooltip("A stock entry to copy (its fields not set in the Inspector keep the game's values)")
         else:
             imgui.text_colored(theme.colour("ERROR"), "No stock entry to start from.")
+    elif pid <= KIND_BASE:
+        _muted("One of the pack's kinds (Kinds window): placed with its base's first stock entry.")
     else:
         _muted(GROUPS[pid][1])
     if imgui.button("Place at view centre"):
@@ -1071,7 +1090,15 @@ def _place(pid: int, pos) -> None:
     pf = S.prefab
     placer = pre.Placer(h.level, S.schemas, S.behaviours)
     try:
-        if pid == -1:
+        if pid <= KIND_BASE:
+            name, kind = sorted(S.project.kinds.items())[KIND_BASE - pid]
+            base = refs.parse(kind["base"], "objtype").number()
+            examples = S.objtypes.get(base, {}).get("examples", [])
+            o = placer.single(base, pos, tuple(examples[0]) if examples else None, name=kind["name"])
+            o["type"] = f"pack:kind/{name}"
+            if not o.get("schema") and S.behaviours.get(base) == 24:
+                o["schema"] = "squadmember"  # a squad member: give it a squadron in the Inspector
+        elif pid == -1:
             squads = _squad_examples()
             if not squads:
                 raise ValueError("the catalog has no stock squadron to start from")
@@ -1094,7 +1121,8 @@ def _place(pid: int, pos) -> None:
     except ValueError as e:
         S.message = f"Can't place it: {e}"
         return
-    h.add(placer.made, "place " + (GROUPS[pid][0] if pid < 0 else S.type_name(pid)))
+    what = "kind" if pid <= KIND_BASE else GROUPS[pid][0] if pid < 0 else S.type_name(pid)
+    h.add(placer.made, f"place {what}")
     S.selection = {o["uid"] for o in placer.made}
     S.message = f"Placed {len(placer.made)} object{'s' if len(placer.made) > 1 else ''}"
     S.validate()
@@ -1513,6 +1541,7 @@ def _layout() -> hello_imgui.DockingParams:
         win("Level Graph", "MainDockSpace", level_graph),
         win("Planet", "MainDockSpace", planet_tools.planet_window),
         win("Models", "MainDockSpace", model_viewer.models_window),
+        win("Kinds", "RightSpace", labelled(kind_tools.kinds_window)),
         win("Hierarchy", "LeftSpace", hierarchy),
         win("Inspector", "RightSpace", labelled(inspector)),
         win("Level", "RightSpace", labelled(level_tools.level_window)),

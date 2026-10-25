@@ -135,30 +135,33 @@
   },
   {
    "fields": {
-    "baddyType": 95,
+    "baddyType": 120,
     "count": 3,
     "doorId": 0,
     "region": 1,
     "squadronId": 1
    },
-   "name": "YellowAnt squad",
+   "kindFields": {
+    "baddyType": "pack:kind/fire_ant"
+   },
+   "name": "Fire Ant squad",
    "pos": [
     0,
     0,
     -250
    ],
    "stock": {
-    "entry": 139,
-    "list": 442
+    "entry": 260,
+    "list": 424
    },
    "type": "stock:objtype/0x4F",
-   "uid": "yellowant_squad1"
+   "uid": "fire_ant_squad1"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "YellowAnt",
+   "name": "Fire Ant",
    "pos": [
     0,
     0,
@@ -166,17 +169,17 @@
    ],
    "schema": "squadmember",
    "stock": {
-    "entry": 30,
-    "list": 706
+    "entry": 261,
+    "list": 424
    },
-   "type": "stock:objtype/0x5F",
-   "uid": "yellowant1"
+   "type": "pack:kind/fire_ant",
+   "uid": "fire_ant1"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "YellowAnt",
+   "name": "Fire Ant",
    "pos": [
     130,
     0,
@@ -184,17 +187,17 @@
    ],
    "schema": "squadmember",
    "stock": {
-    "entry": 30,
-    "list": 706
+    "entry": 261,
+    "list": 424
    },
-   "type": "stock:objtype/0x5F",
-   "uid": "yellowant2"
+   "type": "pack:kind/fire_ant",
+   "uid": "fire_ant2"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "YellowAnt",
+   "name": "Fire Ant",
    "pos": [
     -130,
     0,
@@ -202,11 +205,11 @@
    ],
    "schema": "squadmember",
    "stock": {
-    "entry": 30,
-    "list": 706
+    "entry": 261,
+    "list": 424
    },
-   "type": "stock:objtype/0x5F",
-   "uid": "yellowant3"
+   "type": "pack:kind/fire_ant",
+   "uid": "fire_ant3"
   },
   {
    "fields": {
