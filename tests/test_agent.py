@@ -272,6 +272,8 @@ class TrialFindings(AgentTest):
         self.assertIn("keyLock", [f["name"] for f in door["fields"]])
         self.with_catalog()
         self.assertEqual(self.s.describe_type("door")["ids"], ["0x1AD"])
+        self.assertEqual(self.s.describe_type("door")["modelSizes"], {})  # the made-up types have no models
+        self.assertIsNone(self.s.model_size(0x29))
         yaw = next(f for f in self.s.describe_type("startpoint")["fields"] if f["name"] == "yaw")
         self.assertEqual(yaw["perTurn"], 64)
         start = self.s.place("home", "startpoint", [0, 0], fields={"startPoint": 5}, facing=180)[0]

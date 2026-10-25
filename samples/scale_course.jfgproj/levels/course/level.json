@@ -1,0 +1,20 @@
+{
+ "format": 1,
+ "header": {
+  "cutsceneData": 3,
+  "fog3": 990,
+  "fogB": 225,
+  "fogFar": 1022,
+  "fogG": 210,
+  "fogNear": 990,
+  "fogR": 200,
+  "region": 0,
+  "regionIndex": 0,
+  "tune": 4,
+  "tuneChannelMask": 65535,
+  "world": 15
+ },
+ "name": "Scale Course",
+ "sky": -1,
+ "track": "pack:track/course"
+}

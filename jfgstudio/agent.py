@@ -31,6 +31,7 @@ SURFACES = ("solid", "lava", "hidden", "water", "kill", "nocollide")  # TrackMes
 FLOOR_KINDS = ("solid", "lava", "hidden")
 LIST_LIMIT = 150  # catalog types listed at once
 NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way back to the game
+SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 
 
 class AgentError(Exception):
@@ -54,6 +55,7 @@ class Session:
         self._catalog_error: str | None = None
         self._types: dict[int, dict] | None = None
         self._meshes: dict[str, tuple[float, object]] = {}
+        self._sizes: dict[int, dict | None] = {}
         if path is not None:
             self.open(path)
 
@@ -170,8 +172,11 @@ class Session:
                    "fields": [self._field_doc(f) for f in s.fields], "behaviour": s.behaviour,
                    "note": f"place one by the id of a game type with behaviour {s.behaviour}"}
             if self.catalog() is not None:
-                ids = sorted((t.get("uses", 0), oid) for oid, t in self._types.items() if t["behaviour"] == s.behaviour)
-                out["ids"] = [f"0x{oid:X}" for _, oid in reversed(ids)][:LIST_LIMIT]
+                ids = [oid for _, oid in sorted(((t.get("uses", 0), oid) for oid, t in self._types.items()
+                                                 if t["behaviour"] == s.behaviour), reverse=True)]
+                out["ids"] = [f"0x{oid:X}" for oid in ids][:LIST_LIMIT]
+                sizes = {f"0x{oid:X}": self.model_size(oid) for oid in ids[:SIZED]}  # the most used ones
+                out["modelSizes"] = {k: {a: v[a] for a in "xyz"} for k, v in sizes.items() if v}
             return out
         oid, schema, kind = self._type(type)
         out = {"id": f"0x{oid:X}" if oid is not None else None, "kind": kind}
@@ -188,7 +193,29 @@ class Session:
             t = self._types[oid]
             out.update({"gameName": t["name"], "behaviour": t["behaviour"], "uses": t.get("uses", 0),
                         "examples": t.get("examples", [])})
+            size = self.model_size(oid)
+            if size:
+                out["modelSize"] = size
         return out
+
+    def model_size(self, oid: int) -> dict | None:
+        """The size of a type's model in game units, at its definition's scale and facing 0 (x across, y up, z along
+        the facing): from the player's catalog, measured once per run. None without a model or a catalog."""
+        if oid in self._sizes:
+            return self._sizes[oid]
+        size = None
+        t = (self._types or {}).get(oid)
+        if self.catalog() is not None and t and t.get("kind") == "models" and t.get("assets"):
+            try:
+                from jfgstudio.gui.viewport import TrackMesh
+                mesh = TrackMesh(str(self._catalog.model_glb(t["assets"][0])), surfaces=False)
+                x, y, z = ((mesh.bounds[1] - mesh.bounds[0]) * t["scale"]).tolist()
+                size = {"x": round(x), "y": round(y), "z": round(z),
+                        "note": "the model at its type's scale; an object's own scale field (if any) multiplies it"}
+            except Exception:  # noqa: BLE001 (a model the reader can't take: no size, not an error)
+                size = None
+        self._sizes[oid] = size
+        return size
 
     @staticmethod
     def _field_doc(f: obj.Field) -> dict:

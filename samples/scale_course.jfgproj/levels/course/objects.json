@@ -1,0 +1,390 @@
+{
+ "format": 1,
+ "objects": [
+  {
+   "fields": {
+    "player": 0,
+    "startPoint": 0,
+    "yaw": 32
+   },
+   "name": "start",
+   "pos": [
+    0,
+    8,
+    -300
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xD",
+   "uid": "start1"
+  },
+  {
+   "fields": {},
+   "name": "ramp 1: 15 degrees",
+   "pos": [
+    -1590,
+    122,
+    523
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "ramp_1__15_degrees1"
+  },
+  {
+   "fields": {},
+   "name": "ramp 2: 20 degrees",
+   "pos": [
+    -1440,
+    122,
+    401
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "ramp_2__20_degrees1"
+  },
+  {
+   "fields": {},
+   "name": "ramp 3: 25 degrees",
+   "pos": [
+    -1290,
+    122,
+    326
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "ramp_3__25_degrees1"
+  },
+  {
+   "fields": {},
+   "name": "ramp 4: 30 degrees",
+   "pos": [
+    -1140,
+    122,
+    275
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "ramp_4__30_degrees1"
+  },
+  {
+   "fields": {},
+   "name": "ramp 5: 35 degrees",
+   "pos": [
+    -990,
+    122,
+    237
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "ramp_5__35_degrees1"
+  },
+  {
+   "fields": {},
+   "name": "ramp 6: 40 degrees",
+   "pos": [
+    -840,
+    122,
+    208
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "ramp_6__40_degrees1"
+  },
+  {
+   "fields": {},
+   "name": "ramp 7: 45 degrees",
+   "pos": [
+    -690,
+    122,
+    184
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "ramp_7__45_degrees1"
+  },
+  {
+   "fields": {},
+   "name": "ramp 8: 55 degrees",
+   "pos": [
+    -540,
+    122,
+    147
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "ramp_8__55_degrees1"
+  },
+  {
+   "fields": {},
+   "name": "block 1: 8 high",
+   "pos": [
+    -240,
+    10,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_1__8_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 2: 16 high",
+   "pos": [
+    -90,
+    18,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_2__16_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 3: 24 high",
+   "pos": [
+    60,
+    26,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_3__24_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 4: 32 high",
+   "pos": [
+    210,
+    34,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_4__32_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 5: 48 high",
+   "pos": [
+    360,
+    50,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_5__48_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 6: 64 high",
+   "pos": [
+    510,
+    66,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_6__64_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 7: 80 high",
+   "pos": [
+    660,
+    82,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_7__80_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 8: 100 high",
+   "pos": [
+    810,
+    102,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_8__100_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 9: 120 high",
+   "pos": [
+    960,
+    122,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_9__120_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 10: 140 high",
+   "pos": [
+    1110,
+    142,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_10__140_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 11: 160 high",
+   "pos": [
+    1260,
+    162,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_11__160_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 12: 200 high",
+   "pos": [
+    1410,
+    202,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_12__200_high1"
+  },
+  {
+   "fields": {},
+   "name": "block 13: 250 high",
+   "pos": [
+    1560,
+    252,
+    180
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "block_13__250_high1"
+  },
+  {
+   "fields": {},
+   "name": "gap 1: 40 across",
+   "pos": [
+    -1260,
+    2,
+    1500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "gap_1__40_across1"
+  },
+  {
+   "fields": {},
+   "name": "gap 2: 60 across",
+   "pos": [
+    -1000,
+    2,
+    1500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "gap_2__60_across1"
+  },
+  {
+   "fields": {},
+   "name": "gap 3: 80 across",
+   "pos": [
+    -720,
+    2,
+    1500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "gap_3__80_across1"
+  },
+  {
+   "fields": {},
+   "name": "gap 4: 100 across",
+   "pos": [
+    -420,
+    2,
+    1500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "gap_4__100_across1"
+  },
+  {
+   "fields": {},
+   "name": "gap 5: 140 across",
+   "pos": [
+    -80,
+    2,
+    1500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "gap_5__140_across1"
+  },
+  {
+   "fields": {},
+   "name": "gap 6: 180 across",
+   "pos": [
+    300,
+    2,
+    1500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "gap_6__180_across1"
+  },
+  {
+   "fields": {},
+   "name": "gap 7: 240 across",
+   "pos": [
+    740,
+    2,
+    1500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "gap_7__240_across1"
+  },
+  {
+   "fields": {},
+   "name": "gap 8: 300 across",
+   "pos": [
+    1240,
+    2,
+    1500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "gap_8__300_across1"
+  },
+  {
+   "fields": {
+    "animGroup": -1,
+    "arg1A": 1,
+    "condition": -1,
+    "levelHigh": 255,
+    "radius": 50,
+    "startPoint": 0,
+    "unlockWorld": -1
+   },
+   "name": "out to the game",
+   "pos": [
+    600,
+    2,
+    -450
+   ],
+   "size": 28,
+   "target": "stock:level/21",
+   "type": "stock:objtype/0xB",
+   "uid": "out_to_the_game1"
+  }
+ ]
+}

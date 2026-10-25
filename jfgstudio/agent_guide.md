@@ -57,9 +57,17 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   deck with no ramp onto it is walked under, not onto.
 - Objects that walk (enemies, start points) stand a few units above the floor (`place` does this): a spawn even a
   fraction below a sloped floor falls through it.
-- **Scale** (hero size, jump height, steepest walkable slope, door sizes) is not written down yet. Until it is, take
-  sizes from the example world (`samples/zephyra.jfgproj` in Studio's folder: read its files, don't change them) or
-  measure a game level with `geometry_info` and `surface_at`, and tell the player which sizes are guesses.
+- **Scale**, in game units:
+  - The heroes' models are about 55 (Vela) to 60 (Juno) tall, Lupus about 33 tall and 40 long.
+  - Doors are big: the game's most used ones are about 120-200 wide and 130-220 tall. `describe_type door` measures
+    each door type's model (`modelSizes`), and `describe_type <id>` any type's (`modelSize`, at facing 0: x across,
+    y up, z along the facing). Make an opening the door's width: wider leaves a gap to walk around, which breaks the
+    lock.
+  - Falls of more than 240 hurt, more than 400 hurt more (Vela). Juno swims once the water is deeper than about 48.
+  - Not measured yet: the jump, the highest step, the steepest walkable slope, the clearance and width the hero
+    needs. They are being measured with Studio's `samples/scale_course.jfgproj`. Until then, keep ramps at 30 degrees
+    or less, steps at 16 or less, passages at least 120 wide and ceilings at least 160 high, and tell the player
+    these are guesses.
 - **Facing**: `place`, `update_object` and `connect` take degrees (0 = towards -z, the way a start point at yaw 0
   faces). Types store it in their own steps: `describe_type` gives each angle field's `perTurn` (64 for angle10,
   256 for angle8, 65536 for angle16).
