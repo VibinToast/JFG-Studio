@@ -88,12 +88,16 @@ def landing_mesh() -> wk.Mesh:
 
     m.heightfield("grass", -1800, -1800, 1800, 1800, 100, height, 140, tint)
     m.floor("river_water", -1800, 300, 1800, 700, -28, 120, alpha=170, step=600)
-    m.box("stone", "stone_wall", -90, 220, 90, 780, -45, 12)                    # the bridge
-    m.disc("stone", "stone_wall", 0, -1400, 230, -20, 8, n=20)                  # the landing pad
+    # Walkable surfaces come out of the ground: ramps start a little below it (owner's play-test 2026-10-25: a lip of
+    # a few units stops the hero, and a raised deck she can't step onto lets her walk on underneath it).
+    m.box("stone", "stone_wall", -90, 220, 90, 780, -45, 6)                     # the bridge deck, over the water
+    m.ramp("stone", "stone_wall", -90, 140, 90, 220, -14, 6, axis="z")         # its ends rise out of the banks
+    m.ramp("stone", "stone_wall", -90, 780, 90, 860, 6, -14, axis="z")
+    m.disc("stone", "stone_wall", 0, -1400, 230, -20, 2, n=20)                  # the landing pad
     m.box("grass", "rock", 800, -900, 1500, -200, -30, 140, 140)                # the plateau
-    m.ramp("stone", "rock", 500, -700, 800, -500, 0, 140, axis="x")             # its ramp
+    m.ramp("stone", "rock", 440, -700, 800, -500, -15, 140, axis="x")           # its ramp
     m.box("stone", "rock", -1520, -320, -1200, 20, -20, 220)                    # the key ledge
-    m.ramp("stone", "rock", -1500, -1100, -1380, -320, 0, 220, axis="z")        # its ramp
+    m.ramp("stone", "rock", -1500, -1180, -1380, -320, -15, 220, axis="z")      # its ramp
     for x, z, s, h in ((-600, -700, 60, 90), (450, 100, 50, 70), (-1100, 900, 70, 120), (1200, 1000, 60, 100),
                        (300, -900, 40, 60), (-300, 1100, 45, 80)):
         m.box("crystal", "crystal", x - s, z - s, x + s, z + s, -20, h)          # crystal outcrops (cover)
@@ -176,11 +180,9 @@ def glacia_mesh() -> wk.Mesh:
     m.box("stone", "stone_wall", -260, -1130, 260, -1070, 0, 230)               # the entry screen
     for x0, x1 in ((-760, -560), (560, 760)):
         m.box("ice", "ice_wall", x0, -900, x1, -860, 0, 150)                    # low cover on the way north
-    m.floor("ice", -700, -300, 700, 500, -10, 160, step=350)                     # the frozen lake
+    m.floor("ice", -700, -300, 700, 500, 0, 160, step=350)                      # the frozen lake (level: no lip)
     m.floor("snow", -1300, -300, -700, 500, 0, 140, step=400)
     m.floor("snow", 700, -300, 1300, 500, 0, 140, step=400)
-    m.wall("ice_wall", -700, -300, 700, -300, -10, 0, 60)
-    m.wall("ice_wall", 700, 500, -700, 500, -10, 0, 60)
     m.floor("snow", -1300, 500, 1300, 1100, 0, 140, step=400)                   # the north field
     m.ramp("stone", "stone_wall", -200, 1100, 200, 1300, 0, 80, axis="z")      # up to the finish pad
     m.box("stone", "stone_wall", -300, 1300, 300, 1550, 0, 80)
@@ -565,8 +567,9 @@ def main() -> int:
                            "unlock": unlock, "routes": [route] if route else [],
                            "entryLevel": dict.fromkeys(("vela", "juno", "lupus"), f"pack:level/{level}")}
 
+    # Zephyra is discovered through the portal in Forest First: it opens once its level was entered.
     planet("zephyra", "Zephyra", "landing", {"index": 2, "x": 110, "y": 420, "radius": 16, "colour": [150, 210, 255]},
-           "start")
+           {"entered": "zephyra"})
     planet("glacia", "Glacia", "glacia", {"index": 4, "x": 290, "y": 420, "radius": 13, "colour": [220, 240, 255]},
            {"completed": "zephyra"}, {"from": "pack:world/zephyra", "dir": "right", "back": "left"})
     planet("nimbus", "Nimbus", "nimbus", {"index": 3, "x": 290, "y": 240, "radius": 15, "colour": [230, 200, 255]},

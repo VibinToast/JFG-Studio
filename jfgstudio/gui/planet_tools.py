@@ -16,8 +16,9 @@ from jfgstudio.gui import theme
 
 HEROES = ("juno", "vela", "lupus")
 MAP_W, MAP_H = 420.0, 800.0  # the map's own coordinates (discs and route corners)
-UNLOCKS = ("stock", "start", "script", "entered", "completed")
+UNLOCKS = ("stock", "start", "discovered", "script", "entered", "completed")
 UNLOCK_LABELS = {"stock": "with the stock point its route leaves", "start": "from the start",
+                 "discovered": "once its own level was entered (a portal, an exit)",
                  "script": "by a trigger or script", "entered": "once another planet was entered",
                  "completed": "once another planet was completed"}
 
@@ -432,18 +433,23 @@ def _unlock_fields(p: dict, dirty) -> None:
     on_main = worldmap.galaxy_of(p) == worldmap.MAIN
     unlock = worldmap.unlock_of(p)
     kind = next(iter(unlock)) if isinstance(unlock, dict) else unlock
+    if unlock == {"entered": S.planet}:
+        kind = "discovered"
     kinds = [k for k in UNLOCKS if on_main or k != "stock"]
     if imgui.begin_combo("Opens", UNLOCK_LABELS.get(kind, kind)):
         for k in kinds:
             if imgui.selectable(UNLOCK_LABELS[k], k == kind)[0] and k != kind:
                 others = sorted(n for n in S.project.planets if n != S.planet)
-                p["unlock"] = {k: others[0] if others else ""} if k in ("entered", "completed") else k
+                if k == "discovered":
+                    p["unlock"] = {"entered": S.planet}
+                else:
+                    p["unlock"] = {k: others[0] if others else ""} if k in ("entered", "completed") else k
                 dirty()
         imgui.end_combo()
     if imgui.is_item_hovered():
         imgui.set_tooltip("A hidden planet shows on the map once it opens. 'Completed' waits for a 'complete planet' "
                           "action in the Triggers window (for example at a world's final exit)")
-    if isinstance(unlock, dict):
+    if isinstance(unlock, dict) and kind != "discovered":
         current = unlock[kind]
         if imgui.begin_combo("After planet", current or "(pick)"):
             for n in sorted(S.project.planets):

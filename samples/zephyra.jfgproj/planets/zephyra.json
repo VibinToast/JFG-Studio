@@ -21,5 +21,7 @@
  "format": 1,
  "galaxy": "expanse",
  "routes": [],
- "unlock": "start"
+ "unlock": {
+  "entered": "zephyra"
+ }
 }

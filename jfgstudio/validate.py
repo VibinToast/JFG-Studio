@@ -367,7 +367,7 @@ def _check_galaxies(project: Project) -> list[Problem]:
         if not home or home not in members:
             out.append(Problem(ERROR, "galaxy", gf, f"the home planet must be one of: {', '.join(members)}"))
             continue
-        if worldmap.unlock_of(project.planets[home]) != "start":
+        if worldmap.unlock_of(project.planets[home]) not in ("start", {"entered": home}):
             out.append(Problem(WARNING, "galaxy", gf, f"home planet {home} is not open from the start: the galaxy "
                                                       "shows only once one of its planets opens"))
         lost = [n for n in members if n not in worldmap.reachable(project, name)]
@@ -385,8 +385,9 @@ def _check_galaxies(project: Project) -> list[Problem]:
             other = next(iter(unlock.values()))
             if other not in project.planets:
                 out.append(Problem(ERROR, "unlock", pf, f"it opens after planet {other}: no such planet"))
-            elif other == name:
-                out.append(Problem(ERROR, "unlock", pf, "it opens after itself"))
+            elif other == name and "completed" in unlock:
+                out.append(Problem(ERROR, "unlock", pf, "it opens after completing itself (\"entered\" itself = "
+                                                        "discovered: hidden until its level was first entered)"))
         elif unlock == "stock" and galaxy != worldmap.MAIN:
             out.append(Problem(ERROR, "unlock", pf, "\"stock\" (open with the stock point its route leaves) is for the "
                                                     "game's galaxy"))
