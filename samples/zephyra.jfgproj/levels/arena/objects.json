@@ -62,16 +62,16 @@
     "startPoint": 0,
     "unlockWorld": -1
    },
-   "name": "victory: home to Goldwood",
+   "name": "victory: on to Glacia",
    "pos": [
     0,
     0,
     1380
    ],
    "size": 28,
-   "target": "stock:level/21",
+   "target": "pack:level/glacia",
    "type": "stock:objtype/0xB",
-   "uid": "victory__home_to_goldwood1"
+   "uid": "victory__on_to_glacia1"
   },
   {
    "fields": {

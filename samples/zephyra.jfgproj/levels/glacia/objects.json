@@ -26,16 +26,16 @@
     "startPoint": 0,
     "unlockWorld": -1
    },
-   "name": "the way home to Goldwood",
+   "name": "on to Nimbus",
    "pos": [
     0,
     80,
     1480
    ],
    "size": 28,
-   "target": "stock:level/21",
+   "target": "pack:level/nimbus",
    "type": "stock:objtype/0xB",
-   "uid": "the_way_home_to_goldwood1"
+   "uid": "on_to_nimbus1"
   },
   {
    "fields": {

@@ -12,8 +12,8 @@ The route: a new game -> Goldwood's first level (Forest First), where a glowing 
 the planet map: R to the Zephyra Expanse) -> 1. Zephyra Landing (a valley, a river and a bridge, a chest on a plateau,
 the yellow key on a ledge, an ant squad locking the north gate) -> 2. Ember Caverns (a lava lake crossed on a causeway,
 two squads, a chasm with a kill floor, a door that needs the yellow key) -> 3. Sky Arena (a floating arena over a deadly
-drop, two squads that both lock the final gate) -> the victory exit back to Forest First. Every level has return exits,
-its own music, lights and pickups.
+drop, two squads that both lock the final gate) -> the victory exit on to Glacia, whose finish leads on to Nimbus, whose
+finish leads home to Forest First. Every level has return exits, its own music, lights and pickups.
 
 Everything here is drawn or written by this script; the project only names stock object types and stock entries
 by number (the build copies those from the player's own ROM).
@@ -338,20 +338,20 @@ def world_scripts(p, arena_door: int) -> None:
                   {"do": "spawn", "type": f"stock:objtype/{HEALTH:#x}", "pos": [0, 30, -80], "near_player": True,
                    "fields": {"amount": 2}}]},
         {"name": "victory", "level": "pack:level/arena", "when": {"kind": "enter", "box": [-300, 1000, 300, 1500]},
-         "then": [say("Victory! Zephyra is free. A new planet, Glacia, has appeared on the Zephyra Expanse map.", 7),
+         "then": [say("Victory! Zephyra is free. The light ahead leads on to Glacia, the next planet.", 7),
                   {"do": "complete planet", "planet": "zephyra"},
                   {"do": "fog", "rgb": [200, 190, 255], "near": 1000, "far": 1023, "ticks": 120}]},
         {"name": "glacia intro", "level": "pack:level/glacia", "when": {"kind": "level start"},
          "then": [say("GLACIA - Cross the frozen lake and reach the pad in the north.", 6)]},
         {"name": "glacia complete", "level": "pack:level/glacia",
          "when": {"kind": "enter", "box": [-300, 1300, 300, 1550]},
-         "then": [say("GLACIA COMPLETE - Nimbus has appeared on the Zephyra Expanse map.", 7),
+         "then": [say("GLACIA COMPLETE - The pad's exit leads on to Nimbus.", 7),
                   {"do": "complete planet", "planet": "glacia"}]},
         {"name": "nimbus intro", "level": "pack:level/nimbus", "when": {"kind": "level start"},
          "then": [say("NIMBUS - Mind the edges. The last island is the way out.", 6)]},
         {"name": "nimbus complete", "level": "pack:level/nimbus",
          "when": {"kind": "enter", "box": [-360, 900, 360, 1500]},
-         "then": [say("NIMBUS COMPLETE - The Zephyra Expanse is free!", 8),
+         "then": [say("NIMBUS COMPLETE - The Zephyra Expanse is free! The exit leads home to Goldwood.", 8),
                   {"do": "complete planet", "planet": "nimbus"}]},
     ])
     (p.path / "scripts").mkdir(exist_ok=True)
@@ -484,7 +484,7 @@ def main() -> int:
     w.start(pl, mv, 0, -1150, 0, YAW_NORTH)
     w.start(pl, mv, 0, 1250, 1, YAW_SOUTH)
     w.exit(pl, mv, 0, -1270, "pack:level/caverns", 1, "back to Ember Caverns", radius=50)
-    w.exit(pl, mv, 0, 1380, f"stock:level/{FOREST_FIRST}", 0, "victory: home to Goldwood")
+    w.exit(pl, mv, 0, 1380, "pack:level/glacia", 0, "victory: on to Glacia")  # a world won leads to the next
     door_c = pl.free("door", "doorId")
     p.meta.setdefault("x-arena-door", door_c)  # the finale trigger watches this door (removed before saving)
     ring = [(-620, 0), (620, 0), (620, 620), (-620, 620)]  # the arena's north half: they hold the gate
@@ -508,7 +508,7 @@ def main() -> int:
     d.level["sky"], d.level["music"] = SKY["glacia"], "pack:music/zephyra_landing"
     mv, pl = views["glacia"], w.placer(d)
     w.start(pl, mv, 0, -1350, 0, YAW_NORTH)
-    w.exit(pl, mv, 0, 1480, f"stock:level/{FOREST_FIRST}", 0, "the way home to Goldwood")
+    w.exit(pl, mv, 0, 1480, "pack:level/nimbus", 0, "on to Nimbus")
     w.squad(pl, mv, "BlueAnt", (0, 250), 3, [(-600, 0), (600, 0), (600, 450), (-600, 450)])
     w.squad(pl, mv, "Cyborg", (0, 850), 2, [(-1100, 650), (1100, 650), (1100, 1050), (-1100, 1050)], spread=250)
     w.pickup(pl, mv, HEALTH, 0, -1250, amount=2)  # full health behind the entry screen

@@ -140,7 +140,7 @@
     {
      "do": "message",
      "seconds": 7,
-     "text": "Victory! Zephyra is free. A new planet, Glacia, has appeared on the Zephyra Expanse map."
+     "text": "Victory! Zephyra is free. The light ahead leads on to Glacia, the next planet."
     },
     {
      "do": "complete planet",
@@ -189,7 +189,7 @@
     {
      "do": "message",
      "seconds": 7,
-     "text": "GLACIA COMPLETE - Nimbus has appeared on the Zephyra Expanse map."
+     "text": "GLACIA COMPLETE - The pad's exit leads on to Nimbus."
     },
     {
      "do": "complete planet",
@@ -227,7 +227,7 @@
     {
      "do": "message",
      "seconds": 8,
-     "text": "NIMBUS COMPLETE - The Zephyra Expanse is free!"
+     "text": "NIMBUS COMPLETE - The Zephyra Expanse is free! The exit leads home to Goldwood."
     },
     {
      "do": "complete planet",
