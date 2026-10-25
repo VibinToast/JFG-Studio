@@ -137,3 +137,19 @@ class Music(unittest.TestCase):
             self.assertEqual(build.music_manifest(p)["levels"], {"stock:83": "theme"})
             del gem["fixedId"]
             self.assertEqual(build.music_manifest(p)["levels"], {"level_gemini": "theme"})
+
+
+class Kinds(unittest.TestCase):
+    def test_kind_round_trip_and_schema(self):
+        from jfgstudio import project as proj
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            p.kinds["fire_ant"] = {"format": 1, "name": "Fire Ant", "base": "stock:objtype/0x78", "scale": 1.2,
+                                   "textures": {"0": "0.png"}}
+            p.save()
+            back = proj.load(p.path)
+            self.assertEqual(back.kinds["fire_ant"]["scale"], 1.2)
+            self.assertEqual(back.kind_texture("fire_ant", 3), p.path / "kinds" / "fire_ant" / "3.png")
+            (p.path / "kinds" / "bad.json").write_text('{"format": 1, "name": "x", "base": "pack:kind/y"}')
+            with self.assertRaises(proj.ProjectError):
+                proj.load(p.path)
