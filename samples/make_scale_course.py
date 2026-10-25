@@ -31,6 +31,8 @@ PASSAGES = (20, 30, 40, 50, 60, 80, 100)  # width between two walls
 GAPS = (40, 60, 80, 100, 140, 180, 240, 300)  # across a shallow trench
 TRENCH = 40  # the trench's depth: falling in is safe, a ramp at its end leads out
 LANE = 120  # the width of a ramp or block
+LEDGES = (100, 140, 180, 220, 260)  # blocks whose top edge should be grabbable
+LEDGE_DROP = 1  # their walls stop this far under the top, so the top shares no edge with them
 
 
 def course():
@@ -44,7 +46,7 @@ def course():
 
     # the ground: everything but the gap trench (z 1300-1700)
     m.floor("ground", -1800, -600, 1800, 1300, 0, step=400)
-    m.floor("ground", -1800, 1700, 1800, 1900, 0, step=400)
+    m.floor("ground", -1800, 1700, 1800, 2400, 0, step=400)
 
     # 1. ramps, rising along +z from a little under the ground (a lip stops the hero) to a platform
     for i, deg in enumerate(RAMPS):
@@ -85,6 +87,16 @@ def course():
         if g is not None:
             items.append(("gap", i + 1, f"{g} across", (x + 200 + g + 100, 0, 1500)))
             x += 200 + g
+    # 6. ledge blocks: the walls stop LEDGE_DROP under the top, so the top's edges have no neighbour. The game's
+    # track loader makes such edges grabbable ledges; the importer links every edge two triangles share, so a block
+    # whose walls meet its top has none (the first row's blocks)
+    for i, h in enumerate(LEDGES):
+        x0 = -600 + i * 250
+        m.floor("block", x0, 2000, x0 + 160, 2160, h)
+        for ax, az, bx, bz in ((x0, 2000, x0 + 160, 2000), (x0 + 160, 2000, x0 + 160, 2160),
+                               (x0 + 160, 2160, x0, 2160), (x0, 2160, x0, 2000)):
+            m.wall("block_side", ax, az, bx, bz, 0, h - LEDGE_DROP)
+        items.append(("ledge", i + 1, f"{h} high, its top edge left unlinked", (x0 + 80, h, 2080)))
     return m, items
 
 
@@ -111,10 +123,12 @@ def main() -> int:
     lines = ["# Scale course", "", "You start facing the course. First row: the ramps (number 1 is the longest and "
              "gentlest, 8 the shortest and steepest) and the blocks (1 the lowest, 13 the tallest). Second row: the "
              "tunnels (1 the lowest roof) and the passages between walls (1 the narrowest). Last: the trench, "
-             "crossed on platforms from its end with the ramp out of it (gap 1 the narrowest).",
+             "crossed on platforms from its end with the ramp out of it (gap 1 the narrowest). Beyond it: ledge blocks "
+             "(1 the lowest), whose top edge should be grabbable: jump up at a wall and see whether the hero "
+             "catches the edge.",
              "A health pickup sits on top of each ramp and block and after each gap: getting it means the hero made "
              "it. The ring by the start is an exit back to the game.", ""]
-    for group in ("ramp", "block", "tunnel", "passage", "gap"):
+    for group in ("ramp", "block", "tunnel", "passage", "gap", "ledge"):
         lines += [f"## {group.title()}s", ""] + [f"{n}. {size}" for g, n, size, _ in items if g == group] + [""]
     lines += ["Report: the steepest ramp walked up, the highest block stepped onto without jumping, the highest "
               "reached with a jump, the highest climbed (ledge grab), the lowest tunnel walked / crouched through, "
