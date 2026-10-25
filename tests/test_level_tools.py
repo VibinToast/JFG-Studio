@@ -86,7 +86,8 @@ class StartLevel(unittest.TestCase):
         from jfgstudio import testrun
         with tempfile.TemporaryDirectory() as tmp:
             p = sample_project(Path(tmp))
-            self.assertEqual(testrun.start_level_arg(p, "gemini", True), "412")
+            self.assertEqual(testrun.start_level_arg(p, "gemini", False), "412")
+            self.assertEqual(testrun.start_level_arg(p, "gemini", True), "test.sample:level_gemini")
             del p.levels["gemini"].level["fixedId"]
             self.assertEqual(testrun.start_level_arg(p, "gemini", True), "test.sample:level_gemini")
             with self.assertRaises(testrun.TestRunError):
@@ -131,6 +132,8 @@ class Music(unittest.TestCase):
             p.music_path("theme").write_bytes(b"OggS" + bytes(60))
             self.assertFalse([x for x in val.validate(p, schemas) if x.severity == val.ERROR])
             self.assertEqual(build.music_manifest(p), {"tracks": {"theme": "music/theme.ogg"},
-                                                       "levels": {"stock:412": "theme"}})
+                                                       "levels": {"level_gemini": "theme"}})
+            gem["fixedId"] = 83  # replaces a stock level: named by number
+            self.assertEqual(build.music_manifest(p)["levels"], {"stock:83": "theme"})
             del gem["fixedId"]
             self.assertEqual(build.music_manifest(p)["levels"], {"level_gemini": "theme"})

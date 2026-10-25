@@ -59,6 +59,9 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
     lf = f"levels/{level.name}/level.json"
     of = f"levels/{level.name}/objects.json"
     header = level.level["header"]
+    if level.level.get("base"):
+        _ref(level.level["base"], "level", lf, None, out)
+        return out + _check_objects(project, level, schemas, of, stock_base=True)
 
     cut = header.get("cutsceneData")
     if cut is None:
@@ -98,6 +101,13 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
             elif music.is_pack and project.music_path(music.name).read_bytes()[:4] != b"OggS":
                 out.append(Problem(ERROR, "music", lf, f"music/{music.name}.ogg is not an OGG file"))
 
+    return out + _check_objects(project, level, schemas, of)
+
+
+def _check_objects(project: Project, level, schemas, of: str, stock_base: bool = False) -> list[Problem]:
+    """The level's objects. A stock-level edit (`stock_base`) adds to the stock list: its squads, regions and start
+    points are checked against what the stock level has by the build, not here."""
+    out: list[Problem] = []
     items = level.objects["objects"]
     for uid, n in Counter(o["uid"] for o in items).items():
         if n > 1:
@@ -160,6 +170,8 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
     if total > obj.LIST_BUFFER_SIZE:
         out.append(Problem(ERROR, "list-size", of, f"the object list is 0x{total:X} bytes; the game's buffer is "
                                                    f"0x{obj.LIST_BUFFER_SIZE:X} (header included)"))
+    if stock_base:
+        return out
     out += _check_squads(squadrons, members, doors, region_corners, of)
     out += _check_patrols(patrol_nodes, patrol_links, of)
     for key, limit, what in (("camerazone", 24, "camera zones (the rest are ignored)"),

@@ -31,6 +31,7 @@ from jfgstudio.project import Project
 GAME_ID = "jet-force-gemini"
 DEFAULT_MIN_RECOMP = "1.1.8"
 HEROES = ("vela", "juno", "lupus")
+STOCK_LEVELS = 412  # the US ROM's level count (the catalog's level_count); appended levels are numbered from here
 # (table asset, data asset, what, how to compare two entries)
 SETS = (
     (0x1E, 0x1F, "level", "raw"),
@@ -82,6 +83,9 @@ class _Builder:
         self.list_count = lists
         self.empty_list = None
         for name, level in self.p.levels.items():
+            if level.base is not None:  # an edit of a stock level: its number and lists stay the stock ones
+                self.level_ids[name] = level.base
+                continue
             if "fixedId" in level.level:
                 self.level_ids[name] = level.level["fixedId"]
             else:
@@ -97,7 +101,7 @@ class _Builder:
                 lists += 1
         count = self.catalog.track_count()
         names = sorted({refs.parse(lvl.level["track"]).name for lvl in self.p.levels.values()
-                        if refs.parse(lvl.level["track"]).is_pack})
+                        if refs.parse(lvl.level["track"]).is_pack and lvl.base is None})
         self.track_ids = {n: count + i for i, n in enumerate(names)}
 
     def level_number(self, ref: str) -> int:
@@ -157,6 +161,8 @@ class _Builder:
         known = self.lv.stock_squadrons(stock_lists)
         cutscenes = self.jf.read_table(self.catalog.assets.section(self.lv.CUTSCENE_TABLE))[1]
         for name, level in self.p.levels.items():
+            if level.base is not None:
+                continue  # stock-level edits are patches (patches())
             slots = self.level_lists[name]
             entries, list_fixups, at = [], [], 0x10
             for o in level.objects["objects"]:
@@ -223,6 +229,42 @@ class _Builder:
     def _set_entry(table, data, what, index, raw, counts, name) -> dict:
         return {"table": table, "data": data, "what": what, "index": index, "raw": raw,
                 "append": name if index >= counts[what] else None}
+
+    def patches(self) -> list[dict]:
+        """The port's level patches for stock-level edits: the objects appended to the stock level's own list (slot 1,
+        header +0x56), the header fields written over the stock header."""
+        out = []
+        stock = self.catalog.levels()
+        fields = {name: (off, fmt) for off, fmt, name in self.lv.FIELDS}
+        for name, level in self.p.levels.items():
+            if level.base is None:
+                continue
+            if not 0 <= level.base < len(stock):
+                raise BuildError([f"levels/{name}: there is no stock level {level.base}"])
+            ops = []
+            for o in level.objects["objects"]:
+                entry = self.entry(o, name)
+                op = {"op": "append", "hex": entry.hex()}
+                target = refs.parse(o["target"], "level") if o.get("target") else None
+                if target and target.is_pack and self.p.levels[target.name].base is None:
+                    op["fixups"] = [{"at": 0x0A, "type": "lohi", "ref": f"level_{target.name}"}]
+                ops.append(op)
+            if ops:
+                out.append({"table": self.lv.OBJLIST_TABLE, "data": self.lv.OBJLIST_DATA,
+                            "entry": stock[level.base]["objectList1"], "objlist": ops})
+            sets = []
+            for key, value in sorted(level.level["header"].items()):
+                if key not in fields:
+                    raise BuildError([f"levels/{name}/level.json: header field {key!r} is not one the build knows"])
+                off, fmt = fields[key]
+                values = value if isinstance(value, list) else [value]
+                sets.append({"at": off, "hex": struct.pack(">" + fmt, *values).hex()})
+            if sets:
+                out.append({"table": self.lv.HEADER_TABLE, "data": self.lv.HEADER_DATA, "entry": level.base,
+                            "set": sets})
+            self.log(f"level {name}: adds {len(ops)} objects to stock level {level.base}"
+                     + (f" and changes {len(sets)} header fields" if sets else ""))
+        return out
 
     # the patch side
     def map_image(self) -> bytes | None:
@@ -295,6 +337,7 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
         raise BuildError(b.problems)
     try:
         changes = b.assets()
+        level_patches = b.patches()
         patched = b.map_image()
     except b.jf.FormatError as e:
         raise BuildError([str(e)]) from e
@@ -315,7 +358,7 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
             e["packed"] = True
         entries.append(e)
     result.entries = entries
-    music = music_manifest(project)
+    music = music_manifest(project, b.catalog.level_count())
     for name in sorted(music["tracks"]):
         files[f"music/{name}.ogg"] = project.music_path(name).read_bytes()
     meta = project.meta
@@ -336,8 +379,11 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("mod.json", json.dumps(manifest, indent=4, sort_keys=True))
-        if entries:
-            z.writestr("jfg_assets.json", json.dumps({"entries": entries}, indent=1))
+        if entries or level_patches:
+            doc = {"entries": entries}
+            if level_patches:
+                doc["patches"] = level_patches
+            z.writestr("jfg_assets.json", json.dumps(doc, indent=1))
         if music["levels"]:
             z.writestr("jfg_music.json", json.dumps(music, indent=1, sort_keys=True))
         for name, raw in sorted(files.items()):
@@ -351,9 +397,10 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     return result
 
 
-def music_manifest(project: Project) -> dict:
-    """jfg_music.json: the pack's OGG files and the levels that play them (the port's jfg_music.cpp). A level with a
-    fixed number is named by it; an appended one by its append name, which the port's linker resolves."""
+def music_manifest(project: Project, stock_levels: int = STOCK_LEVELS) -> dict:
+    """jfg_music.json: the pack's OGG files and the levels that play them (the port's jfg_music.cpp). A stock level
+    (or a stock-level edit, or a fixedId that replaces a stock level) is named by its number; an appended level by its
+    append name, which the port's linker resolves (an appended number may change at load)."""
     tracks, levels = {}, {}
     for name, level in project.levels.items():
         if not level.level.get("music"):
@@ -362,7 +409,8 @@ def music_manifest(project: Project) -> dict:
         if not r.is_pack:
             continue
         tracks[r.name] = f"music/{r.name}.ogg"
-        key = f"stock:{level.level['fixedId']}" if "fixedId" in level.level else f"level_{name}"
+        fixed = level.base if level.base is not None else level.level.get("fixedId")
+        key = f"stock:{fixed}" if fixed is not None and fixed < stock_levels else f"level_{name}"
         levels[key] = r.name
     return {"tracks": tracks, "levels": levels}
 

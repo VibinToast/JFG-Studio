@@ -47,9 +47,10 @@ def start_level_arg(project: proj.Project, level: str, by_name: bool) -> str:
     """What --start-level gets: a stock number, a pack level's fixed number, or its linker name."""
     if level not in project.levels:
         return str(int(level, 0))
-    fixed = project.levels[level].level.get("fixedId")
-    if fixed is not None:
-        return str(fixed)
+    lv = project.levels[level]
+    fixed = lv.base if lv.base is not None else lv.level.get("fixedId")
+    if fixed is not None and (fixed < build.STOCK_LEVELS or not by_name):
+        return str(fixed)  # a stock level (or one replacing it); an appended number can change at load
     if not by_name:
         raise TestRunError(f"level {level} has no fixed number and this port can't start a level by name "
                            "(update the port)")

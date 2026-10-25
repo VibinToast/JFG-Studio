@@ -58,6 +58,12 @@ class Level:
     def ref(self) -> str:
         return f"pack:level/{self.name}"
 
+    @property
+    def base(self) -> int | None:
+        """The stock level this level edits ("base"), or None for a level of the pack's own."""
+        b = self.level.get("base")
+        return int(b.rsplit("/", 1)[1], 0) if b else None
+
 
 @dataclass
 class Project:
@@ -151,6 +157,19 @@ def create(path: Path | str, mod_id: str, name: str, author: str = "") -> Projec
         (path / folder).mkdir(parents=True, exist_ok=True)
     project.save()
     return project
+
+
+def edit_stock_level(project: Project, name: str, level_id: int, display_name: str, track_id: int) -> Level:
+    """A level that edits stock level `level_id`: what it holds is added to the stock level when the pack loads."""
+    if not NAME_RE.match(name):
+        raise ProjectError([f"{name!r}: level names use lower case letters, digits, _ and -"])
+    if name in project.levels:
+        raise ProjectError([f"level {name} already exists"])
+    level = Level(name, {"format": FORMAT, "name": display_name[:31], "base": f"stock:level/{level_id}",
+                         "track": f"stock:track/{track_id}", "header": {}},
+                  {"format": FORMAT, "objects": []})
+    project.levels[name] = level
+    return level
 
 
 def new_level(project: Project, name: str, display_name: str, track: str) -> Level:

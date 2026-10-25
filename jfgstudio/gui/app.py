@@ -63,6 +63,7 @@ class State:
         self.water_height = 10.0
         self.water_auto = True  # the water height follows the floor where the drag starts (+15)
         self.exit_filter = ""
+        self.stock_pick = {"open": False, "filter": "", "id": None}
         self.planet: str | None = None  # the Planet window's planet
         self.planets_dirty = False  # planet edits are saved with the project (they have no undo yet)
         self.map_doc = None
@@ -226,6 +227,32 @@ class State:
         path = self.model_paths[key]
         return (path, mode) if path else None
 
+    def stock_objects(self) -> list[dict]:
+        """For a stock-level edit: the stock level's own objects (read from the user's catalog), as display-only
+        project objects (uids "stock:<list>:<index>")."""
+        if not self.project or self.level not in self.project.levels:
+            return []
+        base = self.project.levels[self.level].base
+        if base is None or self.catalog() is None:
+            return []
+        key = ("stock-objects", base)
+        if key not in self.model_paths:
+            out = []
+            lv = self.cat.levels()[base]
+            for n in sorted({lv["objectList0"], lv["objectList1"]}):
+                try:
+                    entries = self.cat.objlist(n)
+                except (IndexError, ValueError):
+                    continue
+                for i, e in enumerate(entries):
+                    if e is None:
+                        continue
+                    d = obj.decode_entry(e[1])
+                    out.append({"uid": f"stock:{n}:{i}", "type": f"stock:objtype/0x{d['id']:X}", "pos": d["pos"],
+                                "stock": {"list": n, "entry": i}, "name": self.type_name(d["id"])})
+            self.model_paths[key] = out
+        return self.model_paths[key]
+
     def type_name(self, oid: int) -> str:
         t = self.objtypes.get(oid) if self.catalog() else None
         return t["name"] if t else f"0x{oid:X}"
@@ -385,9 +412,12 @@ def _rings(objs) -> dict:
     return out
 
 
-def _instances(objs) -> tuple[list, dict]:
-    """The objects drawn with their models: (path, matrix, tint) for the renderer, and their boxes by uid."""
-    out, boxes, S.instances = [], {}, []
+def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
+    """The objects drawn with their models: (path, matrix, tint) for the renderer, and their boxes by uid. Pickable
+    ones are remembered for clicking in the Scene."""
+    out, boxes = [], {}
+    if pickable:
+        S.instances = []
     for o in objs:
         oid = obj.stock_id(o)
         schema = S.schema(o)
@@ -401,7 +431,8 @@ def _instances(objs) -> tuple[list, dict]:
         tint = (1.0, 1.0, 0.2, 0.35) if o["uid"] in S.selection else (0.0, 0.0, 0.0, 0.0)
         out.append((path, m, tint))
         boxes[o["uid"]] = vp.box_corners(mesh.bounds, m)
-        S.instances.append((o["uid"], path, m))
+        if pickable:
+            S.instances.append((o["uid"], path, m))
     return out, boxes
 
 
@@ -436,7 +467,16 @@ def scene() -> None:
     objs = S.objects()
     keys = _keys(objs)
     instances, boxes = _instances(objs)
-    lines = vp.marker_lines(objs, keys, S.selection, vp.region_links(objs, keys), boxes, _rings(objs))
+    stock = S.stock_objects()  # a stock-level edit: the stock level's own objects, drawn but not editable
+    if stock:
+        stock_keys = _keys(stock)
+        stock_inst, stock_boxes = _instances(stock, pickable=False)
+        instances = instances + [(p, m, (0.25, 0.3, 0.4, 0.45)) for p, m, _ in stock_inst]
+        lines = vp.marker_lines(objs + stock, {**keys, **stock_keys}, S.selection,
+                                vp.region_links(objs + stock, {**keys, **stock_keys}), {**boxes, **stock_boxes},
+                                _rings(objs))
+    else:
+        lines = vp.marker_lines(objs, keys, S.selection, vp.region_links(objs, keys), boxes, _rings(objs))
     tex = S.view.render(w, h, S.camera, lines, instances)
     origin = imgui.get_cursor_screen_pos()
     S.scene_rect = (origin.x, origin.y, w, h)
@@ -760,6 +800,57 @@ def _field_input(uid: str, f: obj.Field, value: int, own: bool) -> None:
         imgui.set_tooltip(tip)
 
 
+def _new_level() -> None:
+    """A new level of the pack on the first geometry (a stock track when the project has none)."""
+    if S.project is None:
+        return
+    geometry = sorted((S.project.path / "geometry").glob("*.glb"))
+    track = f"pack:track/{geometry[0].stem}" if geometry else "stock:track/18"
+    n = next(k for k in range(1, 999) if f"level{k}" not in S.project.levels)
+    proj.new_level(S.project, f"level{n}", f"New level {n}", track)
+    S.level, S.selection = f"level{n}", set()
+    S.planets_dirty = True  # unsaved: a new level
+    S.validate()
+
+
+def stock_level_popup() -> None:
+    """Edit a stock level: what the pack adds to it (objects, header fields) is patched in when the pack loads."""
+    d = S.stock_pick
+    if d["open"]:
+        imgui.open_popup("Edit a stock level")
+        d["open"] = False
+    if not imgui.begin_popup_modal("Edit a stock level", None, imgui.WindowFlags_.always_auto_resize)[0]:
+        return
+    if S.catalog() is None:
+        imgui.text(f"No catalog: {S.cat_error}")
+    else:
+        _, d["filter"] = imgui.input_text_with_hint("##stockfilter", "Search levels", d["filter"])
+        imgui.begin_child("stocklevels", imgui.ImVec2(hello_imgui.em_size(28), hello_imgui.em_size(16)))
+        for lv in S.cat.levels():
+            label = f"{lv['id']}: {lv['name']}"
+            if d["filter"] and d["filter"].lower() not in label.lower():
+                continue
+            if imgui.selectable(label, d["id"] == lv["id"])[0]:
+                d["id"] = lv["id"]
+        imgui.end_child()
+        imgui.text_disabled("Objects you place are added to the level; its own stay as they are.")
+        if imgui.button("Create") and d["id"] is not None:
+            lv = S.cat.levels()[d["id"]]
+            name = f"stock{lv['id']}"
+            try:
+                proj.edit_stock_level(S.project, name, lv["id"], lv["name"], lv["track"])
+                S.level, S.selection = name, set()
+                S.planets_dirty = True
+                S.validate()
+                imgui.close_current_popup()
+            except proj.ProjectError as e:
+                S.message = "; ".join(e.problems)
+        imgui.same_line()
+    if imgui.button("Cancel"):
+        imgui.close_current_popup()
+    imgui.end_popup()
+
+
 def project_window() -> None:
     if not S.project:
         if imgui.button("Open project..."):
@@ -772,9 +863,16 @@ def project_window() -> None:
     _muted(f"{S.project.id}  {S.project.meta['version']}   {S.project.path}")
     if imgui.tree_node_ex("Levels", imgui.TreeNodeFlags_.default_open):
         for name, level in S.project.levels.items():
-            if imgui.selectable(f"{level.level['name']}  ({name})", S.level == name)[0]:
+            kind = f"edits stock level {level.base}" if level.base is not None else name
+            if imgui.selectable(f"{level.level['name']}  ({kind})##{name}", S.level == name)[0]:
                 S.level, S.selection = name, set()
         imgui.tree_pop()
+    if imgui.button("New level"):
+        _new_level()
+    imgui.same_line()
+    if imgui.button("Edit a stock level..."):
+        S.stock_pick["open"] = True
+    stock_level_popup()
     if imgui.tree_node_ex("Planets", imgui.TreeNodeFlags_.default_open):
         for name, p in S.project.planets.items():
             where = p.get("replaces") or f"disc {p.get('disc', {}).get('index', '?')}"

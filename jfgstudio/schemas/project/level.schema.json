@@ -7,6 +7,7 @@
  "properties": {
   "format": {"const": 1},
   "name": {"type": "string", "minLength": 1, "maxLength": 31, "description": "the level's name in the game (header +0x00)"},
+  "base": {"type": "string", "description": "stock:level/<n>: this is an edit of a stock level: its objects are added to the level's own list and its header fields change the stock header (the port's level patches)"},
   "fixedId": {"type": "integer", "minimum": 0, "maximum": 2047, "description": "phase 0 only: the level id to use until the port's content linker exists"},
   "fixedObjectLists": {
    "type": "object",
