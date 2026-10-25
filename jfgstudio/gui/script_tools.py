@@ -16,6 +16,7 @@ jfg.player()                      x, y, z of the hero (or nil)
 jfg.level() / jfg.level_id("level_name" | "stock:21")
 jfg.flag(n) / jfg.set_flag(n, on) the game's flags
 jfg.unlock_door(id)               as a squadron's death does
+jfg.door_locked(id)               true while that door is locked, nil if there is none
 jfg.warp(level, start_point)      change level
 jfg.log(...)                      a line in the port's jfg_mods.log"""
 
@@ -88,6 +89,12 @@ def triggers_window() -> None:
                         changed = True
                     else:
                         S.message = "Select objects in the Scene to frame the area"
+            elif when["kind"] == "door opens":
+                c, when["door"] = imgui.input_int("Door id", int(when.get("door", 1)))
+                changed |= c
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip("The door's id (doorId): fires when it opens after being locked, e.g. once the "
+                                      "squadrons that lock it are dead")
             elif when["kind"] == "flag":
                 c, when["flag"] = imgui.input_int("Game flag", int(when.get("flag", 0)))
                 changed |= c

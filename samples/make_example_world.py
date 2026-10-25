@@ -250,7 +250,7 @@ def fire_ant(p, cat) -> None:
                            "textures": textures}
 
 
-def world_scripts(p) -> None:
+def world_scripts(p, arena_door: int) -> None:
     """The world's triggers (made in the editor's Triggers window; compiled to Lua by the build) and one script written
     by hand, for the port's Lua runtime."""
     from jfgstudio import scripts
@@ -269,6 +269,8 @@ def world_scripts(p) -> None:
          "then": [say("Fire Ants!", 2)]},
         {"name": "arena intro", "level": "pack:level/arena", "when": {"kind": "level start"},
          "then": [say("SKY ARENA - Defeat both squads to open the final gate.", 6)]},
+        {"name": "both squads down", "level": "pack:level/arena", "when": {"kind": "door opens", "door": arena_door},
+         "then": [say("The final gate is open! Head north.", 6), {"do": "music", "track": "zephyra_landing"}]},
         {"name": "victory", "level": "pack:level/arena", "when": {"kind": "enter", "box": [-300, 1000, 300, 1500]},
          "then": [say("Victory! The way home is open.", 6),
                   {"do": "fog", "rgb": [200, 190, 255], "near": 1000, "far": 1023, "ticks": 120}]},
@@ -402,6 +404,7 @@ def main() -> int:
     w.exit(pl, mv, 0, -1270, "pack:level/caverns", 1, "back to Ember Caverns", radius=50)
     w.exit(pl, mv, 0, 1380, f"stock:level/{FOREST_FIRST}", 0, "victory: home to Goldwood")
     door_c = pl.free("door", "doorId")
+    p.meta.setdefault("x-arena-door", door_c)  # the finale trigger watches this door (removed before saving)
     ring = [(-620, -620), (620, -620), (620, 620), (-620, 620)]  # inside the arena disc
     w.squad(pl, mv, "BigShieldAnt", (-350, 200), 3, ring, door_id=door_c)
     w.squad(pl, mv, "Cyborg", (350, 200), 2, ring, door_id=door_c)
@@ -433,8 +436,9 @@ def main() -> int:
               fields={"red": 120, "green": 220, "blue": 255, "radius": 300, "flags": 0x40})
     f.objects["objects"] = pl.made
 
+    arena_door = p.meta.pop("x-arena-door")
     p.save()
-    world_scripts(p)
+    world_scripts(p, arena_door)
     print(f"wrote {OUT}: {len(p.levels)} levels, "
           f"{sum(len(lv.objects['objects']) for lv in p.levels.values())} objects")
     return 0

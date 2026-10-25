@@ -6,8 +6,10 @@ in the editor, compiled to one more script.
 
 A trigger:
     {"name": "...", "level": "pack:level/<name>" | "stock:level/<n>",
-     "when": {"kind": "enter", "level start" | "flag",
-              "box": [x0, z0, x1, z1] (enter: the hero's x/z inside it), "flag": n (flag: when it gets set)},
+     "when": {"kind": "enter", "level start" | "flag" | "door opens",
+              "box": [x0, z0, x1, z1] (enter: the hero's x/z inside it), "flag": n (flag: when it gets set),
+              "door": id (door opens: the door with that id opens after it was seen locked: its squadrons are
+              dead, its key was used)},
      "once": true,
      "then": [{"do": "message", "text": "...", "seconds": 3},
               {"do": "music", "track": "<music/ name>"}, {"do": "music_stop"},
@@ -21,7 +23,7 @@ from pathlib import Path
 
 from jfgstudio import refs
 
-WHEN = ("level start", "enter", "flag")
+WHEN = ("level start", "enter", "flag", "door opens")
 DO = ("message", "music", "music_stop", "fog", "flag", "unlock_door", "warp")
 
 
@@ -80,7 +82,7 @@ def _action(a: dict, project) -> str:
 def compile_triggers(triggers: list[dict], project=None) -> str:
     """The triggers as one Lua script for the port."""
     lines = ["-- Made by JFG-Studio from triggers.json: edit the triggers in the editor, not this file.",
-             "local fired = {}", "local levels = {}", ""]
+             "local fired = {}", "local seen = {}", "local levels = {}", ""]
     for k, t in enumerate(triggers):
         lines.append(f"levels[{k + 1}] = function() return {_level_expr(t['level'], project)} end")
     lines.append("")
@@ -100,13 +102,20 @@ def compile_triggers(triggers: list[dict], project=None) -> str:
             xa, xb, za, zb = min(x0, x1), max(x0, x1), min(z0, z1), max(z0, z1)
             on_tick.append(f"{header}\n    if {guard}level == levels[{i}]() and x and x >= {xa} and x <= {xb} "
                            f"and z >= {za} and z <= {zb} then\n{once}{body}\n    end")
+        elif kind == "door opens":
+            inner = "\n".join("  " + line for line in body.split("\n"))
+            on_tick.append(f"{header}\n    if not fired[{i}] and level == levels[{i}]() then\n"
+                           f"      local locked = jfg.door_locked({int(when['door'])})\n"
+                           f"      if locked then seen[{i}] = true\n"
+                           f"      elseif locked == false and seen[{i}] then\n        fired[{i}] = true\n"
+                           f"{inner}\n      end\n    end")
         elif kind == "flag":
             on_tick.append(f"{header}\n    if {guard}level == levels[{i}]() and jfg.flag({int(when['flag'])}) "
                            f"then\n{once}{body}\n    end")
         else:
             raise ValueError(f"trigger {k + 1}: unknown 'when' {kind!r}")
     if on_level:
-        lines += ["jfg.on(\"level\", function(level)", "  fired = {}", *on_level, "end)", ""]
+        lines += ["jfg.on(\"level\", function(level)", "  fired = {}", "  seen = {}", *on_level, "end)", ""]
     if on_tick:
         lines += ["jfg.on(\"tick\", function(level, seconds)", "  local x, y, z = jfg.player()", *on_tick, "end)", ""]
     return "\n".join(lines) + "\n"

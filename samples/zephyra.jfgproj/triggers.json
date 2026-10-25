@@ -79,6 +79,25 @@
   },
   {
    "level": "pack:level/arena",
+   "name": "both squads down",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 6,
+     "text": "The final gate is open! Head north."
+    },
+    {
+     "do": "music",
+     "track": "zephyra_landing"
+    }
+   ],
+   "when": {
+    "door": 1,
+    "kind": "door opens"
+   }
+  },
+  {
+   "level": "pack:level/arena",
    "name": "victory",
    "then": [
     {
