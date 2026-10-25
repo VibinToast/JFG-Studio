@@ -115,3 +115,22 @@ class Markers(unittest.TestCase):
         self.assertEqual(o["fields"]["startPoint"], 2)
         self.assertEqual(o["fields"]["yaw"], 16)  # facing +x: a quarter turn
         self.assertEqual(o["size"], 0x0E)
+
+
+class Music(unittest.TestCase):
+    def test_music_manifest_and_validate(self):
+        from jfgstudio import build
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            gem = p.levels["gemini"].level
+            gem["music"] = "pack:music/theme"
+            schemas = obj.load_schemas()
+            rules = {x.rule for x in val.validate(p, schemas) if x.severity == val.ERROR}
+            self.assertIn("music", rules)  # the file isn't there yet
+            p.music_path("theme").parent.mkdir(exist_ok=True)
+            p.music_path("theme").write_bytes(b"OggS" + bytes(60))
+            self.assertFalse([x for x in val.validate(p, schemas) if x.severity == val.ERROR])
+            self.assertEqual(build.music_manifest(p), {"tracks": {"theme": "music/theme.ogg"},
+                                                       "levels": {"stock:412": "theme"}})
+            del gem["fixedId"]
+            self.assertEqual(build.music_manifest(p)["levels"], {"level_gemini": "theme"})

@@ -187,6 +187,9 @@ class _Builder:
                            "objectList0": slots["slot0"], "objectList1": slots["slot1"]})
             if level.level.get("ambient"):
                 fields["ambientSounds"] = (list(level.level["ambient"]) + [-1, -1, -1])[:3]
+            music = refs.parse(level.level["music"], "music") if level.level.get("music") else None
+            if music is not None and music.is_stock:
+                fields["tune"] = music.number()
             try:
                 raw = self.lv.new_header(level.level["name"], **fields)
             except self.jf.FormatError as e:
@@ -312,6 +315,9 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
             e["packed"] = True
         entries.append(e)
     result.entries = entries
+    music = music_manifest(project)
+    for name in sorted(music["tracks"]):
+        files[f"music/{name}.ogg"] = project.music_path(name).read_bytes()
     meta = project.meta
     manifest = {"id": meta["id"], "version": meta["version"], "display_name": meta["name"],
                 "authors": meta.get("authors", []), "description": meta.get("description", ""),
@@ -332,6 +338,8 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
         z.writestr("mod.json", json.dumps(manifest, indent=4, sort_keys=True))
         if entries:
             z.writestr("jfg_assets.json", json.dumps({"entries": entries}, indent=1))
+        if music["levels"]:
+            z.writestr("jfg_music.json", json.dumps(music, indent=1, sort_keys=True))
         for name, raw in sorted(files.items()):
             z.writestr(name, raw)
         if patch:
@@ -341,6 +349,22 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     log(f"wrote {out}: {len(entries)} entries ({sum(e.get('append') is not None for e in entries)} new)"
         + (f", map patch {len(patch)} bytes" if patch else ""))
     return result
+
+
+def music_manifest(project: Project) -> dict:
+    """jfg_music.json: the pack's OGG files and the levels that play them (the port's jfg_music.cpp). A level with a
+    fixed number is named by it; an appended one by its append name, which the port's linker resolves."""
+    tracks, levels = {}, {}
+    for name, level in project.levels.items():
+        if not level.level.get("music"):
+            continue
+        r = refs.parse(level.level["music"], "music")
+        if not r.is_pack:
+            continue
+        tracks[r.name] = f"music/{r.name}.ogg"
+        key = f"stock:{level.level['fixedId']}" if "fixedId" in level.level else f"level_{name}"
+        levels[key] = r.name
+    return {"tracks": tracks, "levels": levels}
 
 
 def _self_check(b: _Builder, path: Path) -> None:

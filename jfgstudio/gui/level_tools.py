@@ -95,15 +95,25 @@ def level_window() -> None:
 
     if imgui.collapsing_header("Music and sound", imgui.TreeNodeFlags_.default_open):
         tunes = _stock_choices(lambda lv: lv["header"].get("tune"))
-        picked = _combo("Music", hd.get("tune"), tunes)
+        packs = [(f"pack:music/{f.stem}", f"{f.stem}  (music/{f.name})")
+                 for f in sorted((S.project.path / "music").glob("*.ogg"))]
+        current = lv.get("music") if (lv.get("music") or "").startswith("pack:") else hd.get("tune")
+        picked = _combo("Music", current, packs + tunes)
         if picked is not _UNCHANGED:
-            # A tune plays as its stock levels set it: the channel mask and voice limit come with it.
-            src = next(x for x in S.cat.levels() if x["header"].get("tune") == picked)["header"]
-            changes = [edit.Change(edit.LEVEL, ("header", k), hd.get(k), src[k])
-                       for k in ("tune", "tuneChannelMask", "voiceLimit") if hd.get(k) != src[k]]
-            h.do(edit.Command("level music", changes))
+            pack = picked if isinstance(picked, str) else None
+            changes = [edit.Change(edit.LEVEL, ("music",), lv.get("music"), pack)]
+            if not isinstance(picked, str):
+                # A tune plays as its stock levels set it: the channel mask and voice limit come with it.
+                src = next(x for x in S.cat.levels() if x["header"].get("tune") == picked)["header"]
+                changes += [edit.Change(edit.LEVEL, ("header", k), hd.get(k), src[k])
+                            for k in ("tune", "tuneChannelMask", "voiceLimit") if hd.get(k) != src[k]]
+            h.do(edit.Command("level music", [c for c in changes if c.old != c.new]))
+            S.validate()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("A stock tune (custom OGG music comes with the port's music streaming)")
+            imgui.set_tooltip("A stock tune, or one of the pack's OGG files (music/), which the port streams in place "
+                              "of the game's tune")
+        if imgui.button("Add OGG music..."):
+            add_music()
         ids = sorted({a for x in (S.cat.levels() if S.cat else []) for a in x["header"].get("ambientSounds", [])
                       if a != -1})
         names = {}
@@ -168,6 +178,27 @@ def level_window() -> None:
             changed, v = imgui.checkbox(label, bool(hd.get(k, 0)))
             if changed:
                 set_header(k, int(v))
+
+
+def add_music() -> None:
+    """Copies an OGG Vorbis file into the project's music/ folder (loop points: LOOPSTART / LOOPLENGTH comments)."""
+    import shutil
+
+    from imgui_bundle import portable_file_dialogs as pfd
+    S = _app().S
+    picked = (pfd.open_file("Music (OGG Vorbis)", "", ["OGG Vorbis", "*.ogg"]).result() or [None])[0]
+    if not picked:
+        return
+    from pathlib import Path
+    src = Path(picked)
+    if src.read_bytes()[:4] != b"OggS":
+        S.message = f"{src.name} is not an OGG file"
+        return
+    name = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in src.stem.lower()) or "music"
+    dest = S.project.music_path(name)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dest)
+    S.message = f"music/{dest.name} added: pick it as a level's Music"
 
 
 # ---------------------------------------------------------------- Region and Water tools in the Scene

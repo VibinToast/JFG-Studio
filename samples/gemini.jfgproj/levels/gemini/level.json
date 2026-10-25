@@ -22,6 +22,7 @@
   "tuneChannelMask": 65535,
   "world": 15
  },
+ "music": "pack:music/gemini_theme",
  "name": "Planet Gemini",
  "sky": 180,
  "track": "pack:track/field"

@@ -87,8 +87,16 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
     track = _ref(level.level["track"], "track", lf, None, out)
     if track and track.is_pack and not project.geometry_path(track.name).is_file():
         out.append(Problem(ERROR, "track", lf, f"{track}: geometry/{track.name}.glb does not exist"))
-    for r in [level.level.get("music")] if level.level.get("music") else []:
-        _ref(r, "music", lf, None, out)
+    if level.level.get("music"):
+        try:
+            music = refs.parse(level.level["music"], "music")
+        except refs.RefError as e:
+            out.append(Problem(ERROR, "music", lf, str(e)))
+        else:
+            if music.is_pack and not project.music_path(music.name).is_file():
+                out.append(Problem(ERROR, "music", lf, f"{music}: music/{music.name}.ogg does not exist"))
+            elif music.is_pack and project.music_path(music.name).read_bytes()[:4] != b"OggS":
+                out.append(Problem(ERROR, "music", lf, f"music/{music.name}.ogg is not an OGG file"))
 
     items = level.objects["objects"]
     for uid, n in Counter(o["uid"] for o in items).items():

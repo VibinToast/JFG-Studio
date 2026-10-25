@@ -73,6 +73,10 @@ class Project:
     def geometry_path(self, name: str) -> Path:
         return self.path / "geometry" / f"{name}.glb"
 
+    def music_path(self, name: str) -> Path:
+        """music/<name>.ogg: a pack's own music (OGG Vorbis), streamed by the port in place of the game's tune."""
+        return self.path / "music" / f"{name}.ogg"
+
     def save(self) -> None:
         write_json(self.path / "project.json", self.meta)
         for level in self.levels.values():
