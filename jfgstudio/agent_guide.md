@@ -64,10 +64,12 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
     y up, z along the facing). Make an opening the door's width: wider leaves a gap to walk around, which breaks the
     lock.
   - Falls of more than 240 hurt, more than 400 hurt more (Vela). Juno swims once the water is deeper than about 48.
-  - Not measured yet: the jump, the highest step, the steepest walkable slope, the clearance and width the hero
-    needs. They are being measured with Studio's `samples/scale_course.jfgproj`. Until then, keep ramps at 30 degrees
-    or less, steps at 16 or less, passages at least 120 wide and ceilings at least 160 high, and tell the player
-    these are guesses.
+  - Measured in play (Studio's `samples/scale_course.jfgproj`, as Juno, 2026-10-25): ramps up to 45 degrees can be
+    walked up, 55 can't. Everything else on the course was within reach: blocks up to 250 high, a tunnel with a
+    40-high roof, a passage 20 wide, and a 300 gap. Those are lower bounds, not limits.
+  - So, to keep the player out (a locked gate, the edge of the level): seal it completely, as even a 20 gap beside
+    a door lets the hero through; walls must be well over 250 high and gaps well over 300 across, or end in a kill
+    floor. Slopes over 45 degrees (55 tested) can't be walked up: use them for walls the player shouldn't climb.
 - **Facing**: `place`, `update_object` and `connect` take degrees (0 = towards -z, the way a start point at yaw 0
   faces). Types store it in their own steps: `describe_type` gives each angle field's `perTurn` (64 for angle10,
   256 for angle8, 65536 for angle16).
