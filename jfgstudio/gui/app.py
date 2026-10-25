@@ -44,7 +44,7 @@ class State:
         self.local = False
         self.snap = True
         self.grid = 10.0
-        self.new_project = {"open": False, "folder": "", "id": "", "name": ""}
+        self.new_project = {"open": False, "folder": "", "id": "", "name": "", "glb": ""}
         self.message = ""
         self.histories: dict[str, edit.History] = {}
         self.view = vp.Viewport()
@@ -55,6 +55,7 @@ class State:
         self.scene_rect = (0.0, 0.0, 1.0, 1.0)
         self.pos_edit = None  # the Inspector's position before a drag of its fields
         self.gizmo_note = ""
+        self.box_start = None  # where a box selection drag started (Scene pixels)
         self.region_draft: list[list[float]] = []  # the Region tool's corners so far
         self.water_draft = None  # where a Water drag started
         self.water_height = 10.0
@@ -436,6 +437,40 @@ def scene() -> None:
     if hovered and imgui.is_mouse_clicked(imgui.MouseButton_.left) and not using and not gz.is_over() \
             and not imgui.get_io().key_alt:
         _pick(origin, w, h, objs, keys)
+        mouse = imgui.get_mouse_pos()
+        S.box_start = (mouse.x - origin.x, mouse.y - origin.y)
+    _box_select(origin, w, h, objs, draw, using)
+
+
+def _box_select(origin, w, h, objs, draw, using: bool) -> None:
+    """Dragging from a click in the Scene draws a box; on release it selects the objects inside (Ctrl or Shift adds)."""
+    if S.box_start is None:
+        return
+    if using or gz.is_using():
+        S.box_start = None
+        return
+    mouse = imgui.get_mouse_pos()
+    x0, y0 = S.box_start
+    x1, y1 = mouse.x - origin.x, mouse.y - origin.y
+    big = abs(x1 - x0) > 4 and abs(y1 - y0) > 4
+    if imgui.is_mouse_down(imgui.MouseButton_.left):
+        if big:
+            a = imgui.ImVec2(origin.x + min(x0, x1), origin.y + min(y0, y1))
+            b = imgui.ImVec2(origin.x + max(x0, x1), origin.y + max(y0, y1))
+            draw.add_rect_filled(a, b, imgui.get_color_u32(theme.colour("ACCENT", 0.12)))
+            draw.add_rect(a, b, imgui.get_color_u32(theme.colour("ACCENT")), 0.0, 1.0)
+        return
+    S.box_start = None
+    if not big:
+        return
+    inside = set()
+    for o in objs:
+        p = vp.project(S.camera, (w, h), o["pos"])
+        if p and min(x0, x1) <= p[0] <= max(x0, x1) and min(y0, y1) <= p[1] <= max(y0, y1):
+            inside.add(o["uid"])
+    io = imgui.get_io()
+    S.selection = (S.selection | inside) if (io.key_ctrl or io.key_shift) else inside
+    S.message = f"{len(inside)} selected"
 
 
 def _pick(origin, w, h, objs, keys) -> None:
@@ -1041,6 +1076,8 @@ def menus() -> None:
             _open_dialog()
         if imgui.menu_item("Save", "Ctrl+S", False, S.project is not None)[0]:
             S.save()
+        if imgui.menu_item("Import geometry...", "", False, S.project is not None)[0]:
+            import_geometry_dialog()
         imgui.separator()
         if imgui.menu_item("Settings...", "", False)[0]:
             S.settings_open = True
@@ -1139,11 +1176,16 @@ def new_project_popup() -> None:
         imgui.same_line()
         if imgui.button("..."):
             d["folder"] = pfd.select_folder("Where to create the project").result() or d["folder"]
+        _, d["glb"] = imgui.input_text("Geometry", d["glb"])
+        imgui.same_line()
+        if imgui.button("...##glb"):
+            d["glb"] = (pfd.open_file("Your level from Blender", "", ["glTF binary", "*.glb"]).result()
+                        or [d["glb"]])[0]
+        imgui.text_disabled("optional: a .glb from Blender; Studio makes the first level on it")
         if imgui.button("Create") and d["folder"] and d["id"] and d["name"]:
             path = Path(d["folder"]) / f"{d['id'].split('.')[-1]}.jfgproj"
             try:
-                proj.create(path, d["id"], d["name"])
-                S.open(str(path))
+                create_project(path, d["id"], d["name"], d["glb"].strip() or None)
                 imgui.close_current_popup()
             except proj.ProjectError as e:
                 S.message = "; ".join(e.problems)
@@ -1151,6 +1193,69 @@ def new_project_popup() -> None:
         if imgui.button("Cancel"):
             imgui.close_current_popup()
         imgui.end_popup()
+
+
+def create_project(path: Path, mod_id: str, name: str, glb: str | None) -> None:
+    """File > New project: the project, and with a .glb its geometry and a first level with a start point."""
+    from jfgstudio import importer
+    p = proj.create(path, mod_id, name)
+    if glb:
+        dest = importer.import_geometry(p, glb)
+        from jfgstudio.gui.viewport import TrackMesh
+        try:
+            mesh = TrackMesh(str(dest))
+        except Exception:  # noqa: BLE001 (the check below reports what is wrong with the file)
+            mesh = None
+        importer.first_level(p, dest.stem, mesh)
+        p.save()
+    S.open(str(path))
+    if glb:
+        check_geometry(dest)
+
+
+def import_geometry_dialog() -> None:
+    """File > Import geometry: copies a .glb into the project and checks it (the Console has the report)."""
+    from jfgstudio import importer
+    if S.project is None:
+        return
+    picked = (pfd.open_file("A level from Blender", "", ["glTF binary", "*.glb"]).result() or [None])[0]
+    if not picked:
+        return
+    try:
+        dest = importer.import_geometry(S.project, picked)
+    except proj.ProjectError as e:
+        S.message = "; ".join(e.problems)
+        return
+    if not S.project.levels:
+        importer.first_level(S.project, dest.stem)
+        S.level = next(iter(S.project.levels))
+        S.planets_dirty = True  # a new level to save
+    S.message = f"geometry/{dest.name} added: pick it as a level's track in the Level window"
+    check_geometry(dest)
+
+
+def check_geometry(path) -> None:
+    """Runs the import check in the background; the report goes to the Console."""
+    from jfgstudio import importer
+    if S.playing:
+        return
+    S.play_log = [f"Import check: {Path(path).name}"]
+    S.playing = True
+
+    def run():
+        try:
+            if S.catalog() is None:
+                S.play_log.append(f"error: no catalog to check against: {S.cat_error}")
+                return
+            report = importer.check(path, S.cat)
+            S.play_log.extend(report.lines)
+            S.message = f"{Path(path).name}: " + ("ready to build" if report.ok else "has problems (see the Console)")
+        except Exception as e:  # noqa: BLE001 (logged; the editor keeps running)
+            S.play_log.append(f"error: {type(e).__name__}: {e} (log: {crashlog.write(e, 'import check')})")
+        finally:
+            S.playing = False
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def play(launch: bool = True) -> None:

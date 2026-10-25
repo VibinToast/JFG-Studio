@@ -156,7 +156,10 @@ def new_level(project: Project, name: str, display_name: str, track: str) -> Lev
         raise ProjectError([f"level {name} already exists"])
     level = Level(name,
                   {"format": FORMAT, "name": display_name, "track": track, "sky": -1,
-                   "header": {"cutsceneData": 3, "world": 15, "region": 0, "regionIndex": 0}},
+                   # Valid as it is: no fog (all zero), stock tune 4 (set both in the Level window).
+                   "header": {"cutsceneData": 3, "world": 15, "region": 0, "regionIndex": 0, "fogNear": 0,
+                              "fogFar": 0, "fog3": 0, "fogR": 0, "fogG": 0, "fogB": 0, "tune": 4,
+                              "tuneChannelMask": 65535}},
                   {"format": FORMAT, "objects": []})
     project.levels[name] = level
     return level

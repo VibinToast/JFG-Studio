@@ -82,6 +82,16 @@ def level_window() -> None:
         set_header("world", int(min(max(world, 0), 15)))
     if imgui.is_item_hovered():
         imgui.set_tooltip("The planet this level belongs to (0-15); a new planet is 15")
+    tracks = [(f"pack:track/{f.stem}", f"{f.stem}  (geometry/{f.name})")
+              for f in sorted((S.project.path / "geometry").glob("*.glb"))]
+    if lv["track"] not in dict(tracks):
+        tracks.append((lv["track"], lv["track"]))
+    picked = _combo("Track", lv["track"], tracks)
+    if picked is not _UNCHANGED and picked != lv["track"]:
+        h.set_value(edit.LEVEL, ("track",), picked, "level track")
+        S.validate()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("The level's geometry: a .glb in the project (File > Import geometry adds one)")
 
     if imgui.collapsing_header("Music and sound", imgui.TreeNodeFlags_.default_open):
         tunes = _stock_choices(lambda lv: lv["header"].get("tune"))
