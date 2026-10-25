@@ -92,3 +92,26 @@ class StartLevel(unittest.TestCase):
             with self.assertRaises(testrun.TestRunError):
                 testrun.start_level_arg(p, "gemini", False)
             self.assertEqual(testrun.start_level_arg(p, "21", True), "21")
+
+
+class Markers(unittest.TestCase):
+    def test_markers_from_extras(self):
+        _formats_or_skip(self)
+        from jfgformats import gltf
+
+        from jfgstudio import importer
+        g = gltf.GlbWriter()
+        g.doc.update({"scene": 0, "scenes": [{"nodes": [0, 1]}], "nodes": [
+            {"name": "start", "translation": [10, 5, -20], "rotation": [0.5, 0.5, -0.5, 0.5],
+             "extras": {"jfg_type": "stock:objtype/0xD", "jfg_fields": '{"startPoint": 2}'}},
+            {"name": "plain", "translation": [1, 2, 3]}]})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "m.glb"
+            g.write(str(path))
+            found = importer.markers(path)
+        self.assertEqual(len(found), 1)
+        o = found[0]
+        self.assertEqual(o["pos"], [10, 5, -20])
+        self.assertEqual(o["fields"]["startPoint"], 2)
+        self.assertEqual(o["fields"]["yaw"], 16)  # facing +x: a quarter turn
+        self.assertEqual(o["size"], 0x0E)
