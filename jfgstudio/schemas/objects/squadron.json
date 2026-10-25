@@ -12,7 +12,7 @@
   {"name": "stance", "offset": "0x0A", "type": "u8", "description": "formation stance (low 2 bits; 2, 3 = alert)"},
   {"name": "count", "offset": "0x0B", "type": "u8", "default": 1, "description": "member count (the door unlock checks this many saved flags)"},
   {"name": "kind", "offset": "0x24", "type": "u8", "description": "squadron kind (low 4 bits)"},
-  {"name": "heading", "offset": "0x25", "type": "s8", "description": "launch / fixed heading (<< 8)"},
+  {"name": "heading", "offset": "0x25", "type": "s8", "unit": "angle8", "role": "yaw", "description": "launch / fixed heading"},
   {"name": "squadronId", "offset": "0x2D", "type": "u8", "link": "squadronId", "description": "members name it with their +0x11"},
   {"name": "doorId", "offset": "0x31", "type": "u8", "link": "doorId", "description": "doors with this id stay locked until the squadron is dead (0 = none)"},
   {"name": "health", "offset": "0x34", "type": "u8", "description": "member health in units (8.8 << 8)"},

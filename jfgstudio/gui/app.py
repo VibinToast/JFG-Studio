@@ -366,6 +366,7 @@ def _matrix(o: dict, schema: obj.Schema | None, oid: int | None) -> np.ndarray:
         f = schema.role("scale")
         if f is not None:
             scale *= obj.scale_of(f, values.get(f.name, f.default))
+        scale *= schema.scale_factor(values)
     return vp.object_matrix([float(v) for v in o["pos"]], scale=scale, **angles)
 
 

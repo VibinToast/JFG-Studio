@@ -9,6 +9,9 @@
  "status": "partial",
  "description": "An enemy or tribal spawned by its squadron, not by the list. Applies to many object types: set \"schema\": \"squadmember\" on the object. The game writes its saved-flag index into +0x18.",
  "fields": [
+  {"name": "yaw", "offset": "0x0D", "type": "u8", "unit": "angle8", "role": "yaw", "description": "start facing"},
+  {"name": "pitch", "offset": "0x0E", "type": "u8", "unit": "angle8", "role": "pitch", "description": ""},
+  {"name": "roll", "offset": "0x0F", "type": "u8", "unit": "angle8", "role": "roll", "description": ""},
   {"name": "squadron", "offset": "0x11", "type": "u8", "link": "squadronId", "description": "the squadron's squadronId"}
  ]
 }

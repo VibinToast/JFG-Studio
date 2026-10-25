@@ -50,6 +50,7 @@ class Schema:
     size: int = 0  # the smallest entry the game's code reads (schema "minSize"); every stock size is even
     category: str = "Other"  # the Prefabs window's group
     hidden: bool = False  # not drawn in game (zones, lights, markers): the Scene draws a marker, not a model
+    value_scale: dict | None = None  # {"field", "scales": {value: factor}}: a size that follows a field's value
     min_size: int = field(init=False)
 
     def __post_init__(self):
@@ -60,6 +61,13 @@ class Schema:
 
     def role(self, role: str) -> Field | None:
         return next((f for f in self.fields if f.role == role), None)
+
+    def scale_factor(self, values: dict) -> float:
+        """The drawn size factor a field's value gives (health pickups: medium x1.3, full x1.6)."""
+        if not self.value_scale:
+            return 1.0
+        v = values.get(self.value_scale["field"])
+        return float(self.value_scale["scales"].get(str(v), 1.0))
 
     def defaults(self) -> dict:
         """The fields whose default is not 0 (what a new object of this type starts with)."""
@@ -83,7 +91,7 @@ def load_schemas() -> dict[str, Schema]:
         out[doc["key"]] = Schema(doc["key"], doc["name"], [int(i, 0) for i in doc.get("ids", [])],
                                  doc.get("behaviour"), fields, doc.get("status", "decoded"), doc.get("description", ""),
                                  int(doc.get("minSize", "0"), 0), doc.get("category", "Other"),
-                                 doc.get("hidden", False))
+                                 doc.get("hidden", False), doc.get("valueScale"))
     return out
 
 
