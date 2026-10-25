@@ -49,6 +49,30 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     out += _check_arrivals(project, schemas)
     out += _check_keys(project, schemas)
     out += _check_reachable(project, schemas)
+    out += _check_fog(project, schemas)
+    return out
+
+
+FOG_NEAR_MIN = 900  # none of the game's own levels starts its fog closer (checked 2026-10-25: 0 of 412)
+
+
+def _check_fog(project: Project, schemas) -> list[Problem]:
+    """Fog that starts closer than any of the game's levels: the view turns to fog (a trial level's zone at 150 went
+    white)."""
+    out = []
+    for level in project.levels.values():
+        h = level.level.get("header", {})
+        if h.get("fogFar") and h.get("fogNear", FOG_NEAR_MIN) < FOG_NEAR_MIN:
+            out.append(Problem(WARNING, "fog", f"levels/{level.name}/level.json",
+                               f"fogNear {h['fogNear']} starts the fog closer than any of the game's levels "
+                               f"(all {FOG_NEAR_MIN} or more; a light haze is about 985-990): the view will be "
+                               "mostly fog"))
+        for o in level.objects["objects"]:
+            f = o.get("fields", {})
+            if _key(o, schemas) == "fogzone" and f.get("near", FOG_NEAR_MIN) < FOG_NEAR_MIN:
+                out.append(Problem(WARNING, "fog", f"levels/{level.name}/objects.json",
+                                   f"the fog zone's near {f['near']} is closer than any of the game's level fog "
+                                   f"({FOG_NEAR_MIN} or more): inside it the view turns to fog", o["uid"]))
     return out
 
 

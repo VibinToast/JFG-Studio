@@ -13,8 +13,8 @@
   {"name": "red", "offset": "0x0B", "type": "u8", "description": ""},
   {"name": "green", "offset": "0x0C", "type": "u8", "description": ""},
   {"name": "blue", "offset": "0x0D", "type": "u8", "description": ""},
-  {"name": "near", "offset": "0x0E", "type": "s16", "default": 900, "description": "fog start"},
-  {"name": "far", "offset": "0x10", "type": "s16", "default": 1000, "description": "fog end (at most 0x3FF)"},
+  {"name": "near", "offset": "0x0E", "type": "s16", "default": 900, "description": "fog start, on the level header's depth scale (0-1023): the example world's light haze starts at 985-990; a zone at 150 turned the view white (Verdan trial)"},
+  {"name": "far", "offset": "0x10", "type": "s16", "default": 1000, "description": "fog end, the same scale (at most 0x3FF; about 1020 in the example world)"},
   {"name": "fadeTime", "offset": "0x12", "type": "s16", "default": 60, "description": "ticks to change over; never 0"}
  ]
 }

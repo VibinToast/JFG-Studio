@@ -310,6 +310,17 @@ class TrialFindings(AgentTest):
         self.s.delete_objects("home", [exit_])
         self.assertEqual(rules(), [("reachable", "planets/gemini.json")])
 
+    def test_fog_closer_than_the_game(self):
+        def fog():
+            return [p.uid or p.file for p in val.validate(self.s.p) if p.rule == "fog"]
+        self.assertEqual(fog(), [])
+        zone = self.s.place("home", "fogzone", [0, 0], fields={"near": 150, "far": 700})[0]["uid"]
+        self.s.set_level("home", {"header": {"fogNear": 700, "fogFar": 1020}})
+        self.assertEqual(sorted(fog()), sorted([zone, "levels/home/level.json"]))
+        self.s.update_object("home", zone, fields={"near": 975})
+        self.s.set_level("home", {"header": {"fogNear": 988}})
+        self.assertEqual(fog(), [])
+
     def test_preview(self):
         self.with_catalog()
         self.s.place_squad("home", [0, -400], "0x29", members=2, door="new", door_type="0x1AD", door_pos=[0, -150])

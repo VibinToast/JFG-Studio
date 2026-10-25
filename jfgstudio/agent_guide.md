@@ -65,8 +65,9 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   256 for angle8, 65536 for angle16).
 - **Fog** (level header): `fogNear` and `fogFar` are on the game's depth scale, 0-1023, where nearly all of the view
   is in the top few dozen values. The example world's light haze is `fogNear` 985-990, `fogFar` 1020-1022, `fog3` =
-  `fogNear`. Around 700 the fog starts at the hero's feet. Change it a few units at a time; use a `fogzone` for
-  local mist.
+  `fogNear`. Around 700 the fog starts at the hero's feet, and none of the game's levels starts below 900. Change it
+  a few units at a time. A `fogzone`'s `near` / `far` are on the same scale: for local mist go a little under the
+  level's own values (a trial's zone at 150 turned the view white).
 
 ## Objects
 
