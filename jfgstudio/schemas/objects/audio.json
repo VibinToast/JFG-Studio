@@ -10,7 +10,7 @@
  "description": "A looped or one-shot sound at a point. MSR 'Sound emitter'.",
  "fields": [
   {"name": "sound", "offset": "0x0A", "type": "u16", "description": "sound bank id"},
-  {"name": "range", "offset": "0x0C", "type": "u16", "default": 1500, "description": ""},
+  {"name": "range", "offset": "0x0C", "type": "u16", "default": 1500, "role": "radius", "description": ""},
   {"name": "volume", "offset": "0x0E", "type": "u8", "default": 100, "description": "0-127"},
   {"name": "minVolume", "offset": "0x0F", "type": "u8", "description": "looped: never quieter"},
   {"name": "pitch", "offset": "0x10", "type": "u8", "default": 100, "description": "percent"},

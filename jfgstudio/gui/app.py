@@ -29,7 +29,8 @@ gz = imguizmo.im_guizmo
 TOOLS = (("hand", "Q", "Hand: pan and orbit the view"), ("move", "W", "Move"),
          ("rotate", "E", "Rotate: types with a facing field"), ("scale", "R", "Scale: types with a size field"),
          ("region", "G", "Region: click a navigation region's corners on the floor"),
-         ("water", "T", "Water: drag a rectangle on the floor to add a water surface to the pack's geometry"))
+         ("water", "T", "Water: drag a rectangle on the floor to add a water surface to the pack's geometry"),
+         ("patrol", "P", "Patrol: click a squad patrol network's points; each links to the last"))
 
 
 class State:
@@ -58,6 +59,7 @@ class State:
         self.box_start = None  # where a box selection drag started (Scene pixels)
         self.region_draft: list[list[float]] = []  # the Region tool's corners so far
         self.water_draft = None  # where a Water drag started
+        self.patrol_last = None  # the Patrol tool's last point (uid), which the next one links to
         self.water_height = 10.0
         self.water_auto = True  # the water height follows the floor where the drag starts (+15)
         self.exit_filter = ""
@@ -370,6 +372,19 @@ def _matrix(o: dict, schema: obj.Schema | None, oid: int | None) -> np.ndarray:
     return vp.object_matrix([float(v) for v in o["pos"]], scale=scale, **angles)
 
 
+def _rings(objs) -> dict:
+    """uid -> the radii of an object's ranges (fields with the "radius" role), for the Scene."""
+    out = {}
+    for o in objs:
+        schema = S.schema(o)
+        if schema:
+            fields = [f for f in schema.fields if f.role == "radius"]
+            if fields:
+                values = S.fields(o, schema)
+                out[o["uid"]] = [values.get(f.name, f.default) * f.radius_scale for f in fields]
+    return out
+
+
 def _instances(objs) -> tuple[list, dict]:
     """The objects drawn with their models: (path, matrix, tint) for the renderer, and their boxes by uid."""
     out, boxes, S.instances = [], {}, []
@@ -421,7 +436,7 @@ def scene() -> None:
     objs = S.objects()
     keys = _keys(objs)
     instances, boxes = _instances(objs)
-    lines = vp.marker_lines(objs, keys, S.selection, vp.region_links(objs, keys), boxes)
+    lines = vp.marker_lines(objs, keys, S.selection, vp.region_links(objs, keys), boxes, _rings(objs))
     tex = S.view.render(w, h, S.camera, lines, instances)
     origin = imgui.get_cursor_screen_pos()
     S.scene_rect = (origin.x, origin.y, w, h)
@@ -445,7 +460,7 @@ def scene() -> None:
             colour = theme.colour("HIGHLIGHT" if o["uid"] in S.selection else "MUTED")
             draw.add_text(imgui.ImVec2(origin.x + p[0] + 4, origin.y + p[1] - 14), imgui.get_color_u32(colour),
                           o.get("name") or o["uid"])
-    if S.tool in ("region", "water"):
+    if S.tool in ("region", "water", "patrol"):
         if S.drag is not None:
             _end_drag(objs)
         level_tools.scene_tool(origin, w, h, hovered)

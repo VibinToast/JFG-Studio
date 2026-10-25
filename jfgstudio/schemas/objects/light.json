@@ -15,7 +15,7 @@
   {"name": "green", "offset": "0x0D", "type": "u8", "default": 255, "description": ""},
   {"name": "blue", "offset": "0x0E", "type": "u8", "default": 255, "description": ""},
   {"name": "intensity", "offset": "0x0F", "type": "u8", "default": 255, "description": "0 = off"},
-  {"name": "radius", "offset": "0x10", "type": "s16", "default": 300, "description": "reach"},
+  {"name": "radius", "offset": "0x10", "type": "s16", "default": 300, "role": "radius", "description": "reach"},
   {"name": "halfHeight", "offset": "0x12", "type": "s16", "default": 8, "description": "cylinder only"},
   {"name": "pitch", "offset": "0x16", "type": "s16", "unit": "angle16", "description": "direction (directional and spot)"},
   {"name": "yaw", "offset": "0x18", "type": "s16", "unit": "angle16", "description": "direction (directional and spot)"},

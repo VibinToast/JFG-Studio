@@ -9,7 +9,7 @@
  "status": "decoded",
  "description": "Refills the jetpack while a player stands in its cylinder. MSR 'Refuel pad'.",
  "fields": [
-  {"name": "radius", "offset": "0x0A", "type": "u8", "default": 40, "description": "cylinder radius"},
+  {"name": "radius", "offset": "0x0A", "type": "u8", "default": 40, "role": "radius", "description": "cylinder radius"},
   {"name": "bottom", "offset": "0x0B", "type": "s8", "default": -10, "description": "cylinder bottom, relative to the pad"},
   {"name": "top", "offset": "0x0C", "type": "s8", "default": 60, "description": "cylinder top, relative to the pad"},
   {"name": "maxFuel", "offset": "0x0D", "type": "u8", "default": 10, "description": "fills up to this many seconds"},

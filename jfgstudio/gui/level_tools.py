@@ -240,6 +240,30 @@ def scene_tool(origin, w: int, h: int, hovered: bool) -> None:
         for p in chain[:len(pts)]:
             if p:
                 draw.add_circle_filled(p, 4.0, colour)
+    elif S.tool == "patrol":
+        note = ("Patrol: click the floor to add a point linked to the last one, click a point to link to it; Esc "
+                "starts a new chain")
+        objs = S.objects()
+        points = [o for o in objs if (sc := S.schema(o)) and sc.key == "patrolpoint"]
+        near = None
+        for o in points:
+            q = screen(o["pos"])
+            if q and math.hypot(q.x - mouse.x, q.y - mouse.y) < CLOSE_PX:
+                near = o
+        last = next((o for o in points if o["uid"] == S.patrol_last), None)
+        if last is not None and hovered:
+            a = screen(last["pos"])
+            if a:
+                draw.add_line(a, imgui.ImVec2(mouse.x, mouse.y), colour, 2.0)
+        if hovered and imgui.is_mouse_clicked(imgui.MouseButton_.left) and not io.key_alt:
+            if near is not None:
+                if last is not None and near["uid"] != last["uid"]:
+                    patrol_link(last, near)
+                S.patrol_last = near["uid"]
+            elif hit is not None:
+                patrol_point(hit, last)
+        if imgui.is_key_pressed(imgui.Key.escape, False):
+            S.patrol_last = None
     else:
         note = "Water: drag a rectangle on the floor; the surface goes at the height in the toolbar"
         if not _pack_glb():
@@ -272,6 +296,45 @@ def ground_hit(mx: float, my: float, size):
     ray_o, ray_d = vp.screen_ray(S.camera, size, mx, my)
     t = vp.raycast(mesh.collision, ray_o, ray_d)
     return None if t is None else ray_o + ray_d * t
+
+
+def _patrol_examples():
+    S = _app().S
+    if S.catalog() is None:
+        return None, None
+    p = (S.objtypes.get(pre.PATROL_POINT_ID, {}).get("examples") or [None])[0]
+    link = (S.objtypes.get(pre.PATROL_PATH_ID, {}).get("examples") or [None])[0]
+    return p, link
+
+
+def patrol_point(pos, last) -> None:
+    """A patrol point on the floor with the next node number, linked both ways to the last one placed."""
+    S = _app().S
+    h = S.history()
+    point_ex, link_ex = _patrol_examples()
+    if h is None or point_ex is None or link_ex is None:
+        S.message = "Patrol: the catalog has no stock patrol point to start from"
+        return
+    placer = pre.Placer(h.level, S.schemas, S.behaviours)
+    o = placer.patrol_point(pos, point_ex)
+    if last is not None:
+        placer.patrol_link(last, o, link_ex)
+    h.add(placer.made, "patrol point")
+    S.patrol_last = o["uid"]
+    S.selection = {o["uid"]}
+    S.validate()
+
+
+def patrol_link(a, b) -> None:
+    S = _app().S
+    h = S.history()
+    _, link_ex = _patrol_examples()
+    if h is None or link_ex is None:
+        return
+    placer = pre.Placer(h.level, S.schemas, S.behaviours)
+    if placer.patrol_link(a, b, link_ex) is not None:
+        h.add(placer.made, "patrol link")
+        S.validate()
 
 
 def finish_region() -> None:

@@ -11,6 +11,7 @@ from jfgstudio import objects as obj
 from jfgstudio.project import Level
 
 EXIT_ID, START_ID, REGIONPOINT_ID, SQUADRON_ID = 0x0B, 0x0D, 0x05, 0x4F
+PATROL_POINT_ID, PATROL_PATH_ID = 0x61, 0x60
 REGION_HALF = 300  # a new squad's region: a square this far around it
 
 
@@ -71,6 +72,23 @@ class Placer:
         for k, (x, y, z) in enumerate(corners):
             self.single(REGIONPOINT_ID, (x, y, z), name=f"region{n}_{k}", fields={"region": n, "corner": k})
         return n
+
+    def patrol_point(self, pos, example) -> dict:
+        """A patrol point with the next free node number (they run 1..N with no gaps)."""
+        node = self.free("patrolpoint", "node")
+        return self.single(PATROL_POINT_ID, pos, example, name=f"patrol{node}",
+                           fields={"node": node, "command": 1, "startAtLoad": 0})
+
+    def patrol_link(self, a: dict, b: dict, example) -> dict | None:
+        """A two-way link between two patrol points (None when they are already linked)."""
+        na, nb = a.get("fields", {}).get("node"), b.get("fields", {}).get("node")
+        for o in self._all():
+            f = o.get("fields", {})
+            if o["type"] == f"stock:objtype/0x{PATROL_PATH_ID:X}" and {f.get("nodeA"), f.get("nodeB")} == {na, nb}:
+                return None
+        x, y, z = ((p + q) / 2 for p, q in zip(a["pos"], b["pos"], strict=True))
+        return self.single(PATROL_PATH_ID, (x, y, z), example, name=f"link{na}_{nb}",
+                           fields={"nodeA": na, "nodeB": nb, "weight": 1, "flags": 0xC0})
 
     def squad(self, pos, squadron_example, member_oid: int, member_example, members: int = 2,
               door_oid: int | None = None, door_example=None) -> list[dict]:

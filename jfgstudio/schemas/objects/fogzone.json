@@ -9,7 +9,7 @@
  "status": "decoded",
  "description": "Changes the fog inside a circle. MSR 'Fog zone'.",
  "fields": [
-  {"name": "radius8", "offset": "0x0A", "type": "u8", "default": 50, "description": "radius / 8"},
+  {"name": "radius8", "offset": "0x0A", "type": "u8", "default": 50, "role": "radius", "radiusScale": 8, "description": "radius / 8"},
   {"name": "red", "offset": "0x0B", "type": "u8", "description": ""},
   {"name": "green", "offset": "0x0C", "type": "u8", "description": ""},
   {"name": "blue", "offset": "0x0D", "type": "u8", "description": ""},

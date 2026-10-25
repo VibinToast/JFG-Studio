@@ -9,8 +9,8 @@
  "status": "decoded",
  "description": "Changes the player camera inside a zone. MSR 'Camera zone'.",
  "fields": [
-  {"name": "enterRadius", "offset": "0x0A", "type": "u16", "default": 200, "description": ""},
-  {"name": "leaveRadius", "offset": "0x0C", "type": "u16", "default": 250, "description": ""},
+  {"name": "enterRadius", "offset": "0x0A", "type": "u16", "default": 200, "role": "radius", "description": ""},
+  {"name": "leaveRadius", "offset": "0x0C", "type": "u16", "default": 250, "role": "radius", "description": ""},
   {"name": "flags", "offset": "0x0E", "type": "u16", "default": 1, "description": "0x1 height; 0x2 distance; 0x4 fixed point; 0x4000 / 0x8000 height limits"},
   {"name": "height", "offset": "0x10", "type": "s16", "default": 90, "description": "added camera height"},
   {"name": "distance", "offset": "0x12", "type": "s16", "description": "added camera distance"},

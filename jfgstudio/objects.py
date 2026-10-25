@@ -32,6 +32,7 @@ class Field:
     enum: dict[int, str] = field(default_factory=dict)  # named values (others are shown as numbers)
     role: str | None = None  # "yaw", "pitch", "roll" or "scale": how the editor draws the object
     scale: tuple[float, float] = (64.0, 0.0)  # role "scale": value / div, at least min
+    radius_scale: float = 1.0  # role "radius": world units per unit of the value (a fog zone's radius / 8)
 
     @property
     def end(self) -> int:
@@ -83,7 +84,8 @@ def load_schemas() -> dict[str, Schema]:
         doc = json.loads(item.read_text(encoding="utf-8"))
         fields = [Field(f["name"], int(f["offset"], 0), f["type"], f.get("default", 0), f.get("unit"), f.get("link"),
                         f.get("description", ""), {int(k, 0): v for k, v in f.get("enum", {}).items()},
-                        f.get("role"), (f["scale"]["div"], f["scale"]["min"]) if "scale" in f else (64.0, 0.0))
+                        f.get("role"), (f["scale"]["div"], f["scale"]["min"]) if "scale" in f else (64.0, 0.0),
+                        float(f.get("radiusScale", 1.0)))
                   for f in doc["fields"]]
         for f in fields:
             if f.type not in _FORMATS:

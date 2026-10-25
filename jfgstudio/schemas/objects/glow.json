@@ -13,7 +13,7 @@
   {"name": "green", "offset": "0x0B", "type": "u8", "default": 255, "description": ""},
   {"name": "blue", "offset": "0x0C", "type": "u8", "default": 255, "description": ""},
   {"name": "alpha", "offset": "0x0D", "type": "u8", "default": 128, "description": "glare strength; 0 = no glow"},
-  {"name": "distance", "offset": "0x0E", "type": "u16", "default": 360, "description": "seen within this distance"},
+  {"name": "distance", "offset": "0x0E", "type": "u16", "default": 360, "role": "radius", "description": "seen within this distance"},
   {"name": "glare", "offset": "0x10", "type": "u8", "default": 100, "description": "glare within distance * value / 100"},
   {"name": "size", "offset": "0x13", "type": "u8", "default": 92, "description": "sprite scale = value * 0.05"}
  ]

@@ -59,6 +59,9 @@ void main() { frag = col; }
 KIND_COLOURS = {
     "startpoint": (0.24, 0.78, 1.0, 1.0), "exit": (1.0, 0.70, 0.10, 1.0), "squadron": (1.0, 0.29, 0.29, 1.0),
     "squadmember": (1.0, 0.55, 0.55, 1.0), "door": (0.70, 0.45, 1.0, 1.0), "regionpoint": (0.3, 1.0, 0.5, 1.0),
+    "light": (1.0, 0.95, 0.45, 1.0), "glow": (1.0, 0.85, 0.6, 1.0), "audio": (0.45, 1.0, 0.75, 1.0),
+    "camerazone": (0.45, 0.85, 1.0, 1.0), "fogzone": (1.0, 0.6, 0.9, 1.0), "patrolpoint": (1.0, 0.6, 0.25, 1.0),
+    "patrolpath": (1.0, 0.6, 0.25, 1.0), "refuel": (0.6, 0.9, 1.0, 1.0), "animtrigger": (0.85, 0.75, 1.0, 1.0),
 }
 OTHER_COLOUR = (0.75, 0.80, 0.90, 1.0)
 SELECTED_COLOUR = (1.0, 1.0, 0.2, 1.0)
@@ -468,11 +471,14 @@ def project(camera: Camera, size, point) -> tuple[float, float] | None:
     return ((x + 1) * 0.5 * w, (1 - y) * 0.5 * h)
 
 
-def marker_lines(objects: list, keys: dict, selection: set, links: list, boxes: dict | None = None) -> np.ndarray:
+def marker_lines(objects: list, keys: dict, selection: set, links: list, boxes: dict | None = None,
+                 rings: dict | None = None) -> np.ndarray:
     """Line vertices (x, y, z, r, g, b, a) for every object's marker, ring and link. `boxes`: uid -> the 8 world
-    corners of the model an object is drawn with; those get no post, and a box when selected."""
+    corners of the model an object is drawn with; those get no post, and a box when selected. `rings`: uid -> radii of
+    the ranges it has (a light's reach, a sound's range, a camera zone's radii), drawn on the floor."""
     out = []
     boxes = boxes or {}
+    rings = rings or {}
 
     def seg(a, b, c):
         out.append((*a, *c))
@@ -482,6 +488,14 @@ def marker_lines(objects: list, keys: dict, selection: set, links: list, boxes: 
         x, y, z = (float(v) for v in o["pos"])
         key = keys.get(o["uid"])
         col = SELECTED_COLOUR if o["uid"] in selection else KIND_COLOURS.get(key, OTHER_COLOUR)
+        for r in rings.get(o["uid"], []):
+            if r > 0:
+                faint = col if o["uid"] in selection else (col[0], col[1], col[2], 0.45)
+                steps = 32
+                for i in range(steps):
+                    a0, a1 = 2 * math.pi * i / steps, 2 * math.pi * (i + 1) / steps
+                    seg((x + math.sin(a0) * r, y + 2, z + math.cos(a0) * r),
+                        (x + math.sin(a1) * r, y + 2, z + math.cos(a1) * r), faint)
         if o["uid"] in boxes:
             if o["uid"] in selection:
                 c = boxes[o["uid"]]
@@ -524,6 +538,15 @@ def region_links(objects: list, keys: dict) -> list:
         pts = [tuple(float(v) for v in p) for _, p in sorted(corners)]
         for a, b in zip(pts, pts[1:] + pts[:1], strict=True):
             out.append((a, b, KIND_COLOURS["regionpoint"]))
+    nodes = {o.get("fields", {}).get("node"): o for o in objects if keys.get(o["uid"]) == "patrolpoint"}
+    for o in objects:
+        if keys.get(o["uid"]) == "patrolpath":
+            f = o.get("fields", {})
+            a, b = nodes.get(f.get("nodeA")), nodes.get(f.get("nodeB"))
+            if a and b:
+                lift = np.array([0.0, 8.0, 0.0])
+                out.append((tuple(np.array(a["pos"], float) + lift), tuple(np.array(b["pos"], float) + lift),
+                            KIND_COLOURS["patrolpath"]))
     squads = {o.get("fields", {}).get("squadronId"): o for o in objects if keys.get(o["uid"]) == "squadron"}
     doors = [o for o in objects if keys.get(o["uid"]) == "door"]
     up = np.array([0.0, MARKER_HEIGHT, 0.0])

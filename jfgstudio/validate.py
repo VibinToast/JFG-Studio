@@ -105,6 +105,7 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
 
     total = obj.LIST_HEADER_SIZE
     squadrons, members, doors, region_corners, starts = [], [], [], defaultdict(set), []
+    patrol_nodes, patrol_links, counts = [], [], Counter()
     for o in items:
         uid = o["uid"]
         t = _ref(o["type"], None, of, uid, out)
@@ -146,6 +147,13 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
             starts.append(o)
         elif key == "exit":
             out += _check_exit(project, o, of, schemas)
+        elif key == "patrolpoint":
+            patrol_nodes.append((fields.get("node"), uid))
+        elif key == "patrolpath":
+            patrol_links.append((fields.get("nodeA"), fields.get("nodeB"), uid))
+        elif key == "fogzone" and fields.get("fadeTime", 1) == 0:
+            out.append(Problem(ERROR, "fog-zone", of, "fadeTime 0: the game divides by it", uid))
+        counts[key] += 1
         if any(not -32768 <= v <= 32767 for v in o["pos"]):
             out.append(Problem(ERROR, "position", of, "position does not fit s16 (-32768..32767)", uid))
 
@@ -153,10 +161,46 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
         out.append(Problem(ERROR, "list-size", of, f"the object list is 0x{total:X} bytes; the game's buffer is "
                                                    f"0x{obj.LIST_BUFFER_SIZE:X} (header included)"))
     out += _check_squads(squadrons, members, doors, region_corners, of)
+    out += _check_patrols(patrol_nodes, patrol_links, of)
+    for key, limit, what in (("camerazone", 24, "camera zones (the rest are ignored)"),
+                             ("texscroll", 16, "texture scrolls (the rest are dropped)"),
+                             ("audio", 40, "sound emitters (the audio map holds 40 points)"),
+                             ("glow", 50, "glows (the game's camera lights)")):
+        if counts[key] > limit:
+            out.append(Problem(WARNING, "limit", of, f"{counts[key]} {what}; the game takes {limit}"))
+    lights = counts["light"]
+    slots = level.level["header"].get("lights", 24)
+    if lights > slots:
+        out.append(Problem(WARNING, "limit", of, f"{lights} lights but {slots} light slots (Level window: Light "
+                                                 "slots); lights past the last slot are dropped"))
     if not any(s.get("fields", {}).get("player", 0) == 0 and s.get("fields", {}).get("startPoint", 0) == 0
                for s in starts):
         out.append(Problem(WARNING, "start-point", of, "no start point 0 for player 0: the planet map and most exits "
                                                        "enter a level at start point 0"))
+    return out
+
+
+def _check_patrols(nodes, links, of) -> list[Problem]:
+    """Patrol points are numbered 1..N with no gaps (the game puts them in an array by number); links name existing
+    nodes, at most 6 from each (MSR "Squad patrol network")."""
+    out = []
+    numbers = Counter(n for n, _ in nodes)
+    for n, count in numbers.items():
+        if count > 1:
+            out.append(Problem(ERROR, "patrol", of, f"patrol node number {n} is used {count} times"))
+    if nodes and sorted(numbers) != list(range(1, len(numbers) + 1)):
+        out.append(Problem(ERROR, "patrol", of, f"patrol node numbers must run 1..{len(nodes)} with no gaps "
+                                                f"(found {sorted(numbers)})"))
+    outgoing = Counter()
+    for a, b, uid in links:
+        for n in (a, b):
+            if n not in numbers:
+                out.append(Problem(ERROR, "patrol", of, f"the link names patrol node {n}, which isn't there", uid))
+        outgoing[a] += 1
+        outgoing[b] += 1
+    for n, k in outgoing.items():
+        if k > 6:
+            out.append(Problem(WARNING, "patrol", of, f"patrol node {n} has {k} links; the game keeps 6"))
     return out
 
 
