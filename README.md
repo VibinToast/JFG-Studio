@@ -11,7 +11,7 @@ ships.
 
 ## What it does
 
-- **Levels on your own geometry**: import a `.glb` from Blender (the jfg64 add-on helps), with water, lava, kill
+- **Levels on your own geometry**: import a `.glb` from Blender (the [jfg64 add-on](https://github.com/VibinToast/jfg64-blender) helps), with water, lava, kill
   floors and invisible walls, fog, sky, music and lighting settings. Or add to one of the game's own levels without
   replacing it.
 - **Place anything the game has**: ant squads that lock doors until they're dead, navigation regions and patrol
