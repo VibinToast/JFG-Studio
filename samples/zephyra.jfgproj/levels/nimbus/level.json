@@ -1,0 +1,25 @@
+{
+ "format": 1,
+ "header": {
+  "clearB": 140,
+  "clearG": 70,
+  "clearR": 90,
+  "cutsceneData": 3,
+  "fog3": 990,
+  "fogB": 190,
+  "fogFar": 1022,
+  "fogG": 120,
+  "fogNear": 990,
+  "fogR": 150,
+  "lights": 32,
+  "region": 0,
+  "regionIndex": 0,
+  "tune": 4,
+  "tuneChannelMask": 65535,
+  "world": 15
+ },
+ "music": "pack:music/zephyra_arena",
+ "name": "Nimbus",
+ "sky": 205,
+ "track": "pack:track/nimbus"
+}

@@ -139,8 +139,12 @@
    "then": [
     {
      "do": "message",
-     "seconds": 6,
-     "text": "Victory! The way home is open."
+     "seconds": 7,
+     "text": "Victory! Zephyra is free. A new planet, Glacia, has appeared on the Zephyra Expanse map."
+    },
+    {
+     "do": "complete planet",
+     "planet": "zephyra"
     },
     {
      "do": "fog",
@@ -159,6 +163,82 @@
      -300,
      1000,
      300,
+     1500
+    ],
+    "kind": "enter"
+   }
+  },
+  {
+   "level": "pack:level/glacia",
+   "name": "glacia intro",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 6,
+     "text": "GLACIA - Cross the frozen lake and reach the pad in the north."
+    }
+   ],
+   "when": {
+    "kind": "level start"
+   }
+  },
+  {
+   "level": "pack:level/glacia",
+   "name": "glacia complete",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 7,
+     "text": "GLACIA COMPLETE - Nimbus has appeared on the Zephyra Expanse map."
+    },
+    {
+     "do": "complete planet",
+     "planet": "glacia"
+    }
+   ],
+   "when": {
+    "box": [
+     -300,
+     1300,
+     300,
+     1550
+    ],
+    "kind": "enter"
+   }
+  },
+  {
+   "level": "pack:level/nimbus",
+   "name": "nimbus intro",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 6,
+     "text": "NIMBUS - Mind the edges. The last island is the way out."
+    }
+   ],
+   "when": {
+    "kind": "level start"
+   }
+  },
+  {
+   "level": "pack:level/nimbus",
+   "name": "nimbus complete",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 8,
+     "text": "NIMBUS COMPLETE - The Zephyra Expanse is free!"
+    },
+    {
+     "do": "complete planet",
+     "planet": "nimbus"
+    }
+   ],
+   "when": {
+    "box": [
+     -360,
+     900,
+     360,
      1500
     ],
     "kind": "enter"

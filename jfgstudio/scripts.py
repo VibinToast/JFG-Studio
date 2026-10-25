@@ -21,6 +21,9 @@ A trigger:
               {"do": "flag", "flag": n, "on": true}, {"do": "unlock_door", "door": id},
               {"do": "warp", "level": "pack:level/<name>", "start": 0},
               {"do": "lines", "lines": ["...", "..."], "seconds": 4} (the next line each time; the last one repeats),
+              {"do": "unlock planet", "planet": "<name>"}, {"do": "complete planet", "planet": "<name>"}
+              (a planet of the project, for the save file in play: completing a world opens the planets that wait
+              for it),
               {"do": "spawn", "type": "stock:objtype/<id>", "pos": [x, y, z], "near_player": false,
                "fields": {<the type's schema fields>}}]}
 A spawn makes the object as if it were in the level's list (pickups, crates, props). With "near_player", "pos" is an
@@ -34,7 +37,8 @@ from pathlib import Path
 from jfgstudio import refs
 
 WHEN = ("level start", "enter", "flag", "door opens", "talk")
-DO = ("message", "music", "music_stop", "fog", "flag", "unlock_door", "warp", "spawn", "lines")
+DO = ("message", "music", "music_stop", "fog", "flag", "unlock_door", "warp", "spawn", "lines", "unlock planet",
+      "complete planet")
 BUTTONS = ("", "A", "B", "Z", "START", "DUP", "DDOWN", "DLEFT", "DRIGHT", "L", "R", "CUP", "CDOWN", "CLEFT", "CRIGHT")
 NO_SPAWN = {5, 0x60, 0x61, 0x69}  # region and patrol data: the game refuses them
 
@@ -132,6 +136,10 @@ def _action(a: dict, project, trigger: int = 0) -> str:
         return f"jfg.warp({_level_expr(a['level'], project)}, {int(a.get('start', 0))})"
     if kind == "spawn":
         return _spawn(a)
+    if kind == "unlock planet":
+        return f"jfg.unlock_planet({_lua_str(a.get('planet', ''))})"
+    if kind == "complete planet":
+        return f"jfg.complete_planet({_lua_str(a.get('planet', ''))})"
     raise ValueError(f"unknown action {kind!r}")
 
 
@@ -258,6 +266,8 @@ def check(project) -> list[str]:
                 out.append(f"{where}: unknown action {a.get('do')!r}")
             elif a["do"] == "music" and a.get("track") not in tracks:
                 out.append(f"{where}: music/{a.get('track')}.ogg does not exist")
+            elif a["do"] in ("unlock planet", "complete planet") and a.get("planet") not in project.planets:
+                out.append(f"{where}: {a['do']}: the project has no planet {a.get('planet')!r}")
             elif a["do"] == "spawn":
                 try:
                     spawn_entry(a)

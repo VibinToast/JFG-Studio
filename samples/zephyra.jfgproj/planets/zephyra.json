@@ -6,9 +6,9 @@
    255
   ],
   "index": 2,
-  "radius": 14,
-  "x": 160,
-  "y": 25
+  "radius": 16,
+  "x": 110,
+  "y": 420
  },
  "displayName": {
   "en": "Zephyra"
@@ -19,11 +19,7 @@
   "vela": "pack:level/landing"
  },
  "format": 1,
- "routes": [
-  {
-   "back": "down",
-   "dir": "up",
-   "from": "stock:mappoint/0"
-  }
- ]
+ "galaxy": "expanse",
+ "routes": [],
+ "unlock": "start"
 }

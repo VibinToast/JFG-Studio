@@ -140,7 +140,8 @@ class Mesh:
 
 
 def image(png, kind: str, size: int, seed: int) -> bytes:
-    """A small drawn texture: grass, rock, stone (blocks), metal (panels), lava, water, sand, crystal."""
+    """A small drawn texture: grass, rock, stone (blocks), metal (panels), lava, water, sand, crystal, snow, ice,
+    cloud."""
     rng = random.Random(seed)
     noise = {}
     px = bytearray()
@@ -165,6 +166,13 @@ def image(png, kind: str, size: int, seed: int) -> bytes:
                 c = (40 + n // 2, 110 + n, 210, 160)
             elif kind == "sand":
                 c = (205 + n, 180 + n, 120 + n, 255)
+            elif kind == "snow":
+                c = (225 + n // 2, 232 + n // 2, 245, 255)
+            elif kind == "ice":
+                streak = (x + y) % 11 == 0
+                c = (170 + n, 215 + n // 2, 245, 255) if not streak else (225, 245, 255, 255)
+            elif kind == "cloud":
+                c = (235 + n // 3, 225 + n // 3, 250, 255)
             else:  # crystal
                 c = (150 + n, 90 + n, 220, 255)
             px += bytes(max(0, min(255, v)) for v in c)

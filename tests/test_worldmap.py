@@ -57,3 +57,57 @@ class OnGround(unittest.TestCase):
         self.assertEqual(obj.on_ground(-2.6, schemas["squadmember"]), 6)  # rounded up, then lifted
         self.assertEqual(obj.on_ground(3.2, schemas["health"]), 6)
         self.assertEqual(obj.on_ground(0.0, None), 8)
+
+
+class Galaxies(unittest.TestCase):
+    def project(self, tmp):
+        p = sample_project(Path(tmp))
+        p.planets.clear()
+        p.galaxies["far"] = {"format": 1, "name": "Far Away", "home": "one"}
+        base = {"format": 1, "galaxy": "far",
+                "entryLevel": {"vela": "pack:level/home", "juno": "pack:level/home", "lupus": "pack:level/home"}}
+        p.planets["one"] = {**base, "displayName": {"en": "One"},
+                            "disc": {"index": 0, "x": 100, "y": 100, "radius": 10},
+                            "unlock": "start"}
+        p.planets["two"] = {**base, "displayName": {"en": "Two"},
+                            "disc": {"index": 1, "x": 220, "y": 100, "radius": 10},
+                            "unlock": {"completed": "one"},
+                            "routes": [{"from": "pack:world/one", "dir": "right", "back": "left"}]}
+        return p
+
+    def test_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self.project(tmp)
+            world, problems = worldmap.manifest(p, None)  # a project galaxy needs no stock map
+            self.assertEqual(problems, [])
+            self.assertEqual(world["format"], 2)
+            self.assertEqual(world["galaxies"], [{"id": "far", "name": "Far Away", "home": "one"}])
+            two = next(q for q in world["planets"] if q["id"] == "two")
+            self.assertEqual(two["galaxy"], "far")
+            self.assertEqual(two["unlock"], {"completed": "one"})
+            self.assertEqual(two["routes"], [{"from": "planet:one", "dir": 1, "back": 0,
+                                              "corners": [[123, 100], [197, 100]]}])
+            one = next(q for q in world["planets"] if q["id"] == "one")
+            self.assertEqual((one["routes"], one["unlock"]), ([], "start"))
+
+    def test_rules(self):
+        from jfgstudio import validate as val
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self.project(tmp)
+            self.assertEqual([x.rule for x in val.validate(p) if x.severity == val.ERROR], [])
+            p.planets["two"]["routes"] = []  # cut off from home
+            p.planets["two"]["unlock"] = {"completed": "nowhere"}
+            p.planets["one"]["routes"] = [{"from": "stock:mappoint/0", "dir": "up", "back": "down"}]
+            rules = sorted(x.rule for x in val.validate(p) if x.severity == val.ERROR)
+            self.assertEqual(rules, ["route", "route", "unlock"])
+
+    def test_trigger_actions(self):
+        from jfgstudio import scripts as scr
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self.project(tmp)
+            scr.save_triggers(p, [{"name": "won", "level": "pack:level/home", "when": {"kind": "level start"},
+                                   "then": [{"do": "complete planet", "planet": "one"},
+                                            {"do": "unlock planet", "planet": "zzz"}]}])
+            lua = scr.compile_triggers(scr.load_triggers(p), p)
+            self.assertIn('jfg.complete_planet("one")', lua)
+            self.assertEqual(len(scr.check(p)), 1)

@@ -1,0 +1,33 @@
+{
+ "disc": {
+  "colour": [
+   230,
+   200,
+   255
+  ],
+  "index": 3,
+  "radius": 15,
+  "x": 290,
+  "y": 240
+ },
+ "displayName": {
+  "en": "Nimbus"
+ },
+ "entryLevel": {
+  "juno": "pack:level/nimbus",
+  "lupus": "pack:level/nimbus",
+  "vela": "pack:level/nimbus"
+ },
+ "format": 1,
+ "galaxy": "expanse",
+ "routes": [
+  {
+   "back": "down",
+   "dir": "up",
+   "from": "pack:world/glacia"
+  }
+ ],
+ "unlock": {
+  "completed": "glacia"
+ }
+}

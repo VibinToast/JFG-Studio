@@ -1,0 +1,33 @@
+{
+ "disc": {
+  "colour": [
+   220,
+   240,
+   255
+  ],
+  "index": 4,
+  "radius": 13,
+  "x": 290,
+  "y": 420
+ },
+ "displayName": {
+  "en": "Glacia"
+ },
+ "entryLevel": {
+  "juno": "pack:level/glacia",
+  "lupus": "pack:level/glacia",
+  "vela": "pack:level/glacia"
+ },
+ "format": 1,
+ "galaxy": "expanse",
+ "routes": [
+  {
+   "back": "left",
+   "dir": "right",
+   "from": "pack:world/zephyra"
+  }
+ ],
+ "unlock": {
+  "completed": "zephyra"
+ }
+}

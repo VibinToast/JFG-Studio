@@ -2,6 +2,7 @@
 
     project.json                    id, version, name, authors, dependencies
     planets/<name>.json             a planet on the select map
+    galaxies/<name>.json            a planet map of the pack's own (planets name it with "galaxy")
     levels/<name>/level.json        header fields by name, track, sky, music
     levels/<name>/objects.json      placed objects
     geometry/<name>.glb             tracks from Blender (pack:track/<name>)
@@ -35,7 +36,7 @@ def _schema(name: str) -> dict:
                       .read_text(encoding="utf-8"))
 
 
-_SCHEMAS = {name: _schema(name) for name in ("project", "level", "objects", "planet", "kind")}
+_SCHEMAS = {name: _schema(name) for name in ("project", "level", "objects", "planet", "kind", "galaxy")}
 
 
 def dumps(doc: dict) -> str:
@@ -74,6 +75,7 @@ class Project:
     levels: dict[str, Level] = field(default_factory=dict)
     planets: dict[str, dict] = field(default_factory=dict)
     kinds: dict[str, dict] = field(default_factory=dict)
+    galaxies: dict[str, dict] = field(default_factory=dict)
 
     @property
     def id(self) -> str:
@@ -98,6 +100,13 @@ class Project:
             write_json(self.path / "planets" / f"{name}.json", planet)
         for name, kind in self.kinds.items():
             write_json(self.path / "kinds" / f"{name}.json", kind)
+        for name, galaxy in self.galaxies.items():
+            write_json(self.path / "galaxies" / f"{name}.json", galaxy)
+        gone = self.path / "galaxies"
+        if gone.is_dir():  # a galaxy deleted in the editor
+            for f in gone.glob("*.json"):
+                if f.stem not in self.galaxies:
+                    f.unlink()
 
 
 def _read(path: Path, schema: str, problems: list[str]) -> dict | None:
@@ -153,9 +162,19 @@ def load(path: Path | str) -> Project:
             kind = _read(f, "kind", problems)
             if kind is not None:
                 kinds[f.stem] = kind
+    galaxies = {}
+    galaxies_dir = path / "galaxies"
+    if galaxies_dir.is_dir():
+        for f in sorted(galaxies_dir.glob("*.json")):
+            if not NAME_RE.match(f.stem):
+                problems.append(f"{f}: galaxy file names use lower case letters, digits, _ and -")
+                continue
+            galaxy = _read(f, "galaxy", problems)
+            if galaxy is not None:
+                galaxies[f.stem] = galaxy
     if problems:
         raise ProjectError(problems)
-    return Project(path, meta, levels, planets, kinds)
+    return Project(path, meta, levels, planets, kinds, galaxies)
 
 
 def create(path: Path | str, mod_id: str, name: str, author: str = "") -> Project:

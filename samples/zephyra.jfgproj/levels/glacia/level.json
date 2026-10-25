@@ -1,0 +1,24 @@
+{
+ "format": 1,
+ "header": {
+  "clearB": 220,
+  "clearG": 190,
+  "clearR": 170,
+  "cutsceneData": 3,
+  "fog3": 985,
+  "fogB": 235,
+  "fogFar": 1022,
+  "fogG": 215,
+  "fogNear": 985,
+  "fogR": 200,
+  "region": 0,
+  "regionIndex": 0,
+  "tune": 4,
+  "tuneChannelMask": 65535,
+  "world": 15
+ },
+ "music": "pack:music/zephyra_landing",
+ "name": "Glacia",
+ "sky": 180,
+ "track": "pack:track/glacia"
+}

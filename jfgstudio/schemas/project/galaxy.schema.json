@@ -1,0 +1,12 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "JFG-Studio galaxies/<name>.json: a planet map of the pack's own, which the player switches to with L / R",
+ "type": "object",
+ "required": ["format", "name"],
+ "additionalProperties": false,
+ "properties": {
+  "format": {"const": 1},
+  "name": {"type": "string", "minLength": 1, "maxLength": 40, "description": "the name shown at the top of the map"},
+  "home": {"type": "string", "pattern": "^[a-z0-9_-]+$", "description": "the planet the cursor starts on (one of this galaxy's planets; it should be open from the start)"}
+ }
+}

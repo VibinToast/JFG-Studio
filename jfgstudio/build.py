@@ -350,9 +350,10 @@ class _Builder:
 
     # the patch side
     def world(self) -> dict | None:
-        """jfg_world.json: the planets with a map point of their own (the port's planet registry, worldmap.py)."""
+        """jfg_world.json: the planets with a map point of their own and the project's galaxies (the port's planet
+        registry, worldmap.py)."""
         from jfgstudio import worldmap
-        if not any(worldmap.is_registry(p) for p in self.p.planets.values()):
+        if not self.p.galaxies and not any(worldmap.is_registry(p) for p in self.p.planets.values()):
             return None
         doc, problems = None, []
         try:
@@ -362,9 +363,13 @@ class _Builder:
         world, more = worldmap.manifest(self.p, doc)
         if problems or more:
             raise BuildError(problems + more)
+        for g in world["galaxies"]:
+            self.log(f"galaxy {g['id']}: {g['name']}" + (f", home {g['home']}" if g.get("home") else ""))
         for p in world["planets"]:
-            self.log(f"planet {p['id']}: a map point of its own at ({p['disc']['x']}, {p['disc']['y']}), reached from "
-                     + ", ".join(f"map point {r['from']} ({worldmap.DIRS[r['dir']]})" for r in p["routes"]))
+            reached = ", ".join(f"{'map point ' if isinstance(r['from'], int) else ''}{r['from']} "
+                                f"({worldmap.DIRS[r['dir']]})" for r in p["routes"]) or "nothing (its galaxy's home)"
+            where = f"({p['disc']['x']}, {p['disc']['y']})"
+            self.log(f"planet {p['id']} on {p['galaxy']}: at {where}, reached from {reached}, unlock {p['unlock']}")
         return world
 
     def map_image(self) -> bytes | None:

@@ -20,6 +20,8 @@ jfg.unlock_door(id)               as a squadron's death does
 jfg.door_locked(id)               true while that door is locked, nil if there is none
 jfg.warp(level, start_point)      change level
 jfg.weapon(n, {damage=, delay=, ...}) / jfg.weapon_stats(n)  the heroes' weapons
+jfg.unlock_planet(id) / jfg.complete_planet(id) / jfg.planet(id)  open, entered, completed
+jfg.galaxy() / jfg.show_galaxy(id)  the galaxy the map shows / opens on next
 jfg.spawn(id, x, y, z [, bytes])  an object as if in the level's list (bytes from entry +0x0A)
 jfg.log(...)                      a line in the port's jfg_mods.log"""
 
@@ -29,7 +31,9 @@ ACTIONS = {"message": {"do": "message", "text": "Hello", "seconds": 4}, "music":
            "flag": {"do": "flag", "flag": 0, "on": True}, "unlock_door": {"do": "unlock_door", "door": 1},
            "warp": {"do": "warp", "level": "", "start": 0},
            "spawn": {"do": "spawn", "type": "", "pos": [0, 20, -100], "near_player": True},
-           "lines": {"do": "lines", "lines": ["Hello there."], "seconds": 4}}
+           "lines": {"do": "lines", "lines": ["Hello there."], "seconds": 4},
+           "unlock planet": {"do": "unlock planet", "planet": ""},
+           "complete planet": {"do": "complete planet", "planet": ""}}
 
 
 def _app():
@@ -214,6 +218,16 @@ def _action_fields(a: dict) -> bool:
         imgui.same_line()
         c, a["near_player"] = imgui.checkbox("from hero", bool(a.get("near_player", False)))
         changed |= c
+    elif kind in ("unlock planet", "complete planet"):
+        imgui.set_next_item_width(hello_imgui.em_size(14))
+        if imgui.begin_combo("##planet", a.get("planet") or "(pick)"):
+            for name in sorted(S.project.planets):
+                if imgui.selectable(name, name == a.get("planet"))[0]:
+                    a["planet"] = name
+                    changed = True
+            imgui.end_combo()
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Completing a world opens the planets set to open after it (the Planet window's Unlock)")
     elif kind == "lines":
         lines = a.setdefault("lines", [])
         text = "\n".join(lines)

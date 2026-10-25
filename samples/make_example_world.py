@@ -4,12 +4,16 @@
                                                      to copy and checks the geometry with the game's importer)
     blender --background --factory-startup --python samples/make_example_music.py   (the music, once)
 
-The route: a new game -> Goldwood's first level (Forest First), where a glowing portal now stands just ahead of
-Juno -> 1. Zephyra Landing (a valley, a river and a bridge, a chest on a plateau, the yellow key on a ledge, an ant
-squad locking the north gate) -> 2. Ember Caverns (a lava lake crossed on a causeway, two squads, a chasm with a kill
-floor, a door that needs the yellow key) -> 3. Sky Arena (a floating arena over a deadly drop, two squads that both
-lock the final gate) -> the victory exit back to Forest First. Every level has return exits, its own music, lights and
-pickups.
+The galaxy: Zephyra is a planet of the pack's own galaxy, the Zephyra Expanse (L / R on the planet map). Two more
+planets wait there, hidden like the game's own until the world before them is completed: Glacia (an ice field, after
+Zephyra's Sky Arena victory) and Nimbus (sky islands, after Glacia).
+
+The route: a new game -> Goldwood's first level (Forest First), where a glowing portal now stands just ahead of Juno (or
+the planet map: R to the Zephyra Expanse) -> 1. Zephyra Landing (a valley, a river and a bridge, a chest on a plateau,
+the yellow key on a ledge, an ant squad locking the north gate) -> 2. Ember Caverns (a lava lake crossed on a causeway,
+two squads, a chasm with a kill floor, a door that needs the yellow key) -> 3. Sky Arena (a floating arena over a deadly
+drop, two squads that both lock the final gate) -> the victory exit back to Forest First. Every level has return exits,
+its own music, lights and pickups.
 
 Everything here is drawn or written by this script; the project only names stock object types and stock entries
 by number (the build copies those from the player's own ROM).
@@ -44,7 +48,7 @@ SQUADS = {  # baddy type -> (stock squadron entry, stock member entry); squadron
     "Cyborg": (0x143, (431, 1), (431, 146)),
 }
 FOREST_FIRST, FOREST_FIRST_TRACK = 21, 18
-SKY = {"landing": 180, "caverns": 194, "arena": 205}
+SKY = {"landing": 180, "caverns": 194, "arena": 205, "glacia": 180, "nimbus": 205}
 YAW_NORTH, YAW_SOUTH = 32, 0  # start point facing (angle10: 64 = a full turn): the hero faces -z at yaw 0
 
 
@@ -157,7 +161,48 @@ def arena_mesh() -> wk.Mesh:
 
 IMAGES = {"grass": ("grass", 16, 11), "sand": ("sand", 16, 12), "rock": ("rock", 32, 13), "stone": ("stone", 32, 14),
           "water": ("water", 16, 15), "crystal": ("crystal", 16, 16), "lava": ("lava", 16, 17),
-          "metal": ("metal", 32, 18)}
+          "metal": ("metal", 32, 18), "snow": ("snow", 16, 19), "ice": ("ice", 32, 20), "cloud": ("cloud", 16, 21)}
+
+
+def glacia_mesh() -> wk.Mesh:
+    """Glacia: a snow field around a frozen lake, ice pillars for cover, the finish pad on a rise in the north."""
+    m = wk.Mesh(ambient=(0.55, 0.6, 0.7), sun=(0.7, 0.75, 0.85))
+    for name, img, kind in (("snow", "snow", "opaque"), ("ice", "ice", "opaque"), ("ice_wall", "ice", "opaque"),
+                            ("stone", "stone", "opaque"), ("stone_wall", "stone", "opaque"),
+                            ("crystal", "crystal", "opaque")):
+        m.material(name, img, kind)
+    m.floor("snow", -1300, -1500, 1300, -300, 0, 140, step=400)                  # the south field
+    m.floor("ice", -700, -300, 700, 500, -10, 160, step=350)                     # the frozen lake
+    m.floor("snow", -1300, -300, -700, 500, 0, 140, step=400)
+    m.floor("snow", 700, -300, 1300, 500, 0, 140, step=400)
+    m.wall("ice_wall", -700, -300, 700, -300, -10, 0, 60)
+    m.wall("ice_wall", 700, 500, -700, 500, -10, 0, 60)
+    m.floor("snow", -1300, 500, 1300, 1100, 0, 140, step=400)                   # the north field
+    m.ramp("stone", "stone_wall", -200, 1100, 200, 1300, 0, 80, axis="z")      # up to the finish pad
+    m.box("stone", "stone_wall", -300, 1300, 300, 1550, 0, 80)
+    for x, z in ((-450, -700), (450, -650), (-900, 150), (900, 100), (-350, 850), (400, 800)):
+        m.box("ice", "ice_wall", x - 50, z - 50, x + 50, z + 50, -10, 180)      # ice pillars (cover)
+        m.box("crystal", "crystal", x - 30, z - 30, x + 30, z + 30, 180, 230)
+    enclosure(m, "ice_wall", -1300, -1500, 1300, 1550, 380)
+    return m
+
+
+def nimbus_mesh() -> wk.Mesh:
+    """Nimbus: three cloud-stone islands over a deadly drop, joined by narrow bridges; the finish on the last one."""
+    m = wk.Mesh(ambient=(0.55, 0.5, 0.65), sun=(0.75, 0.7, 0.8))
+    for name, img, kind in (("cloud", "cloud", "opaque"), ("stone", "stone", "opaque"),
+                            ("stone_wall", "stone", "opaque"), ("metal", "metal", "opaque"),
+                            ("void_kill", "rock", "kill")):
+        m.material(name, img, kind)
+    m.disc("cloud", "stone_wall", 0, -1100, 380, -120, 0, n=20)                # the landing island
+    m.box("stone", "stone_wall", -60, -730, 60, -420, -60, 0)                  # bridge 1
+    m.disc("cloud", "stone_wall", 0, -50, 520, -120, 0, n=24)                  # the middle island
+    for sx in (-1, 1):
+        m.box("metal", "metal", sx * 260 - 60, -110, sx * 260 + 60, 10, 0, 160)    # cover blocks
+    m.box("stone", "stone_wall", -60, 460, 60, 820, -60, 0)                    # bridge 2
+    m.disc("cloud", "stone_wall", 0, 1150, 360, -120, 0, n=20)                 # the finish island
+    m.floor("void_kill", -3000, -3000, 3000, 3000, -900, 400, step=1000)       # falling off is the end
+    return m
 
 
 # ---------------------------------------------------------------- objects
@@ -287,8 +332,21 @@ def world_scripts(p, arena_door: int) -> None:
                   {"do": "spawn", "type": f"stock:objtype/{HEALTH:#x}", "pos": [0, 30, -80], "near_player": True,
                    "fields": {"amount": 2}}]},
         {"name": "victory", "level": "pack:level/arena", "when": {"kind": "enter", "box": [-300, 1000, 300, 1500]},
-         "then": [say("Victory! The way home is open.", 6),
+         "then": [say("Victory! Zephyra is free. A new planet, Glacia, has appeared on the Zephyra Expanse map.", 7),
+                  {"do": "complete planet", "planet": "zephyra"},
                   {"do": "fog", "rgb": [200, 190, 255], "near": 1000, "far": 1023, "ticks": 120}]},
+        {"name": "glacia intro", "level": "pack:level/glacia", "when": {"kind": "level start"},
+         "then": [say("GLACIA - Cross the frozen lake and reach the pad in the north.", 6)]},
+        {"name": "glacia complete", "level": "pack:level/glacia",
+         "when": {"kind": "enter", "box": [-300, 1300, 300, 1550]},
+         "then": [say("GLACIA COMPLETE - Nimbus has appeared on the Zephyra Expanse map.", 7),
+                  {"do": "complete planet", "planet": "glacia"}]},
+        {"name": "nimbus intro", "level": "pack:level/nimbus", "when": {"kind": "level start"},
+         "then": [say("NIMBUS - Mind the edges. The last island is the way out.", 6)]},
+        {"name": "nimbus complete", "level": "pack:level/nimbus",
+         "when": {"kind": "enter", "box": [-360, 900, 360, 1500]},
+         "then": [say("NIMBUS COMPLETE - The Zephyra Expanse is free!", 8),
+                  {"do": "complete planet", "planet": "nimbus"}]},
     ])
     (p.path / "scripts").mkdir(exist_ok=True)
     # Zephyra's air is thin: the starting gun fires faster and its bolts fly faster (the Weapons window).
@@ -352,7 +410,8 @@ def main() -> int:
     w = World(p, cat)
     fire_ant(p, cat)
 
-    meshes = {"landing": landing_mesh(), "caverns": caverns_mesh(), "arena": arena_mesh()}
+    meshes = {"landing": landing_mesh(), "caverns": caverns_mesh(), "arena": arena_mesh(), "glacia": glacia_mesh(),
+              "nimbus": nimbus_mesh()}
     for name, m in meshes.items():
         wk.write_glb(m, p.geometry_path(name), IMAGES, GEN)
         print(f"geometry/{name}.glb: {m.triangles()} triangles")
@@ -437,6 +496,42 @@ def main() -> int:
     w.glow(pl, mv, 0, 1380, (255, 240, 160), lift=60)
     c.objects["objects"] = pl.made
 
+    # 4. Glacia (the Expanse's second planet, opened by completing Zephyra)
+    d = proj.new_level(p, "glacia", "Glacia", "pack:track/glacia")
+    level_header(d, (200, 215, 235, 985, 1022), (170, 190, 220))
+    d.level["sky"], d.level["music"] = SKY["glacia"], "pack:music/zephyra_landing"
+    mv, pl = views["glacia"], w.placer(d)
+    w.start(pl, mv, 0, -1350, 0, YAW_NORTH)
+    w.exit(pl, mv, 0, 1480, f"stock:level/{FOREST_FIRST}", 0, "the way home to Goldwood")
+    w.squad(pl, mv, "BlueAnt", (0, 100), 3, [(-600, -250), (600, -250), (600, 450), (-600, 450)])
+    w.squad(pl, mv, "Cyborg", (0, 800), 2, [(-1100, 600), (1100, 600), (1100, 1050), (-1100, 1050)], spread=250)
+    for x, z in ((300, -1200), (-1000, 300), (1000, 300), (0, 1100)):
+        w.pickup(pl, mv, HEALTH, x, z)
+    for x, z in ((-300, -1200), (600, 900)):
+        w.pickup(pl, mv, AMMO, x, z)
+    for x, z in ((-450, -700), (450, -650), (-900, 150), (900, 100)):
+        w.light(pl, mv, x, z, (170, 220, 255), radius=420, lift=200)
+    w.glow(pl, mv, 0, 1420, (200, 240, 255), lift=60)
+    d.objects["objects"] = pl.made
+
+    # 5. Nimbus (the Expanse's third planet, opened by completing Glacia)
+    e = proj.new_level(p, "nimbus", "Nimbus", "pack:track/nimbus")
+    level_header(e, (150, 120, 190, 990, 1022), (90, 70, 140), {"lights": 32})
+    e.level["sky"], e.level["music"] = SKY["nimbus"], "pack:music/zephyra_arena"
+    mv, pl = views["nimbus"], w.placer(e)
+    w.start(pl, mv, 0, -1250, 0, YAW_NORTH)
+    w.exit(pl, mv, 0, 1330, f"stock:level/{FOREST_FIRST}", 0, "the way home to Goldwood")
+    w.squad(pl, mv, "ZombieAnt", (0, 150), 3, [(-380, -300), (380, -300), (380, 300), (-380, 300)], spread=200)
+    w.squad(pl, mv, "BigShieldAnt", (0, 1150), 2, [(-250, 950), (250, 950), (250, 1300), (-250, 1300)])
+    for x, z in ((200, -1050), (-350, -50), (350, -50)):
+        w.pickup(pl, mv, HEALTH, x, z)
+    w.pickup(pl, mv, HEALTH, -150, -1050, amount=2)
+    w.pickup(pl, mv, AMMO, 0, -350)
+    for x, z in ((0, -1100), (0, -50), (0, 1150)):
+        w.light(pl, mv, x, z, (220, 190, 255), radius=500, lift=200)
+    w.glow(pl, mv, 0, 1300, (255, 230, 180), lift=60)
+    e.objects["objects"] = pl.made
+
     # Goldwood's first level: the portal, just ahead of where a new game puts Juno
     f = proj.edit_stock_level(p, "forest_portal", FOREST_FIRST, "Forest First", FOREST_FIRST_TRACK)
     pl = w.placer(f)
@@ -454,12 +549,21 @@ def main() -> int:
               fields={"red": 120, "green": 220, "blue": 255, "radius": 300, "flags": 0x40})
     f.objects["objects"] = pl.made
 
-    # Zephyra's own point on the planet map (the port's planet registry): above map point 0, the world a new game
-    # starts in, one stick push up from it. It wears disc 2's textures with a pale blue top.
-    p.planets["zephyra"] = {"format": 1, "displayName": {"en": "Zephyra"},
-                            "disc": {"index": 2, "x": 160, "y": 25, "radius": 14, "colour": [150, 210, 255]},
-                            "routes": [{"from": "stock:mappoint/0", "dir": "up", "back": "down"}],
-                            "entryLevel": dict.fromkeys(("vela", "juno", "lupus"), "pack:level/landing")}
+    # The Zephyra Expanse: the pack's own galaxy (L / R on the planet map). Zephyra is its home, open from the start;
+    # Glacia and Nimbus stay hidden until the world before them is completed (the triggers' "complete planet").
+    p.galaxies["expanse"] = {"format": 1, "name": "Zephyra Expanse", "home": "zephyra"}
+
+    def planet(name, title, level, disc, unlock, route=None):
+        p.planets[name] = {"format": 1, "displayName": {"en": title}, "galaxy": "expanse", "disc": disc,
+                           "unlock": unlock, "routes": [route] if route else [],
+                           "entryLevel": dict.fromkeys(("vela", "juno", "lupus"), f"pack:level/{level}")}
+
+    planet("zephyra", "Zephyra", "landing", {"index": 2, "x": 110, "y": 420, "radius": 16, "colour": [150, 210, 255]},
+           "start")
+    planet("glacia", "Glacia", "glacia", {"index": 4, "x": 290, "y": 420, "radius": 13, "colour": [220, 240, 255]},
+           {"completed": "zephyra"}, {"from": "pack:world/zephyra", "dir": "right", "back": "left"})
+    planet("nimbus", "Nimbus", "nimbus", {"index": 3, "x": 290, "y": 240, "radius": 15, "colour": [230, 200, 255]},
+           {"completed": "glacia"}, {"from": "pack:world/glacia", "dir": "up", "back": "down"})
     arena_door = p.meta.pop("x-arena-door")
     p.save()
     world_scripts(p, arena_door)

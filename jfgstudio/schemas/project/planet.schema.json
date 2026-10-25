@@ -23,6 +23,16 @@
    }
   },
   "scale": {"type": "number"},
+  "galaxy": {"type": "string", "pattern": "^[a-z0-9_-]+$", "description": "a galaxy of this project (galaxies/<name>.json); none = the game's own galaxy"},
+  "unlock": {
+   "description": "when the planet shows: start (from the beginning), stock (once the stock map point its route leaves from is open: the game's galaxy's default), script (when a trigger or script opens it), or once another planet of the project was entered / completed",
+   "oneOf": [
+    {"enum": ["start", "stock", "script"]},
+    {"type": "object", "additionalProperties": false, "required": ["entered"], "properties": {"entered": {"type": "string", "pattern": "^[a-z0-9_-]+$"}}},
+    {"type": "object", "additionalProperties": false, "required": ["completed"], "properties": {"completed": {"type": "string", "pattern": "^[a-z0-9_-]+$"}}},
+    {"type": "object", "additionalProperties": false, "required": ["newGame"], "properties": {"newGame": {"type": "array", "items": {"enum": ["vela", "juno", "lupus"]}}}, "description": "take-overs: heroes it opens for at a new game (not carried out by the port yet)"}
+   ]
+  },
   "routes": {
    "type": "array",
    "items": {
@@ -30,7 +40,7 @@
     "required": ["from", "dir", "back"],
     "additionalProperties": false,
     "properties": {
-     "from": {"type": "string", "description": "stock:mappoint/<n> or pack:world/<name>"},
+     "from": {"type": "string", "description": "stock:mappoint/<n> (the game's galaxy) or pack:world/<planet> (another planet of the same galaxy)"},
      "dir": {"enum": ["left", "right", "up", "down"]},
      "back": {"enum": ["left", "right", "up", "down"]},
      "corners": {"type": "array", "maxItems": 4, "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer"}}}
@@ -42,11 +52,6 @@
    "required": ["vela", "juno", "lupus"],
    "additionalProperties": false,
    "properties": {"vela": {"type": "string"}, "juno": {"type": "string"}, "lupus": {"type": "string"}}
-  },
-  "unlock": {
-   "type": "object",
-   "additionalProperties": false,
-   "properties": {"newGame": {"type": "array", "items": {"enum": ["vela", "juno", "lupus"]}}}
   }
  }
 }

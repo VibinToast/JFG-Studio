@@ -43,6 +43,7 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     for name, planet in project.planets.items():
         out += _check_planet(project, name, planet)
     out += _check_planets_together(project)
+    out += _check_galaxies(project)
     out += _check_scripts(project)
     return out
 
@@ -312,16 +313,22 @@ def _check_planet(project: Project, name: str, p: dict) -> list[Problem]:
     pf = f"planets/{name}.json"
     if "replaces" in p:
         _ref(p["replaces"], "mappoint", pf, None, out)
-    elif "disc" not in p or not p.get("routes"):
+    elif "disc" not in p or (not p.get("routes") and not p.get("galaxy")):
         out.append(Problem(ERROR, "planet", pf, "a planet needs \"replaces\" (a stock map point to take over) or a "
-                                                "disc and at least one route"))
+                                                "disc and a route (a planet on a project galaxy may have none)"))
     disc = p.get("disc", {"index": -1})
     if "replaces" not in p:  # a map point of its own (the planet registry): the disc index is only its look
         for route in p.get("routes", []):
             r = _ref(route["from"], None, pf, None, out)
-            if r and not (r.is_stock and r.category == "mappoint"):
-                out.append(Problem(ERROR, "route", pf, f"{route['from']}: the port reaches a new planet from a "
-                                                       "stock map point only"))
+            on_main = not p.get("galaxy")
+            if r and r.is_stock and r.category == "mappoint" and not on_main:
+                out.append(Problem(ERROR, "route", pf, f"{route['from']}: a stock map point is on the game's galaxy, "
+                                                       "this planet is not"))
+            elif r and not (r.is_stock and r.category == "mappoint") and not (r.is_pack and r.category == "world"):
+                out.append(Problem(ERROR, "route", pf, f"{route['from']}: routes start at a stock map point or a "
+                                                       "planet (pack:world/<name>)"))
+            elif r and r.category == "world" and r.name not in project.planets:
+                out.append(Problem(ERROR, "route", pf, f"{route['from']}: the project has no planet {r.name}"))
             if route.get("corners") and len(route["corners"]) < 2:
                 out.append(Problem(ERROR, "route", pf, "a route line needs at least 2 corners (or none: the build "
                                                        "draws it)"))
@@ -342,6 +349,47 @@ def _check_planet(project: Project, name: str, p: dict) -> list[Problem]:
                                                      f"is not the opposite of {route['dir']}"))
     if "fixedWorld" not in p and "replaces" in p:
         out.append(Problem(INFO, "world", pf, "no fixedWorld: a planet that takes over a map point uses world 15"))
+    return out
+
+
+def _check_galaxies(project: Project) -> list[Problem]:
+    """A galaxy has a home among its planets, open from the start; its planets are reachable from home; unlock rules
+    name planets of the project."""
+    from jfgstudio import worldmap
+    out: list[Problem] = []
+    for name, g in project.galaxies.items():
+        gf = f"galaxies/{name}.json"
+        members = sorted(n for n, p in project.planets.items() if worldmap.galaxy_of(p) == name)
+        if not members:
+            out.append(Problem(WARNING, "galaxy", gf, "no planet is on this galaxy yet"))
+            continue
+        home = g.get("home")
+        if not home or home not in members:
+            out.append(Problem(ERROR, "galaxy", gf, f"the home planet must be one of: {', '.join(members)}"))
+            continue
+        if worldmap.unlock_of(project.planets[home]) != "start":
+            out.append(Problem(WARNING, "galaxy", gf, f"home planet {home} is not open from the start: the galaxy "
+                                                      "shows only once one of its planets opens"))
+        lost = [n for n in members if n not in worldmap.reachable(project, name)]
+        if lost:
+            out.append(Problem(ERROR, "route", gf, f"{', '.join(lost)}: no route leads there from home planet {home}"))
+    for name, p in project.planets.items():
+        pf = f"planets/{name}.json"
+        galaxy = worldmap.galaxy_of(p)
+        if galaxy != worldmap.MAIN and galaxy not in project.galaxies:
+            out.append(Problem(ERROR, "galaxy", pf, f"the project has no galaxy {galaxy}"))
+        if galaxy != worldmap.MAIN and "replaces" in p:
+            out.append(Problem(ERROR, "galaxy", pf, "a planet taking over a stock map point is on the game's galaxy"))
+        unlock = worldmap.unlock_of(p)
+        if isinstance(unlock, dict):
+            other = next(iter(unlock.values()))
+            if other not in project.planets:
+                out.append(Problem(ERROR, "unlock", pf, f"it opens after planet {other}: no such planet"))
+            elif other == name:
+                out.append(Problem(ERROR, "unlock", pf, "it opens after itself"))
+        elif unlock == "stock" and galaxy != worldmap.MAIN:
+            out.append(Problem(ERROR, "unlock", pf, "\"stock\" (open with the stock point its route leaves) is for the "
+                                                    "game's galaxy"))
     return out
 
 
