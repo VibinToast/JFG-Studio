@@ -42,8 +42,27 @@ The design and the plans are in the JFG-Modding repo (`Docs/`): `JFG_STUDIO_DESI
 | `jfgstudio catalog` | decodes your ROM into the local catalog (your data folder) |
 | `jfgstudio build <project> [-o pack.nrm]` | builds the pack |
 | `jfgstudio test <project>` | builds, installs into the port's `mods` and starts the game in the level |
+| `jfgstudio mcp [project]` | Studio's tools for an AI agent (MCP over stdio): see below |
 
 The sample planet: `jfgstudio test samples/gemini.jfgproj` (its ground is drawn by `samples/make_gemini_field.py`).
+
+## AI agents (MCP)
+
+`jfgstudio mcp` lets an AI agent that speaks the Model Context Protocol (Claude Code, Claude Desktop and others) make
+levels with Studio: open or create a project, import geometry from Blender, ask where the floor is, place objects,
+squads with the doors they lock, exits between levels, set fog, music and planets, then validate, build and start
+the game for you to play. Its edits are the editor's own (saved as they are made, undoable per level), and its first
+tool, `guide`, tells it the game's units, limits and level patterns.
+
+With Claude Code, from this folder:
+
+```
+claude mcp add jfg-studio -- .venv/Scripts/python -m jfgstudio mcp
+```
+
+Other clients: run `<python> -m jfgstudio mcp [project]` as a stdio server. The agent reads names and stock examples
+from your local catalog on your machine; nothing from your ROM goes into the project beyond the stock entry numbers
+objects start from, as in the editor.
 
 ## Run from source
 

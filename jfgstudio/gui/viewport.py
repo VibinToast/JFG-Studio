@@ -223,27 +223,36 @@ class TrackMesh:
 
     def floor_height(self, x: float, z: float, below: float | None = None) -> float | None:
         """The highest floor under (x, z) (below a height when given): a ray down against the solid triangles."""
-        t = self.collision
-        if not len(t):
-            return None
-        a, b, c = t[:, 0], t[:, 1], t[:, 2]
+        return floor_of(self.collision, x, z, below)
+
+    def kind_triangles(self, kind: str) -> np.ndarray:
+        """The triangles (n, 3, 3) of one surface kind (solid, water, lava, kill, hidden, nocollide)."""
+        tris = [p[0] for p in self.parts if p[5] == kind]
+        return np.concatenate(tris).reshape(-1, 3, 3) if tris else np.zeros((0, 3, 3))
+
+
+def floor_of(t: np.ndarray, x: float, z: float, below: float | None = None) -> float | None:
+    """The highest of the triangles (n, 3, 3) straight under or over (x, z) (at or below `below` when given)."""
+    if not len(t):
+        return None
+    a, b, c = t[:, 0], t[:, 1], t[:, 2]
         # Barycentric test in the xz plane.
-        v0x, v0z = c[:, 0] - a[:, 0], c[:, 2] - a[:, 2]
-        v1x, v1z = b[:, 0] - a[:, 0], b[:, 2] - a[:, 2]
-        v2x, v2z = x - a[:, 0], z - a[:, 2]
-        den = v0x * v1z - v1x * v0z
-        ok = np.abs(den) > 1e-6
-        den = np.where(ok, den, 1.0)
-        u = (v2x * v1z - v1x * v2z) / den
-        v = (v0x * v2z - v2x * v0z) / den
-        inside = ok & (u >= 0) & (v >= 0) & (u + v <= 1)
-        if not inside.any():
-            return None
-        y = a[:, 1] + u * (c[:, 1] - a[:, 1]) + v * (b[:, 1] - a[:, 1])
-        ys = y[inside]
-        if below is not None:
-            ys = ys[ys <= below + 1.0]
-        return float(ys.max()) if len(ys) else None
+    v0x, v0z = c[:, 0] - a[:, 0], c[:, 2] - a[:, 2]
+    v1x, v1z = b[:, 0] - a[:, 0], b[:, 2] - a[:, 2]
+    v2x, v2z = x - a[:, 0], z - a[:, 2]
+    den = v0x * v1z - v1x * v0z
+    ok = np.abs(den) > 1e-6
+    den = np.where(ok, den, 1.0)
+    u = (v2x * v1z - v1x * v2z) / den
+    v = (v0x * v2z - v2x * v0z) / den
+    inside = ok & (u >= 0) & (v >= 0) & (u + v <= 1)
+    if not inside.any():
+        return None
+    y = a[:, 1] + u * (c[:, 1] - a[:, 1]) + v * (b[:, 1] - a[:, 1])
+    ys = y[inside]
+    if below is not None:
+        ys = ys[ys <= below + 1.0]
+    return float(ys.max()) if len(ys) else None
 
 
 def raycast(triangles: np.ndarray, origin, direction) -> float | None:

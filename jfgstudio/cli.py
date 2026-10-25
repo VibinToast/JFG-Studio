@@ -93,6 +93,12 @@ def cmd_test(args) -> int:
     return testrun.main(args)
 
 
+def cmd_mcp(args) -> int:
+    from jfgstudio import mcp_server
+
+    return mcp_server.serve(args.project)
+
+
 def cmd_not_yet(args) -> int:
     print(f"jfgstudio {args.command}: not built yet (phase 0 task {args.task}, Docs/PHASE0_TASKS.md)")
     return 2
@@ -146,6 +152,10 @@ def parser() -> argparse.ArgumentParser:
     t.add_argument("--rom", help="your US ROM (default: the rom setting)")
     t.add_argument("--no-launch", action="store_true", help="build and install, but don't start the game")
     t.set_defaults(run=cmd_test)
+
+    m = sub.add_parser("mcp", help="serve Studio's tools to an AI agent (MCP over stdio)")
+    m.add_argument("project", nargs="?", help="a .jfgproj folder to open at the start")
+    m.set_defaults(run=cmd_mcp)
     return ap
 
 
