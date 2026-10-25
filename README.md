@@ -54,13 +54,26 @@ squads with the doors they lock, exits between levels, set fog, music and planet
 the game for you to play. Its edits are the editor's own (saved as they are made, undoable per level), and its first
 tool, `guide`, tells it the game's units, limits and level patterns.
 
-With Claude Code, from this folder:
+### Setup
 
-```
-claude mcp add jfg-studio -- .venv/Scripts/python -m jfgstudio mcp
-```
+1. **JFG-Studio's server.** With Claude Code, from this folder:
 
-Other clients: run `<python> -m jfgstudio mcp [project]` as a stdio server. The agent reads names and stock examples
+   ```
+   claude mcp add jfg-studio -- .venv/Scripts/python -m jfgstudio mcp
+   ```
+
+   Other clients: run `<python> -m jfgstudio mcp [project]` as a stdio server.
+
+2. **Blender, for modelling (needed when the agent makes geometry).** Blender 3.5 or newer with:
+   - **the jfg64 add-on (required).** The agent calls it for the game's surfaces, vertex light, budgets and the
+     export Studio reads. Install `jfg64.zip` ([jfg64-blender](https://github.com/VibinToast/jfg64-blender)) in
+     Edit › Preferences › Add-ons › Install… (Blender 4.2+: the ▾ menu, Install from Disk…) and tick
+     **jfg64: Jet Force Gemini levels**; its panel is the **JFG** tab of the 3D View's sidebar (N).
+   - **a Blender MCP server**, so the agent can drive Blender. The community
+     [blender-mcp](https://github.com/ahujasid/blender-mcp): install [uv](https://docs.astral.sh/uv/), install its
+     `addon.py` in Blender the same way, start it from the **BlenderMCP** tab of the sidebar, then
+     `claude mcp add blender -- uvx blender-mcp`. It runs any Python the agent sends inside Blender: connect it only
+     while you work with the agent, and check its README for current steps. The agent reads names and stock examples
 from your local catalog on your machine; nothing from your ROM goes into the project beyond the stock entry numbers
 objects start from, as in the editor.
 

@@ -6,8 +6,8 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 ## Workflow
 
 1. `open_project` (or `new_project`), then `project_summary`.
-2. Geometry: model in Blender (the jfg64 add-on: surfaces, vertex light, budgets, Export for JFG-Studio) or any tool
-   that writes a `.glb`, then `import_geometry`. Check `geometry_info` against the limits.
+2. Geometry: model in Blender with the jfg64 add-on (below), then `import_geometry`. Check `geometry_info` against
+   the limits.
 3. `add_level` on the geometry; `set_level` for fog, sky, music and planet.
 4. A start point first: type `startpoint`, fields `startPoint` 0, `player` 0. Exits into a level arrive at one of its
    start points, by number, for player 0.
@@ -15,6 +15,23 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 6. Enemies with `place_squad`, doors and keys, pickups, lights; levels joined with `connect`.
 7. `validate` until there are no errors, then `play` (builds, installs and starts the game in the level). You can't
    play it yourself: say what to try, and the player reports back.
+
+## Blender (when you model geometry)
+
+The jfg64 add-on is **required** in Blender: it knows the game's surfaces and limits and exports what Studio reads.
+Through a Blender MCP server, run Python in Blender and use it rather than writing your own:
+
+```python
+import bpy, jfg64
+jfg64.set_surface(bpy.data.materials["river"], "water")    # solid, water, lava, kill, collider, nocollide
+jfg64.bake_light(obj.data, obj.matrix_world, sun_dir, sun_colour, ambient)   # vertex light, per mesh
+jfg64.budgets([o for o in bpy.context.scene.objects])      # {"triangles", "images", "far", "surfaces"}
+jfg64.export("C:/path/level.glb")                          # +Y up, custom properties, vertex colours
+```
+
+Then `import_geometry` the `.glb` here. If `import jfg64` fails, the add-on isn't installed or enabled: ask the
+player to install it (Edit > Preferences > Add-ons > Install..., `jfg64.zip`, tick "jfg64: Jet Force Gemini levels")
+before modelling.
 
 ## Units and space
 
