@@ -33,7 +33,7 @@ jfg64.export("C:/path/level.glb")                          # +Y up, custom prope
 ```
 
 Then `import_geometry` the `.glb` here. If `import jfg64` fails, the add-on isn't installed or enabled: ask the
-player to install it (Edit > Preferences > Add-ons > Install..., `jfg64.zip`, tick "jfg64: Jet Force Gemini levels")
+player to install it (Edit > Preferences > Add-ons, the ▾ menu > Install from Disk..., `jfg64.zip`, tick "jfg64: Jet Force Gemini levels")
 before modelling.
 
 ## Units and space
