@@ -1,22 +1,26 @@
 """The editor window: a docked, Unity-style layout (design doc section 6) in the JFG theme.
 
-Phase 0 is the shell: Hierarchy, Scene, Inspector, Project, Prefabs, Console and Level Graph windows, the toolbar and
-the menus, working on a loaded project (open, browse, select, validate). The 3D Scene view, editing and Play come in
-phase 1.
+Hierarchy, Scene (3D: gui/viewport.py), Inspector, Project, Prefabs, Console and Level Graph windows, the toolbar and
+the menus. Edits go through jfgstudio.edit's per-level undo history.
 """
 
+import math
 import struct
 import zlib
 from pathlib import Path
 
-from imgui_bundle import hello_imgui, imgui
+import numpy as np
+from imgui_bundle import hello_imgui, imgui, imguizmo
 from imgui_bundle import portable_file_dialogs as pfd
 
-from jfgstudio import __version__
+from jfgstudio import __version__, edit, refs
 from jfgstudio import objects as obj
 from jfgstudio import project as proj
 from jfgstudio import validate as val
 from jfgstudio.gui import theme
+from jfgstudio.gui import viewport as vp
+
+gz = imguizmo.im_guizmo
 
 TOOLS = (("hand", "Q", "Hand: pan and orbit the view"), ("move", "W", "Move"), ("rotate", "E", "Rotate"),
          ("scale", "R", "Scale"))
@@ -36,6 +40,16 @@ class State:
         self.grid = 10.0
         self.new_project = {"open": False, "folder": "", "id": "", "name": ""}
         self.message = ""
+        self.histories: dict[str, edit.History] = {}
+        self.view = vp.Viewport()
+        self.camera = vp.Camera()
+        self.framed_level = None
+        self.snap_floor = True
+        self.drag = None  # uid -> start position, while the gizmo moves the selection
+        self.scene_rect = (0.0, 0.0, 1.0, 1.0)
+        self.pos_edit = None  # the Inspector's position before a drag of its fields
+        self.settings_open = False
+        self.settings_edit = {}
 
     # project actions
     def open(self, path: str) -> None:
@@ -57,7 +71,41 @@ class State:
     def save(self) -> None:
         if self.project:
             self.project.save()
+            for h in self.histories.values():
+                h.dirty = False
             self.message = "Saved"
+
+    def history(self) -> edit.History | None:
+        if not self.project or self.level not in self.project.levels:
+            return None
+        if self.level not in self.histories:
+            self.histories[self.level] = edit.History(self.project.levels[self.level])
+        return self.histories[self.level]
+
+    def undo(self) -> None:
+        h = self.history()
+        label = h.undo() if h else None
+        self.message = f"Undo {label}" if label else "Nothing to undo"
+        self.validate()
+
+    def redo(self) -> None:
+        h = self.history()
+        label = h.redo() if h else None
+        self.message = f"Redo {label}" if label else "Nothing to redo"
+        self.validate()
+
+    def dirty(self) -> bool:
+        return any(h.dirty for h in self.histories.values())
+
+    def track_path(self) -> str | None:
+        """The .glb the Scene shows for the open level: the project's geometry, or a stock track from the catalog."""
+        level = self.project.levels[self.level]
+        r = refs.parse(level.level["track"], "track")
+        if r.is_pack:
+            path = self.project.geometry_path(r.name)
+            return str(path) if path.is_file() else None
+        from jfgstudio.catalog import Catalog
+        return str(Catalog.open().track_glb(r.number()))
 
     def objects(self) -> list[dict]:
         if not self.project or self.level not in self.project.levels:
@@ -141,82 +189,246 @@ def _leaf(o: dict) -> None:
         _select(o["uid"])
 
 
+def _keys(objs) -> dict:
+    return {o["uid"]: (sc.key if (sc := obj.schema_for(o, S.schemas)) else None) for o in objs}
+
+
 def scene() -> None:
-    _title("Scene")
     if not S.project or not S.level:
         imgui.text_disabled("Open a project and pick a level in the Project window.")
         return
     level = S.project.levels[S.level]
-    imgui.text(f"{level.level['name']}   ({level.ref})")
-    imgui.text_disabled(f"track {level.level['track']}   sky {level.level.get('sky', -1)}   "
-                        f"{len(level.objects['objects'])} objects")
-    imgui.spacing()
+    try:
+        S.view.load_track(S.track_path())
+    except Exception as e:  # no catalog yet, no ROM set: say so in the Scene
+        S.view.load_track(None)
+        S.view.error = f"stock track: {e}"
+    S.view.fog = vp.decode_fog(level.level["header"])
+    if S.framed_level != S.level and S.view.mesh is not None:
+        S.camera.look_from_above(S.view.mesh.bounds)
+        S.framed_level = S.level
+    _, S.view.show_fog = imgui.checkbox("Fog", S.view.show_fog)
+    imgui.same_line()
+    _, S.view.show_hidden = imgui.checkbox("Invisible colliders", S.view.show_hidden)
+    imgui.same_line()
+    imgui.text_disabled(f"   {level.level['name']}  ({level.level['track']})   speed {S.camera.speed:.0f}")
+    if S.view.error:
+        imgui.text_colored(theme.colour("ERROR"), S.view.error)
     avail = imgui.get_content_region_avail()
-    draw = imgui.get_window_draw_list()
-    p0 = imgui.get_cursor_screen_pos()
-    p1 = imgui.ImVec2(p0.x + avail.x, p0.y + max(avail.y, 50))
-    draw.add_rect_filled(p0, p1, imgui.get_color_u32(theme.colour("BACKGROUND")), 6.0)
-    # A top-down sketch until the 3D view arrives (phase 1): objects as dots, regions as outlines.
+    w, h = int(max(avail.x, 8)), int(max(avail.y, 8))
     objs = S.objects()
-    if objs:
-        xs = [o["pos"][0] for o in objs]
-        zs = [o["pos"][2] for o in objs]
-        span = max(max(xs) - min(xs), max(zs) - min(zs), 1) * 1.15
-        cx, cz = (max(xs) + min(xs)) / 2, (max(zs) + min(zs)) / 2
-        scale = min(p1.x - p0.x, p1.y - p0.y) / span
+    keys = _keys(objs)
+    lines = vp.marker_lines(objs, keys, S.selection, vp.region_links(objs, keys))
+    tex = S.view.render(w, h, S.camera, lines)
+    origin = imgui.get_cursor_screen_pos()
+    S.scene_rect = (origin.x, origin.y, w, h)
+    if tex is None:
+        return
+    imgui.image(imgui.ImTextureRef(tex), imgui.ImVec2(w, h), imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
+    hovered = imgui.is_item_hovered()
+    draw = imgui.get_window_draw_list()
+    for o in objs:
+        p = vp.project(S.camera, (w, h), (o["pos"][0], o["pos"][1] + vp.MARKER_HEIGHT + 6, o["pos"][2]))
+        if p and keys.get(o["uid"]) != "regionpoint":
+            colour = theme.colour("HIGHLIGHT" if o["uid"] in S.selection else "MUTED")
+            draw.add_text(imgui.ImVec2(origin.x + p[0] + 4, origin.y + p[1] - 14), imgui.get_color_u32(colour),
+                          o.get("name") or o["uid"])
+    using = _gizmo(origin, w, h, objs)
+    _camera_input(hovered, objs)
+    if hovered and imgui.is_mouse_clicked(imgui.MouseButton_.left) and not using and not gz.is_over() \
+            and not imgui.get_io().key_alt:
+        _pick(origin, w, h, objs, keys)
 
-        def at(x, z):
-            return imgui.ImVec2((p0.x + p1.x) / 2 + (x - cx) * scale, (p0.y + p1.y) / 2 + (z - cz) * scale)
 
-        by_region = {}
-        for o in objs:
-            if o.get("fields", {}).get("corner") is not None and o["type"].endswith("/0x5"):
-                by_region.setdefault(o["fields"].get("region"), []).append(o)
-        for corners in by_region.values():
-            pts = [at(c["pos"][0], c["pos"][2]) for c in sorted(corners, key=lambda c: c["fields"]["corner"])]
-            for a, b in zip(pts, pts[1:] + pts[:1], strict=True):
-                draw.add_line(a, b, imgui.get_color_u32(theme.colour("BORDER")), 2.0)
-        for o in objs:
-            selected = o["uid"] in S.selection
-            col = theme.colour("HIGHLIGHT" if selected else "ACCENT")
-            draw.add_circle_filled(at(o["pos"][0], o["pos"][2]), 6.0 if selected else 4.0, imgui.get_color_u32(col))
-    draw.add_text(imgui.ImVec2(p0.x + 10, p1.y - 24), imgui.get_color_u32(theme.colour("MUTED")),
-                  "Top-down preview. The 3D Scene view comes in phase 1.")
-    imgui.dummy(imgui.ImVec2(avail.x, max(avail.y, 50)))
+def _pick(origin, w, h, objs, keys) -> None:
+    mouse = imgui.get_mouse_pos()
+    mx, my = mouse.x - origin.x, mouse.y - origin.y
+    best, best_d = None, 14.0 ** 2
+    for o in objs:
+        for lift in (vp.MARKER_HEIGHT, 0.0):
+            p = vp.project(S.camera, (w, h), (o["pos"][0], o["pos"][1] + lift, o["pos"][2]))
+            if p:
+                d = (p[0] - mx) ** 2 + (p[1] - my) ** 2
+                if d < best_d:
+                    best, best_d = o["uid"], d
+    if best is None:
+        if not (imgui.get_io().key_ctrl or imgui.get_io().key_shift):
+            S.selection = set()
+    else:
+        _select(best)
+
+
+def _yaw_field(o: dict):
+    """The schema field that holds an object's facing, and radians per unit, if it has one."""
+    schema = obj.schema_for(o, S.schemas)
+    f = schema.field("yaw") if schema else None
+    if f is None or f.unit not in ("angle10", "angle8"):
+        return None, 0.0
+    return f, (2 * math.pi * (1024 if f.unit == "angle10" else 256) / 65536)
+
+
+def _gizmo(origin, w, h, objs) -> bool:
+    sel = [o for o in objs if o["uid"] in S.selection]
+    if not sel or S.tool not in ("move", "rotate"):
+        if S.drag is not None:
+            _end_drag(objs)
+        return False
+    gz.set_drawlist()
+    gz.set_rect(origin.x, origin.y, w, h)
+    view = gz.Matrix16(vp.pack_matrix(S.camera.view()))
+    proj_m = gz.Matrix16(vp.pack_matrix(S.camera.projection(w / h)))
+    centre = np.mean([o["pos"] for o in sel], axis=0)
+    yaw_f, per_unit = _yaw_field(sel[0]) if len(sel) == 1 else (None, 0.0)
+    yaw = sel[0].get("fields", {}).get("yaw", 0) * per_unit if yaw_f else 0.0
+    m = gz.Matrix16(vp.pack_matrix(vp.object_matrix(centre, yaw)))
+    if S.tool == "move":
+        op = gz.OPERATION.translate
+        snap = gz.Matrix3([S.grid, S.grid, S.grid]) if S.snap else None
+    else:
+        if yaw_f is None:
+            return False
+        op = gz.OPERATION.rotate_y
+        snap = gz.Matrix3([360.0 / 64, 0, 0]) if S.snap else None
+    mode = gz.MODE.local if S.local else gz.MODE.world
+    changed = gz.manipulate(view, proj_m, op, mode, m, None, snap)
+    using = gz.is_using()
+    if using and S.drag is None:
+        S.drag = {o["uid"]: (list(o["pos"]), dict(o.get("fields", {}))) for o in sel}
+    if changed:
+        new = vp.unpack_matrix(m.values)
+        if S.tool == "move":
+            delta = new[:3, 3] - centre
+            for o in sel:
+                p = [float(o["pos"][k] + delta[k]) for k in range(3)]
+                if S.snap_floor and S.view.mesh is not None:
+                    y = S.view.mesh.floor_height(p[0], p[2], below=p[1] + 60)
+                    if y is not None:
+                        p[1] = y
+                o["pos"] = [round(v) for v in p]
+        else:
+            angle = math.atan2(new[0, 2], new[0, 0])
+            units = round(angle / per_unit) % int(round(2 * math.pi / per_unit))
+            sel[0].setdefault("fields", {})["yaw"] = units
+    if not using and S.drag is not None:
+        _end_drag(objs)
+    return using
+
+
+def _end_drag(objs) -> None:
+    h = S.history()
+    start = S.drag or {}
+    S.drag = None
+    if not h:
+        return
+    changes = []
+    for o in objs:
+        if o["uid"] in start:
+            old_pos, old_fields = start[o["uid"]]
+            if list(o["pos"]) != old_pos:
+                changes.append(edit.Change(o["uid"], ("pos",), old_pos, list(o["pos"])))
+            if o.get("fields", {}).get("yaw") != old_fields.get("yaw"):
+                changes.append(edit.Change(o["uid"], ("fields", "yaw"), old_fields.get("yaw"),
+                                           o.get("fields", {}).get("yaw")))
+    h.record(edit.Command("move" if S.tool == "move" else "rotate", changes))
+    S.validate()
+
+
+def _camera_input(hovered: bool, objs) -> None:
+    io = imgui.get_io()
+    cam = S.camera
+    dt = max(io.delta_time, 1e-3)
+    d = io.mouse_delta
+    if hovered and io.mouse_wheel:
+        cam.speed = float(np.clip(cam.speed * (1.25 if io.mouse_wheel > 0 else 0.8), 50, 20000))
+    if imgui.is_mouse_down(imgui.MouseButton_.right) and (hovered or imgui.is_mouse_dragging(imgui.MouseButton_.right)):
+        cam.yaw -= d.x * 0.005
+        cam.pitch = float(np.clip(cam.pitch - d.y * 0.005, -1.5, 1.5))
+        move = np.zeros(3)
+        for key, vec in ((imgui.Key.w, cam.forward()), (imgui.Key.s, -cam.forward()), (imgui.Key.d, cam.right()),
+                         (imgui.Key.a, -cam.right()), (imgui.Key.e, np.array([0, 1.0, 0])),
+                         (imgui.Key.q, np.array([0, -1.0, 0]))):
+            if imgui.is_key_down(key):
+                move += vec
+        cam.pos = cam.pos + move * cam.speed * dt * (3.0 if io.key_shift else 1.0)
+    elif imgui.is_mouse_down(imgui.MouseButton_.middle) and (hovered or imgui.is_mouse_dragging(
+            imgui.MouseButton_.middle)):
+        up = np.cross(cam.right(), cam.forward())  # the screen's up
+        cam.pos = cam.pos + (-cam.right() * d.x + up * d.y) * cam.speed * 0.002  # the scene follows the mouse
+    elif io.key_alt and imgui.is_mouse_down(imgui.MouseButton_.left) and hovered:
+        sel = [o["pos"] for o in objs if o["uid"] in S.selection]
+        pivot = np.mean(sel, axis=0) if sel else cam.pos + cam.forward() * 600
+        dist = float(np.linalg.norm(cam.pos - pivot)) or 600.0
+        cam.yaw -= d.x * 0.005
+        cam.pitch = float(np.clip(cam.pitch - d.y * 0.005, -1.5, 1.5))
+        cam.frame(pivot, dist)
+
+
+def frame_selection() -> None:
+    sel = [o["pos"] for o in S.objects() if o["uid"] in S.selection]
+    if sel:
+        S.camera.frame(np.mean(sel, axis=0), 500.0)
+    elif S.view.mesh is not None:
+        S.camera.look_from_above(S.view.mesh.bounds)
 
 
 def inspector() -> None:
     sel = [o for o in S.objects() if o["uid"] in S.selection]
-    if not sel:
-        imgui.text_disabled("Select an object in the Hierarchy.")
+    h = S.history()
+    if not sel or h is None:
+        imgui.text_disabled("Select an object in the Hierarchy or the Scene.")
         return
     if len(sel) > 1:
         imgui.text(f"{len(sel)} objects selected")
+        imgui.text_disabled("W moves them together; Delete removes them; Ctrl+D duplicates them.")
         return
     o = sel[0]
+    uid = o["uid"]
     schema = obj.schema_for(o, S.schemas)
     _title(o.get("name") or (schema.name if schema else "Object"))
-    imgui.text_disabled(f"{o['type']}   uid {o['uid']}")
+    imgui.text_disabled(f"{o['type']}   uid {uid}")
+    changed, name = imgui.input_text("Name", o.get("name", ""), imgui.InputTextFlags_.enter_returns_true)
+    if changed:
+        h.set_value(uid, ("name",), name or None, "rename")
     if imgui.collapsing_header("Transform", imgui.TreeNodeFlags_.default_open):
-        imgui.input_float3("Position", list(map(float, o["pos"])), "%.0f", imgui.InputTextFlags_.read_only)
+        pos = [float(v) for v in o["pos"]]
+        changed, new = imgui.drag_float3("Position", pos, 1.0, -32768, 32767, "%.0f")
+        if imgui.is_item_activated():
+            S.pos_edit = list(o["pos"])
+        if changed:
+            o["pos"] = [round(v) for v in new]
+        if imgui.is_item_deactivated_after_edit() and S.pos_edit is not None:
+            h.move({uid: (S.pos_edit, list(o["pos"]))})
+            S.pos_edit = None
+            S.validate()
+        if S.view.mesh is not None and imgui.button("Drop to floor"):
+            y = S.view.mesh.floor_height(o["pos"][0], o["pos"][2], below=o["pos"][1] + 60)
+            if y is not None:
+                h.set_value(uid, ("pos",), [o["pos"][0], round(y), o["pos"][2]], "drop to floor")
     if schema and imgui.collapsing_header(schema.name, imgui.TreeNodeFlags_.default_open):
         if schema.status != "decoded":
             imgui.text_colored(theme.colour("HIGHLIGHT"), "Partly decoded: other fields come from the stock entry.")
         for f in schema.fields:
             value = o.get("fields", {}).get(f.name, f.default)
-            imgui.input_int(f.name, value, 0, 0, imgui.InputTextFlags_.read_only)
+            lo, hi = obj._RANGES[f.type]
+            changed, new = imgui.input_int(f.name, int(value), 1, 10, imgui.InputTextFlags_.enter_returns_true)
+            if changed:
+                h.set_value(uid, ("fields", f.name), int(min(max(new, lo), hi)), f"set {f.name}")
+                S.validate()
             if f.description and imgui.is_item_hovered():
                 imgui.set_tooltip(f.description)
-    if o.get("target"):
-        imgui.text(f"Leads to {o['target']}")
+    if schema and schema.key == "exit":
+        changed, target = imgui.input_text("Leads to", o.get("target", ""), imgui.InputTextFlags_.enter_returns_true)
+        if changed:
+            h.set_value(uid, ("target",), target or None, "exit target")
+            S.validate()
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("pack:level/<name> or stock:level/<number>")
     if imgui.collapsing_header("Entry"):
         imgui.text(f"size 0x{o['size']:X}" if "size" in o else "size from the stock base")
         if o.get("stock"):
             imgui.text(f"stock base: list {o['stock']['list']}, entry {o['stock']['entry']}")
         if o.get("params"):
             imgui.text_wrapped(f"raw: {o['params']}")
-    imgui.spacing()
-    imgui.text_disabled("Editing comes in phase 1.")
 
 
 def project_window() -> None:
@@ -319,6 +531,10 @@ def toolbar() -> None:
     imgui.same_line()
     _, S.snap = imgui.checkbox("Snap", S.snap)
     imgui.same_line()
+    _, S.snap_floor = imgui.checkbox("Floor", S.snap_floor)
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Moved objects drop onto the floor under them")
+    imgui.same_line()
     imgui.set_next_item_width(hello_imgui.em_size(5))
     _, S.grid = imgui.input_float("##grid", S.grid, 0, 0, "%.0f")
     imgui.same_line()
@@ -343,10 +559,23 @@ def menus() -> None:
             _open_dialog()
         if imgui.menu_item("Save", "Ctrl+S", False, S.project is not None)[0]:
             S.save()
+        imgui.separator()
+        if imgui.menu_item("Settings...", "", False)[0]:
+            S.settings_open = True
         imgui.end_menu()
     if imgui.begin_menu("Edit"):
-        imgui.menu_item("Undo", "Ctrl+Z", False, False)
-        imgui.menu_item("Redo", "Ctrl+Y", False, False)
+        h = S.history()
+        if imgui.menu_item("Undo", "Ctrl+Z", False, bool(h and h.done))[0]:
+            S.undo()
+        if imgui.menu_item("Redo", "Ctrl+Y", False, bool(h and h.undone))[0]:
+            S.redo()
+        imgui.separator()
+        if imgui.menu_item("Duplicate", "Ctrl+D", False, bool(S.selection))[0]:
+            duplicate()
+        if imgui.menu_item("Delete", "Delete", False, bool(S.selection))[0]:
+            delete()
+        if imgui.menu_item("Frame selection", "F", False, S.project is not None)[0]:
+            frame_selection()
         imgui.end_menu()
     if imgui.begin_menu("Window"):
         for w in hello_imgui.get_runner_params().docking_params.dockable_windows:
@@ -367,6 +596,44 @@ def _open_dialog() -> None:
     folder = pfd.select_folder("Open a .jfgproj folder").result()
     if folder:
         S.open(folder)
+
+
+def settings_popup() -> None:
+    """File > Settings: the decomp, port and ROM paths (the same settings as `jfgstudio settings`)."""
+    from jfgstudio import settings
+    if S.settings_open:
+        S.settings_edit = {k: settings.load().get(k, "") for k in settings.KEYS}
+        imgui.open_popup("Settings")
+        S.settings_open = False
+    if not imgui.begin_popup_modal("Settings", None, imgui.WindowFlags_.always_auto_resize)[0]:
+        return
+    for key, what in settings.KEYS.items():
+        imgui.text(what)
+        imgui.set_next_item_width(hello_imgui.em_size(36))
+        _, S.settings_edit[key] = imgui.input_text(f"##{key}", S.settings_edit[key])
+        imgui.same_line()
+        if imgui.button(f"...##{key}"):
+            if key == "rom":
+                picked = (pfd.open_file("Your US ROM").result() or [None])[0]
+            else:
+                picked = pfd.select_folder(what).result()
+            if picked:
+                S.settings_edit[key] = picked
+        found = settings.detected(key)
+        if not S.settings_edit[key] and found:
+            imgui.text_disabled(f"found automatically: {found}")
+        imgui.spacing()
+    if imgui.button("Save"):
+        for key, value in S.settings_edit.items():
+            settings.set_value(key, value.strip() or None)
+        S.view.load_track(None)  # reload the Scene with the new paths
+        S.view.mesh_path = "reload"
+        S.message = "Settings saved"
+        imgui.close_current_popup()
+    imgui.same_line()
+    if imgui.button("Cancel"):
+        imgui.close_current_popup()
+    imgui.end_popup()
 
 
 def new_project_popup() -> None:
@@ -396,24 +663,51 @@ def new_project_popup() -> None:
         imgui.end_popup()
 
 
+def duplicate() -> None:
+    h = S.history()
+    if h and S.selection:
+        S.selection = set(h.duplicate(S.selection))
+        S.validate()
+
+
+def delete() -> None:
+    h = S.history()
+    if h and S.selection:
+        h.delete(S.selection)
+        S.selection = set()
+        S.validate()
+
+
 def shortcuts() -> None:
     io = imgui.get_io()
     if io.want_text_input:
         return
-    for name, key, _ in TOOLS:
-        if imgui.is_key_pressed(getattr(imgui.Key, key.lower()), False):
-            S.tool = name
+    flying = imgui.is_mouse_down(imgui.MouseButton_.right)  # WASD / QE fly the camera then
+    if not flying and not io.key_ctrl:
+        for name, key, _ in TOOLS:
+            if imgui.is_key_pressed(getattr(imgui.Key, key.lower()), False):
+                S.tool = name
+        if imgui.is_key_pressed(imgui.Key.f, False):
+            frame_selection()
+        if imgui.is_key_pressed(imgui.Key.delete, False):
+            delete()
     if io.key_ctrl and imgui.is_key_pressed(imgui.Key.s, False):
         S.save()
     if io.key_ctrl and imgui.is_key_pressed(imgui.Key.o, False):
         _open_dialog()
+    if io.key_ctrl and imgui.is_key_pressed(imgui.Key.z, False):
+        S.undo()
+    if io.key_ctrl and imgui.is_key_pressed(imgui.Key.y, False):
+        S.redo()
+    if io.key_ctrl and imgui.is_key_pressed(imgui.Key.d, False):
+        duplicate()
 
 
 def status() -> None:
     if S.project:
         errors = sum(p.severity == val.ERROR for p in S.problems)
-        imgui.text(f"{S.project.meta['name']}  |  level {S.level or '-'}  |  {len(S.selection)} selected  |  "
-                   f"{errors} errors  |  tool {S.tool}")
+        imgui.text(f"{S.project.meta['name']}{' *' if S.dirty() else ''}  |  level {S.level or '-'}  |  "
+                   f"{len(S.selection)} selected  |  {errors} errors  |  tool {S.tool}")
     if S.message:
         imgui.same_line()
         imgui.text_colored(theme.colour("MUTED"), f"   {S.message}")
@@ -499,8 +793,10 @@ def run(project_path: str | None = None, screenshot: str | None = None, frames: 
     counter = {"n": 0}
 
     def gui():
+        gz.begin_frame()
         shortcuts()
         new_project_popup()
+        settings_popup()
         if screenshot:
             counter["n"] += 1
             if counter["n"] >= frames:

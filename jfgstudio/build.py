@@ -1,14 +1,15 @@
-"""The pack compiler (task S6): a project -> an `.nrm` the port loads.
+"""The pack compiler: a project -> an `.nrm` the port loads.
 
-How (phase 0): the project's content is written into a copy of the user's ROM with jfgformats (tracks and their new
-textures, level headers from the neutral template, object lists), the same way the decomp's tools build test ROMs.
-Then the copy is compared with the original, entry by entry, and only the entries that changed or were added go into
-the pack (`jfg_assets.json`: "entry" to replace, "append" with "expect" to add). The planet map, the world name and
-Juno's new-game worlds are not asset data: they go into `patch.bps`, built against a separate copy that has only those
-changes, so the patch carries only new bytes.
+Every entry is built on its own with jfgformats' item writers: level headers (`levels.new_header`), object lists,
+tracks (`tracks.import_track`, then `set_texture_ids`, `check_track_buffer`, `pack_track`) and their new textures
+(`textures.pack_new_texture`). They go into `jfg_assets.json`: "entry" to replace a stock entry, "append" with the
+number it will get ("expect") to add one. Packs never carry ROM-built bytes or ROM-end offsets: the decomp's ROM tools
+are for emulators only (owner's decision, 2026-10-25). The user's ROM is only read: stock entries an object copies, the
+table sizes, and the planet map.
 
-Phase 0 shortcuts (Docs/PHASE0_TASKS.md): fixed ids (`fixedId`, `fixedObjectLists`, `fixedWorld`) instead of the
-content linker, and the map as a patch (one patch mod at a time) instead of the planet registry.
+The planet map is not asset data: it goes into `patch.bps`, an in-place edit of overlay 9's data (see map_image).
+
+Still phase 0 style until the port's content linker exists: fixed ids (`fixedId`, `fixedObjectLists`, `fixedWorld`).
 """
 
 import io
@@ -63,8 +64,9 @@ class _Builder:
         self.image = image
         self.log = log
         self.jf = formats.load()
-        from jfgformats import levels, mapdata, models, tracks
+        from jfgformats import levels, mapdata, models, textures, tracks
         self.lv, self.mapdata, self.models, self.tracks = levels, mapdata, models, tracks
+        self.textures = textures
         self.catalog = Catalog(image)
         self.schemas = obj.load_schemas()
         self.problems: list[str] = []
@@ -106,56 +108,92 @@ class _Builder:
         return obj.encode_entry(t.number(), o["pos"], size, schema, fields, raw)
 
     # the asset side
-    def write_assets(self, r) -> None:
+    def assets(self) -> list[dict]:
+        """Every entry the pack adds or replaces: {table, data, what, index, raw, append (a name, or None)}."""
+        out = []
+        counts = {what: self.jf.read_table(self.catalog.assets.section(table))[1] for table, _, what, _ in SETS}
         data = self.models.ModelData(self.catalog.assets)
-        results = {}
+        next_texture = counts["texture"]
+        track_ids = {}
         for name, tid in self.track_ids.items():
             glb = self.p.geometry_path(name)
             self.log(f"track {name}: importing {glb.name} as track {tid}")
-            results[tid] = self.tracks.import_track(data, str(glb), track_id=tid, log=self.log)
-        if results:
-            self.tracks.build(r, data, results, log=self.log)
-        headers, lists = {}, {}
+            result = self.tracks.import_track(data, str(glb), track_id=tid, log=self.log)
+            if result.get("textures"):
+                raise BuildError([f"geometry/{glb.name}: it changes the pixels of stock textures, which a pack can't "
+                                  "carry yet; give those materials their own images"])
+            ids = {}
+            for key, png in result.get("newTextures", {}).items():
+                ids[key] = 0x8000 | next_texture
+                out.append({"table": 0x01, "data": 0x00, "what": "texture", "index": next_texture,
+                            "raw": self.textures.pack_new_texture(png), "append": f"texture_{name}_{key}"})
+                self.log(f"texture {name}/{key}: new, id 0x{ids[key]:04X}")
+                next_texture += 1
+            result = self.tracks.set_texture_ids(result, ids)
+            self.tracks.check_track_buffer(result["data"], name=f"track {name}")
+            # The track names its new textures by number (texture entry k at header +0x00, 8 bytes each, a u32 id
+            # without bit 15): fixups, so the port writes the numbers the textures really get.
+            textures_at = struct.unpack_from(">I", result["data"], 0)[0]
+            fixups = [{"at": textures_at + 8 * int(key), "type": "u32", "ref": f"texture_{name}_{key}"} for key in ids]
+            out.append({"table": 0x24, "data": 0x25, "what": "track", "index": tid,
+                        "raw": self.tracks.pack_track(result["data"]), "append": f"track_{name}",
+                        "fixups": fixups, "packed": True})
+            track_ids[name] = tid
+        stock_lists = self.catalog.pair(self.lv.OBJLIST_TABLE, self.lv.OBJLIST_DATA)
+        known = self.lv.stock_squadrons(stock_lists)
+        cutscenes = self.jf.read_table(self.catalog.assets.section(self.lv.CUTSCENE_TABLE))[1]
         for name, level in self.p.levels.items():
-            entries = [self.entry(o, name) for o in level.objects["objects"]]
             slots = self.level_lists[name]
-            lists[slots["slot1"]] = _list_raw(entries)
-            lists[slots["slot0"]] = _list_raw([])
+            entries, list_fixups, at = [], [], 0x10
+            for o in level.objects["objects"]:
+                entry = self.entry(o, name)
+                target = refs.parse(o["target"], "level") if o.get("target") else None
+                if target and target.is_pack:
+                    # An exit to a pack level: the level's number is the port's to give (lohi = levelLow, levelHigh).
+                    list_fixups.append({"at": at + 0x0A, "type": "lohi", "ref": f"level_{target.name}"})
+                entries.append(entry)
+                at += len(entry)
+            lists = {slots["slot1"]: (_list_raw(entries), list_fixups), slots["slot0"]: (_list_raw([]), [])}
+            for index, (raw, fixups) in lists.items():
+                problems = self.lv.validate_objlist(raw, True, known)
+                if problems:
+                    raise BuildError([f"levels/{name}/objects.json: {x}" for x in problems])
+                e = self._set_entry(0x1C, 0x1D, "objlist", index, raw, counts, f"objlist_{name}_{index}")
+                e["fixups"] = fixups
+                out.append(e)
             track = refs.parse(level.level["track"])
             fields = dict(level.level["header"])
-            fields.update({"track": track.number() if track.is_stock else self.track_ids[track.name],
+            fields.update({"track": track.number() if track.is_stock else track_ids[track.name],
                            "track2": level.level.get("sky", -1),
                            "objectList0": slots["slot0"], "objectList1": slots["slot1"]})
             if level.level.get("ambient"):
                 fields["ambientSounds"] = (list(level.level["ambient"]) + [-1, -1, -1])[:3]
             try:
-                headers[self.level_ids[name]] = self.lv.new_header(level.level["name"], **fields)
+                raw = self.lv.new_header(level.level["name"], **fields)
             except self.jf.FormatError as e:
                 raise BuildError([f"levels/{name}/level.json: {e}"]) from e
-        for line in self.lv.build(r, headers=headers, lists=lists):
-            self.log(line)
-
-    def diff(self, r) -> list[tuple[int, int, str, int, bytes, bool]]:
-        """(table, data, what, index, entry bytes, appended) for every entry that differs from the user's ROM."""
-        out = []
-        for table, data, what, how in SETS:
-            before = self.jf.pair_entries(self.catalog.assets.section(table), self.catalog.assets.section(data))
-            after = r.entries(table, data, self.jf.read_table(r.section(table))[1])
-
-            for i, e in enumerate(after):
-                if i >= len(before):
-                    out.append((table, data, what, i, e, True))
-                elif self._norm(e, how) != self._norm(before[i], how):
-                    out.append((table, data, what, i, e, False))
+            problems = self.lv.validate_header(raw, cutscenes, len(stock_lists))
+            if problems:
+                raise BuildError([f"levels/{name}/level.json: {x}" for x in problems])
+            e = self._set_entry(0x1E, 0x1F, "level", self.level_ids[name], raw, counts, f"level_{name}")
+            if not track.is_stock:
+                e["fixups"] = [{"at": 0x54, "type": "s16", "ref": f"track_{track.name}"}]  # header +0x54: the track
+            out.append(e)
+        # A replacement identical to the stock entry is left out (an empty slot-0 list over an empty stock one).
+        stock = {table: self.catalog.pair(table, data) for table, data, _, _ in SETS}
+        out = [e for e in out if e["append"] or e["raw"] != stock[e["table"]][e["index"]]]
+        # The port numbers appended entries in order, so each set's new ones must follow its last stock one, no gap.
+        for _, _, what, _ in SETS:
+            new = sorted(e["index"] for e in out if e["what"] == what and e["append"])
+            if new and new != list(range(counts[what], counts[what] + len(new))):
+                raise BuildError([f"{what}: new entries {new} must follow the last stock one ({counts[what] - 1}) "
+                                  "with no gap"])
         return out
 
-    def _norm(self, entry: bytes, how: str) -> bytes:
-        """An entry as the game unpacks it, so a stock entry the build only packed again counts as unchanged."""
-        if how == "packed":
-            return self.jf.unpack(entry)
-        if how == "texture":
-            return self.jf.unpack_texture_entry(entry)[1]
-        return entry
+    @staticmethod
+    def _set_entry(table, data, what, index, raw, counts, name) -> dict:
+        return {"table": table, "data": data, "what": what, "index": index, "raw": raw,
+                "append": name if index >= counts[what] else None}
 
     # the patch side
     def map_image(self) -> bytes | None:
@@ -220,26 +258,26 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     b.plan_ids()
     if b.problems:
         raise BuildError(b.problems)
-    r = b.jf.Rom(image, log=log)
     try:
-        b.write_assets(r)
-        changes = b.diff(r)
+        changes = b.assets()
         patched = b.map_image()
     except b.jf.FormatError as e:
         raise BuildError([str(e)]) from e
 
     result = BuildResult(Path(out))
-    names = {("level", n): k for k, n in b.level_ids.items()}
-    names.update({("track", n): k for k, n in b.track_ids.items()})
     files, entries = {}, []
-    for table, data, what, index, raw, appended in changes:
-        fname = f"assets/{what}_{index}.bin"
-        files[fname] = raw
-        e = {"table": table, "data": data, "file": fname}
-        if appended:
-            e.update({"append": f"{what}_{names.get((what, index), index)}", "expect": index})
+    for c in changes:
+        fname = f"assets/{c['what']}_{c['index']}.bin"
+        files[fname] = c["raw"]
+        e = {"table": c["table"], "data": c["data"], "file": fname}
+        if c["append"]:
+            e.update({"append": c["append"], "expect": c["index"]})
         else:
-            e["entry"] = index
+            e["entry"] = c["index"]
+        if c.get("fixups"):
+            e["fixups"] = c["fixups"]
+        if c.get("packed") and c.get("fixups"):
+            e["packed"] = True
         entries.append(e)
     result.entries = entries
     meta = project.meta

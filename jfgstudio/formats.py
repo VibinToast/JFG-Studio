@@ -19,7 +19,8 @@ def load():
     """Returns the jfgformats module, or raises FormatsUnavailable with what to do."""
     decomp = settings.get("decomp")
     if not decomp:
-        raise FormatsUnavailable("The decomp checkout is not set: jfgstudio settings set decomp <path>")
+        raise FormatsUnavailable("The decomp checkout was not found: set it in File > Settings "
+                                 "(or jfgstudio settings set decomp <path>)")
     tools = Path(decomp) / "tools"
     if not (tools / "jfgformats").is_dir():
         raise FormatsUnavailable(

@@ -51,7 +51,9 @@ def cmd_settings(args) -> int:
         settings.set_value(args.key, args.value)
     current = settings.load()
     for key, what in settings.KEYS.items():
-        print(f"{key:7} {current.get(key, '(not set)')}\n        {what}")
+        value = current.get(key) or (f"{settings.detected(key)}  (found automatically)" if settings.detected(key)
+                                     else "(not set)")
+        print(f"{key:7} {value}\n        {what}")
     print(f"config: {settings.config_dir()}\ndata:   {settings.data_dir()}")
     return 0
 

@@ -37,8 +37,28 @@ def load() -> dict:
     return {k: v for k, v in data.items() if k in KEYS}
 
 
+def _workspace() -> Path:
+    """The folder Studio usually sits in: JetForceGemini/JFG-Modding-Tools/JFG-Studio -> JetForceGemini."""
+    return Path(__file__).resolve().parents[3]
+
+
+def detected(key: str) -> str | None:
+    """A path found without a setting, in the usual layout: the decomp next to JFG-Modding-Tools, the user's ROM
+    beside it. None when it isn't there."""
+    base = _workspace()
+    if key == "decomp":
+        candidate = base / "Decomp"
+        return str(candidate) if (candidate / "tools" / "jfgformats").is_dir() else None
+    if key == "rom":
+        for name in ("baserom.us.z64", "jfg-us.z64"):
+            if (base / name).is_file():
+                return str(base / name)
+    return None
+
+
 def get(key: str) -> str | None:
-    return load().get(key)
+    """The setting, else a path found in the usual layout (see detected)."""
+    return load().get(key) or detected(key)
 
 
 def set_value(key: str, value: str | None) -> None:

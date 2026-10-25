@@ -3,8 +3,9 @@
     python samples/make_gemini_field.py       (needs the decomp setting: it writes with jfgformats' glTF writer)
 
 A 2000 x 2000 grass field at height 0, a stone ramp and three stone platforms stepping up to the north (25, 50,
-75), a pool of water to the east and a strip of lava to the west. It shows what a Blender export needs to give
-Studio: triangles counter-clockwise seen from their front, COLOR_0 as the baked light, TEXCOORD_0 repeating past 1,
+75), a pool of water to the east and a strip of lava to the west (it replaces whole field tiles, leaving no gap). It
+shows what a Blender export needs to give Studio: triangles counter-clockwise seen from their front, COLOR_0 as the
+baked light, TEXCOORD_0 repeating past 1,
 and the material-name words (`water`, `lava`). Three images (grass, stone, water): the ROM's 3D texture table has
 room for exactly three new ones, so the lava reuses the stone image under red vertex colours.
 """
@@ -21,7 +22,7 @@ HALF, TILE = 1000, 200
 PLATFORMS = [(-150, 300, 150, 500, 25), (-150, 550, 150, 750, 50), (-150, 800, 150, 1000, 75)]
 RAMP = (-100, 100, 100, 300, 0, 25)
 POOL = (400, -200, 800, 200, 6)
-LAVA = (-900, -300, -750, 300, 1)
+LAVA = (-800, -200, -600, 200, 1)  # exactly the field tiles it replaces, so the field has no gap
 
 
 def image(png, kind: str, size: int, seed: int) -> bytes:

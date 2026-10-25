@@ -81,10 +81,13 @@ def apply_style() -> None:
 
 
 def _port_font(*parts: str) -> Path | None:
+    """A font from the port: the `port` setting's folder, else the port repo next to JFG-Modding-Tools."""
+    bases = []
     port = settings.get("port")
-    if not port:
-        return None
-    for base in (Path(port), Path(port) / ".."):
+    if port:
+        bases += [Path(port), Path(port) / ".."]
+    bases.append(settings._workspace() / "Recomp")
+    for base in bases:
         p = base.joinpath("assets", *parts)
         if p.is_file():
             return p
