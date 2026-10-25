@@ -142,7 +142,7 @@ def first_level(project: proj.Project, track_name: str, mesh=None) -> proj.Level
         lo, hi = mesh.bounds
         x, z = (lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2
         floor = mesh.floor_height(x, z)
-        y = floor if floor is not None else hi[1]
+        y = obj.on_ground(floor, None) if floor is not None else hi[1]  # a start point: a little above the floor
     level.objects["objects"].append({"uid": "start0", "name": "Start", "type": "stock:objtype/0xD",
                                      "pos": [round(x), round(y), round(z)], "size": 0x0E,
                                      "fields": {"player": 0, "startPoint": 0, "yaw": 0}})

@@ -137,6 +137,23 @@ def scale_of(f: Field, value: int) -> float:
     return max(value / div, minimum)
 
 
+# How far above the floor "drop to floor" puts an object. A spawn point even a fraction below a sloped floor drops
+# the object through it (play-tested 2026-10-25: two ants on uneven ground fell out of the level), so the height is
+# rounded up and lifted: a little for things that stand, more for what walks (enemies, squads, start points).
+GROUND_LIFT = {"squadmember": 8, "squadron": 8, "startpoint": 8}
+GROUND_LIFT_OTHER = 2
+GROUND_LIFT_UNKNOWN = 8  # no schema: often a stock enemy
+
+
+def on_ground(floor_y: float, schema: "Schema | None") -> int:
+    """The height to place an object at over a floor at `floor_y`."""
+    if schema is None:
+        lift = GROUND_LIFT_UNKNOWN
+    else:
+        lift = GROUND_LIFT.get(schema.key, GROUND_LIFT_OTHER)
+    return math.ceil(floor_y) + lift
+
+
 def stock_id(obj: dict) -> int | None:
     t = obj.get("type", "")
     if isinstance(t, str) and t.startswith("stock:objtype/"):

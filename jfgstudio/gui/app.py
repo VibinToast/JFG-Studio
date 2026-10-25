@@ -663,7 +663,7 @@ def _gizmo(origin, w, h, objs) -> bool:
                 if S.snap_floor and S.view.mesh is not None:
                     y = S.view.mesh.floor_height(p[0], p[2], below=p[1] + 60)
                     if y is not None:
-                        p[1] = y
+                        p[1] = obj.on_ground(y, S.schema(o))
                 o["pos"] = [round(v) for v in p]
         elif S.tool == "rotate":
             angle = math.atan2(new[0, 2], new[0, 0])
@@ -773,7 +773,10 @@ def inspector() -> None:
         if S.view.mesh is not None and imgui.button("Drop to floor"):
             y = S.view.mesh.floor_height(o["pos"][0], o["pos"][2], below=o["pos"][1] + 60)
             if y is not None:
-                h.set_value(uid, ("pos",), [o["pos"][0], round(y), o["pos"][2]], "drop to floor")
+                h.set_value(uid, ("pos",), [o["pos"][0], obj.on_ground(y, S.schema(o)), o["pos"][2]], "drop to floor")
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Onto the floor below, a little above it (enemies and start points a bit more), so it "
+                              "doesn't spawn inside a slope and fall through")
     is_exit = bool(schema and schema.key == "exit")
     if is_exit and imgui.collapsing_header("Destination", imgui.TreeNodeFlags_.default_open):
         level_tools.exit_picker(o)
@@ -1138,6 +1141,11 @@ def _place(pid: int, pos) -> None:
     except ValueError as e:
         S.message = f"Can't place it: {e}"
         return
+    if S.snap_floor and S.view.mesh is not None:  # each object onto the floor under it (a squad spreads out)
+        for o in placer.made:
+            y = S.view.mesh.floor_height(o["pos"][0], o["pos"][2], below=o["pos"][1] + 60)
+            if y is not None:
+                o["pos"][1] = obj.on_ground(y, S.schema(o))
     what = "kind" if pid <= KIND_BASE else GROUPS[pid][0] if pid < 0 else S.type_name(pid)
     h.add(placer.made, f"place {what}")
     S.selection = {o["uid"] for o in placer.made}

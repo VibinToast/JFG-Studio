@@ -10,7 +10,7 @@
    "name": "start0",
    "pos": [
     0,
-    8,
+    16,
     -1400
    ],
    "size": 14,
@@ -26,7 +26,7 @@
    "name": "start1",
    "pos": [
     0,
-    0,
+    8,
     1500
    ],
    "size": 14,
@@ -101,7 +101,7 @@
    "name": "region1_0",
    "pos": [
     -700,
-    4,
+    5,
     850
    ],
    "size": 12,
@@ -146,7 +146,7 @@
    "name": "region1_3",
    "pos": [
     -700,
-    16,
+    17,
     1300
    ],
    "size": 12,
@@ -164,7 +164,7 @@
    "name": "BlueAnt squad",
    "pos": [
     0,
-    0,
+    8,
     1050
    ],
    "stock": {
@@ -181,7 +181,7 @@
    "name": "BlueAnt",
    "pos": [
     0,
-    0,
+    8,
     1200
    ],
    "schema": "squadmember",
@@ -199,7 +199,7 @@
    "name": "BlueAnt",
    "pos": [
     130,
-    -3,
+    6,
     975
    ],
    "schema": "squadmember",
@@ -217,7 +217,7 @@
    "name": "BlueAnt",
    "pos": [
     -130,
-    3,
+    11,
     975
    ],
    "schema": "squadmember",
@@ -332,7 +332,7 @@
    "name": "ammo",
    "pos": [
     -220,
-    2,
+    3,
     -1250
    ],
    "size": 16,
@@ -344,7 +344,7 @@
    "name": "ammo",
    "pos": [
     900,
-    -32,
+    -31,
     600
    ],
    "size": 16,

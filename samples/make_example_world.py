@@ -173,15 +173,17 @@ class World:
     def placer(self, level):
         return prefabs.Placer(level, self.schemas, self.behaviours)
 
-    def drop(self, mesh: TrackMesh, x, z, below=None, lift=0):
+    def drop(self, mesh: TrackMesh, x, z, below=None, lift=0, walks=False):
+        """On the floor (rounded up; `walks`: enemies and start points a little above it, as Studio drops them)."""
         y = mesh.floor_height(x, z, below)
-        return [round(x), round((y if y is not None else 0) + lift), round(z)]
+        y = math.ceil(y if y is not None else 0) + (obj.GROUND_LIFT["squadmember"] if walks else 0)
+        return [round(x), y + round(lift), round(z)]
 
     def example(self, oid):
         return tuple(self.types[oid]["examples"][0])
 
     def start(self, pl, mesh, x, z, number, yaw, below=None):
-        return pl.single(START, self.drop(mesh, x, z, below), name=f"start{number}",
+        return pl.single(START, self.drop(mesh, x, z, below, walks=True), name=f"start{number}",
                          fields={"player": 0, "startPoint": number, "yaw": yaw})
 
     def exit(self, pl, mesh, x, z, target, start_point, name, radius=70):
@@ -196,15 +198,15 @@ class World:
         region = pl.polygon([self.drop(mesh, x, z) for x, z in corners])
         cx, cz = centre
         label = reskin.rsplit("/", 1)[1].replace("_", " ").title() if reskin else kind
-        squadron = pl.single(0x4F, self.drop(mesh, cx, cz), squad_ex, name=f"{label} squad",
+        squadron = pl.single(0x4F, self.drop(mesh, cx, cz, walks=True), squad_ex, name=f"{label} squad",
                              fields={"squadronId": n, "doorId": door_id, "region": region, "count": members,
                                      "baddyType": baddy})
         if reskin:
             squadron["kindFields"] = {"baddyType": reskin}
         for k in range(members):
             a = 2 * math.pi * k / members
-            m = pl.single(baddy, self.drop(mesh, cx + spread * math.sin(a), cz + spread * math.cos(a)), member_ex,
-                          name=label, fields={"squadron": n})
+            at = self.drop(mesh, cx + spread * math.sin(a), cz + spread * math.cos(a), walks=True)
+            m = pl.single(baddy, at, member_ex, name=label, fields={"squadron": n})
             m["schema"] = "squadmember"
             if reskin:
                 m["type"] = reskin

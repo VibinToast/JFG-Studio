@@ -10,7 +10,7 @@
    "name": "start0",
    "pos": [
     0,
-    0,
+    8,
     -1600
    ],
    "size": 14,
@@ -26,7 +26,7 @@
    "name": "start1",
    "pos": [
     0,
-    0,
+    8,
     1450
    ],
    "size": 14,
@@ -147,7 +147,7 @@
    "name": "Fire Ant squad",
    "pos": [
     0,
-    0,
+    8,
     -250
    ],
    "stock": {
@@ -164,7 +164,7 @@
    "name": "Fire Ant",
    "pos": [
     0,
-    0,
+    8,
     -100
    ],
    "schema": "squadmember",
@@ -182,7 +182,7 @@
    "name": "Fire Ant",
    "pos": [
     130,
-    0,
+    8,
     -325
    ],
    "schema": "squadmember",
@@ -200,7 +200,7 @@
    "name": "Fire Ant",
    "pos": [
     -130,
-    0,
+    8,
     -325
    ],
    "schema": "squadmember",
@@ -282,7 +282,7 @@
    "name": "ZombieAnt squad",
    "pos": [
     0,
-    0,
+    8,
     1120
    ],
    "stock": {
@@ -299,7 +299,7 @@
    "name": "ZombieAnt",
    "pos": [
     0,
-    0,
+    8,
     1340
    ],
    "schema": "squadmember",
@@ -317,7 +317,7 @@
    "name": "ZombieAnt",
    "pos": [
     191,
-    0,
+    8,
     1010
    ],
    "schema": "squadmember",
@@ -335,7 +335,7 @@
    "name": "ZombieAnt",
    "pos": [
     -191,
-    0,
+    8,
     1010
    ],
    "schema": "squadmember",
