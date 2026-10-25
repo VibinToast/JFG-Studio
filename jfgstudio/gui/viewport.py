@@ -12,6 +12,7 @@ speed), middle mouse to pan, Alt + left to orbit around the selection, F to fram
 """
 
 import math
+import os
 import struct
 
 import moderngl
@@ -287,6 +288,7 @@ class Viewport:
         self.size = (0, 0)
         self.mesh = None
         self.mesh_path = None
+        self.mesh_stamp = None
         self.gpu_parts = []
         self.fog = None  # (rgb 0-1, near, far) in world units, or None
         self.show_fog = True
@@ -302,9 +304,14 @@ class Viewport:
         self.white = self.ctx.texture((1, 1), 4, bytes([255, 255, 255, 255]))
 
     def load_track(self, path: str | None) -> None:
-        if path == self.mesh_path:
+        """Shows a track .glb; it is read again when the file changes (a water plane, a new export)."""
+        try:
+            stamp = os.stat(path).st_mtime_ns if path else None
+        except OSError:
+            stamp = None
+        if path == self.mesh_path and stamp == self.mesh_stamp:
             return
-        self.mesh_path, self.mesh, self.error = path, None, ""
+        self.mesh_path, self.mesh_stamp, self.mesh, self.error = path, stamp, None, ""
         for vao, _, tex, _ in self.gpu_parts:
             vao.release()
             if tex is not None:

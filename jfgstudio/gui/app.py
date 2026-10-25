@@ -19,13 +19,15 @@ from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
 from jfgstudio import validate as val
-from jfgstudio.gui import theme
+from jfgstudio.gui import level_tools, theme
 from jfgstudio.gui import viewport as vp
 
 gz = imguizmo.im_guizmo
 
 TOOLS = (("hand", "Q", "Hand: pan and orbit the view"), ("move", "W", "Move"),
-         ("rotate", "E", "Rotate: types with a facing field"), ("scale", "R", "Scale: types with a size field"))
+         ("rotate", "E", "Rotate: types with a facing field"), ("scale", "R", "Scale: types with a size field"),
+         ("region", "G", "Region: click a navigation region's corners on the floor"),
+         ("water", "T", "Water: drag a rectangle on the floor to add a water surface to the pack's geometry"))
 
 
 class State:
@@ -51,6 +53,11 @@ class State:
         self.scene_rect = (0.0, 0.0, 1.0, 1.0)
         self.pos_edit = None  # the Inspector's position before a drag of its fields
         self.gizmo_note = ""
+        self.region_draft: list[list[float]] = []  # the Region tool's corners so far
+        self.water_draft = None  # where a Water drag started
+        self.water_height = 10.0
+        self.water_auto = True  # the water height follows the floor where the drag starts (+15)
+        self.exit_filter = ""
         self.errors: list[str] = []  # errors a window hit (logged in crash logs), shown in the Console
         self.errors_seen: set[str] = set()  # why the rotate / scale handle is not shown for the selection
         self.drag_scale = 0  # the size field's value when a scale drag started
@@ -96,6 +103,11 @@ class State:
         if self.level not in self.histories:
             self.histories[self.level] = edit.History(self.project.levels[self.level])
         return self.histories[self.level]
+
+    def history_for(self, name: str) -> edit.History:
+        if name not in self.histories:
+            self.histories[name] = edit.History(self.project.levels[name])
+        return self.histories[name]
 
     def undo(self) -> None:
         h = self.history()
@@ -217,6 +229,17 @@ def guarded(name: str, fn):
                 S.errors.append(f"{key}  (log: {path})")
                 S.message = f"{name} hit an error: see the Console"
             imgui.text_colored(theme.colour("ERROR"), f"This window hit an error: {type(e).__name__}: {e}")
+    return run
+
+
+def labelled(fn):
+    """A window whose fields leave room for their labels on the right."""
+    def run():
+        imgui.push_item_width(-hello_imgui.em_size(8.5))
+        try:
+            fn()
+        finally:
+            imgui.pop_item_width()
     return run
 
 
@@ -389,6 +412,12 @@ def scene() -> None:
             colour = theme.colour("HIGHLIGHT" if o["uid"] in S.selection else "MUTED")
             draw.add_text(imgui.ImVec2(origin.x + p[0] + 4, origin.y + p[1] - 14), imgui.get_color_u32(colour),
                           o.get("name") or o["uid"])
+    if S.tool in ("region", "water"):
+        if S.drag is not None:
+            _end_drag(objs)
+        level_tools.scene_tool(origin, w, h, hovered)
+        _camera_input(hovered, objs)
+        return
     using = _gizmo(origin, w, h, objs)
     if S.gizmo_note:
         draw.add_text(imgui.ImVec2(origin.x + 10, origin.y + 8), imgui.get_color_u32(theme.colour("HIGHLIGHT")),
@@ -597,6 +626,9 @@ def inspector() -> None:
             y = S.view.mesh.floor_height(o["pos"][0], o["pos"][2], below=o["pos"][1] + 60)
             if y is not None:
                 h.set_value(uid, ("pos",), [o["pos"][0], round(y), o["pos"][2]], "drop to floor")
+    is_exit = bool(schema and schema.key == "exit")
+    if is_exit and imgui.collapsing_header("Destination", imgui.TreeNodeFlags_.default_open):
+        level_tools.exit_picker(o)
     if schema and imgui.collapsing_header(schema.name, imgui.TreeNodeFlags_.default_open):
         if schema.status != "decoded":
             imgui.push_style_color(imgui.Col_.text, theme.colour("HIGHLIGHT"))
@@ -604,14 +636,9 @@ def inspector() -> None:
             imgui.pop_style_color()
         values = S.fields(o, schema)
         for f in schema.fields:
+            if is_exit and f.link in ("level", "startPoint"):
+                continue  # the Destination picker sets these
             _field_input(uid, f, int(values.get(f.name, f.default)), f.name in o.get("fields", {}))
-    if schema and schema.key == "exit":
-        changed, target = imgui.input_text("Leads to", o.get("target", ""), imgui.InputTextFlags_.enter_returns_true)
-        if changed:
-            h.set_value(uid, ("target",), target or None, "exit target")
-            S.validate()
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("pack:level/<name> or stock:level/<number>")
     if imgui.collapsing_header("Entry"):
         imgui.text(f"size 0x{o['size']:X}" if "size" in o else "size from the stock base")
         if o.get("stock"):
@@ -956,6 +983,16 @@ def toolbar() -> None:
     imgui.same_line()
     imgui.set_next_item_width(hello_imgui.em_size(5))
     _, S.grid = imgui.input_float("##grid", S.grid, 0, 0, "%.0f")
+    if S.tool == "water":
+        imgui.same_line()
+        _, S.water_auto = imgui.checkbox("Auto height", S.water_auto)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("The surface goes 15 units above the floor where the drag starts")
+        imgui.same_line()
+        imgui.set_next_item_width(hello_imgui.em_size(5))
+        imgui.begin_disabled(S.water_auto)
+        _, S.water_height = imgui.input_float("##waterheight", S.water_height, 0, 0, "%.0f")
+        imgui.end_disabled()
     imgui.same_line()
     imgui.text("|")
     imgui.same_line()
@@ -1105,6 +1142,9 @@ def delete() -> None:
 
 def shortcuts() -> None:
     io = imgui.get_io()
+    h = S.history()
+    if h and h.done and not imgui.is_mouse_down(imgui.MouseButton_.left):
+        h.done[-1].merge = False  # a slider or colour drag ended: the next edit is a step of its own
     if io.want_text_input:
         return
     flying = imgui.is_mouse_down(imgui.MouseButton_.right)  # WASD / QE fly the camera then
@@ -1163,7 +1203,8 @@ def _layout() -> hello_imgui.DockingParams:
         win("Scene", "MainDockSpace", scene),
         win("Level Graph", "MainDockSpace", level_graph),
         win("Hierarchy", "LeftSpace", hierarchy),
-        win("Inspector", "RightSpace", inspector),
+        win("Inspector", "RightSpace", labelled(inspector)),
+        win("Level", "RightSpace", labelled(level_tools.level_window)),
         win("Project", "BottomSpace", project_window),
         win("Console", "BottomSpace", console),
         win("Prefabs", "BottomSpace", prefabs),

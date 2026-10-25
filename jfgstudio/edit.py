@@ -7,10 +7,12 @@ live and records one command when it ends (`History.record`), so a drag is one u
 import copy
 import itertools
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from jfgstudio.project import Level
 
 _uid_counter = itertools.count(1)
+LEVEL = "@level"  # a Change on the level's own settings (level.json) instead of an object
 
 
 def new_uid(level: Level, stem: str) -> str:
@@ -25,6 +27,9 @@ def new_uid(level: Level, stem: str) -> str:
 
 
 def find(level: Level, uid: str) -> dict | None:
+    """An object by uid, or the level's settings (level.json) for LEVEL."""
+    if uid == LEVEL:
+        return level.level
     return next((o for o in level.objects["objects"] if o["uid"] == uid), None)
 
 
@@ -62,8 +67,16 @@ class Command:
     changes: list[Change] = field(default_factory=list)
     added: list[tuple[int, dict]] = field(default_factory=list)    # (index, object) put in
     removed: list[tuple[int, dict]] = field(default_factory=list)  # (index, object) taken out
+    files: list[tuple[str, bytes | None, bytes]] = field(default_factory=list)  # (path, old or None, new): geometry
+    merge: bool = False  # later edits of the same values join this step (set_value merge)
 
     def apply(self, level: Level, forward: bool) -> None:
+        for path, old, new in self.files:
+            data = new if forward else old
+            if data is None:
+                Path(path).unlink(missing_ok=True)
+            else:
+                Path(path).write_bytes(data)
         objs = level.objects["objects"]
         if forward:
             for i, _ in sorted(self.removed, key=lambda x: -x[0]):
@@ -96,7 +109,7 @@ class History:
 
     def record(self, cmd: Command) -> None:
         """A command whose effect is already in the level (a finished gizmo drag)."""
-        if not (cmd.changes or cmd.added or cmd.removed):
+        if not (cmd.changes or cmd.added or cmd.removed or cmd.files):
             return
         self.done.append(cmd)
         self.undone.clear()
@@ -121,14 +134,36 @@ class History:
         return cmd.label
 
     # the commands the editor uses
-    def set_value(self, uid: str, path: tuple, value, label: str | None = None) -> None:
+    def set_value(self, uid: str, path: tuple, value, label: str | None = None, merge: bool = False) -> None:
+        """One value as one undo step. With `merge`, a run of edits of the same value (a slider or colour being
+        dragged) stays one step."""
         o = find(self.level, uid)
         if o is None:
             return
         old = _get(o, path)
         if old == value:
             return
-        self.do(Command(label or f"set {'.'.join(path)}", [Change(uid, path, old, value)]))
+        label = label or f"set {'.'.join(path)}"
+        last = self.done[-1] if self.done else None
+        same = last is not None and last.label == label and all(c.uid == uid for c in last.changes)
+        if merge and same and last.merge and not self.undone:
+            c = next((c for c in last.changes if c.path == path), None)
+            if c is None:
+                last.changes.append(Change(uid, path, old, value))
+            else:
+                c.new = value
+            _set(o, path, value)
+            self.dirty = True
+            return
+        cmd = Command(label, [Change(uid, path, old, value)])
+        cmd.merge = merge
+        self.do(cmd)
+
+    def write_file(self, path, data: bytes, label: str) -> None:
+        """Replaces a project file (a geometry .glb) as one undo step."""
+        path = Path(path)
+        old = path.read_bytes() if path.exists() else None
+        self.do(Command(label, files=[(str(path), old, data)]))
 
     def move(self, moves: dict, label: str = "move") -> None:
         """moves: uid -> (old pos, new pos); the new positions are already in the level."""

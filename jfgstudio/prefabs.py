@@ -65,6 +65,13 @@ class Placer:
                         fields={"region": n, "corner": k})
         return n
 
+    def polygon(self, corners, region: int | None = None) -> int:
+        """A navigation region from corners in order (RegionPoints); returns its id."""
+        n = region if region is not None else max(self.free("regionpoint", "region"), self.free("squadron", "region"))
+        for k, (x, y, z) in enumerate(corners):
+            self.single(REGIONPOINT_ID, (x, y, z), name=f"region{n}_{k}", fields={"region": n, "corner": k})
+        return n
+
     def squad(self, pos, squadron_example, member_oid: int, member_example, members: int = 2,
               door_oid: int | None = None, door_example=None) -> list[dict]:
         """A squadron with its members, a region to keep to and, when given, a door it keeps locked."""

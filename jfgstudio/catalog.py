@@ -17,7 +17,11 @@ from pathlib import Path
 from jfgstudio import formats, rom, settings
 
 OBJINDEX_ASSET, OBJDEF_TABLE, OBJDEF_DATA = 0x30, 0x2E, 0x2F
-CATALOG_FORMAT = 2  # objtypes.json is rebuilt when it is older
+CATALOG_FORMAT = 3  # the catalog is rebuilt when objtypes.json is older
+# header fields the Level window offers stock values of (music, sky, fog, ambient loops ...)
+LEVEL_PROPS = ("tune", "tuneChannelMask", "voiceLimit", "ambientSounds", "fogNear", "fogFar", "fog3", "fogR", "fogG",
+               "fogB", "clearR", "clearG", "clearB", "weather", "fov", "nightVision", "dayLength", "lights",
+               "underWaterLights", "regionIndex")
 EXAMPLES = 8  # stock entries kept per object type, for the Prefabs window's "start from" list
 ASSET_KINDS = {0: "models", 1: "sprites", 4: "textures"}
 
@@ -95,7 +99,8 @@ class Catalog:
             f = doc["fields"]
             levels.append({"id": i, "name": doc["name"], "world": f["world"], "track": f["track"],
                            "sky": f["track2"], "objectList0": f["objectList0"], "objectList1": f["objectList1"],
-                           "tune": f["tune"], "region": f["region"]})
+                           "tune": f["tune"], "region": f["region"],
+                           "header": {k: f[k] for k in LEVEL_PROPS if k in f}})
         self._write("levels.json", levels)
         types = object_types(self.assets)
         lists = self.pair(self.levels_mod.OBJLIST_TABLE, self.levels_mod.OBJLIST_DATA)
@@ -135,6 +140,24 @@ class Catalog:
             with open(path, encoding="utf-8") as f:
                 doc = json.load(f)
         return {int(k, 16): v for k, v in doc["types"].items()}
+
+    def levels(self) -> list[dict]:
+        """levels.json (built with objtypes.json)."""
+        self.objtypes()
+        with open(self.dir / "levels.json", encoding="utf-8") as f:
+            return json.load(f)
+
+    def start_points(self, level_id: int) -> list[int]:
+        """The start point numbers a stock level's object lists hold (start point entry +0x0B)."""
+        lv = self.levels()[level_id]
+        out = set()
+        for n in (lv["objectList0"], lv["objectList1"]):
+            try:
+                entries = self.objlist(n)
+            except (IndexError, ValueError):
+                continue
+            out |= {e[1][0x0B] for e in entries if e and e[0] == 0x0D and len(e[1]) > 0x0B}
+        return sorted(out)
 
     def model_glb(self, model_id: int) -> Path:
         """A model in its rest pose as .glb in the catalog (exported the first time)."""
