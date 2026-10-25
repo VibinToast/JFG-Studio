@@ -263,6 +263,12 @@ def world_scripts(p, arena_door: int) -> None:
          "then": [say("A strange blue portal has opened just ahead...")]},
         {"name": "landing intro", "level": "pack:level/landing", "when": {"kind": "level start"},
          "then": [say("ZEPHYRA - Ants hold the north gate. The yellow key waits on the west ledge.", 6)]},
+        {"name": "scout's note", "level": "pack:level/landing", "once": False,
+         "when": {"kind": "talk", "at": [1150, -550], "radius": 160},
+         "then": [{"do": "lines", "seconds": 5, "lines": [
+             "A scout's note on the chest: 'The ants came down from the north at dawn.'",
+             "'They locked the gate behind them. Thin air here: your gun cycles faster.'",
+             "'If you find this, take the gun. I went west for the key.'"]}]},
         {"name": "caverns intro", "level": "pack:level/caverns", "when": {"kind": "level start"},
          "then": [say("EMBER CAVERNS - Mind the lava. The north door needs the yellow key.", 6)]},
         {"name": "fire ants", "level": "pack:level/caverns", "when": {"kind": "enter", "box": [-380, -650, 380, -100]},

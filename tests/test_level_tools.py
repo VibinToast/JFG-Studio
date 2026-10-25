@@ -175,6 +175,25 @@ class Triggers(unittest.TestCase):
             self.assertIn("music/nope.ogg", problems[0])
             self.assertIn("scripts/_triggers.lua", scr.pack_scripts(p))
 
+    def test_talker(self):
+        from jfgstudio import scripts as scr
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            scr.save_triggers(p, [
+                {"name": "scout", "level": "pack:level/home", "once": False,
+                 "when": {"kind": "talk", "at": [100, -50], "radius": 120},
+                 "then": [{"do": "lines", "lines": ["One", 'Two "2"'], "seconds": 3}]},
+                {"name": "sign", "level": "pack:level/home", "when": {"kind": "talk", "at": [0, 0], "button": "Q"},
+                 "then": []}])
+            lua = scr.compile_triggers(scr.load_triggers(p), p)
+            self.assertIn("(x - 100.0)^2 + (z - -50.0)^2 <= 14400.0", lua)
+            self.assertIn("not near[1]", lua)
+            self.assertIn('local t = {"One", "Two \\"2\\""}; line[1] = math.min((line[1] or 0) + 1, #t)', lua)
+            self.assertIn('jfg.pressed("Q")', lua)
+            problems = scr.check(p)
+            self.assertEqual(len(problems), 1)
+            self.assertIn("unknown button", problems[0])
+
     def test_weapons(self):
         from jfgstudio import scripts as scr
         with tempfile.TemporaryDirectory() as tmp:

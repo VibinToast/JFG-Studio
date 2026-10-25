@@ -30,6 +30,30 @@
    }
   },
   {
+   "level": "pack:level/landing",
+   "name": "scout's note",
+   "once": false,
+   "then": [
+    {
+     "do": "lines",
+     "lines": [
+      "A scout's note on the chest: 'The ants came down from the north at dawn.'",
+      "'They locked the gate behind them. Thin air here: your gun cycles faster.'",
+      "'If you find this, take the gun. I went west for the key.'"
+     ],
+     "seconds": 5
+    }
+   ],
+   "when": {
+    "at": [
+     1150,
+     -550
+    ],
+    "kind": "talk",
+    "radius": 160
+   }
+  },
+  {
    "level": "pack:level/caverns",
    "name": "caverns intro",
    "then": [

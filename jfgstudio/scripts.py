@@ -8,16 +8,19 @@ in the editor, compiled to one more script.
 
 A trigger:
     {"name": "...", "level": "pack:level/<name>" | "stock:level/<n>",
-     "when": {"kind": "enter", "level start" | "flag" | "door opens",
+     "when": {"kind": "enter", "level start" | "flag" | "door opens" | "talk",
               "box": [x0, z0, x1, z1] (enter: the hero's x/z inside it), "flag": n (flag: when it gets set),
               "door": id (door opens: the door with that id opens after it was seen locked: its squadrons are
-              dead, its key was used)},
+              dead, its key was used),
+              "at": [x, z], "radius": r, "button": "" | "L" | ... (talk: the hero comes within r of the point, or with
+              a button, presses it there: a talker. Pair it with a "lines" action)},
      "once": true,
      "then": [{"do": "message", "text": "...", "seconds": 3},
               {"do": "music", "track": "<music/ name>"}, {"do": "music_stop"},
               {"do": "fog", "rgb": [r, g, b], "near": 990, "far": 1022, "ticks": 60},
               {"do": "flag", "flag": n, "on": true}, {"do": "unlock_door", "door": id},
               {"do": "warp", "level": "pack:level/<name>", "start": 0},
+              {"do": "lines", "lines": ["...", "..."], "seconds": 4} (the next line each time; the last one repeats),
               {"do": "spawn", "type": "stock:objtype/<id>", "pos": [x, y, z], "near_player": false,
                "fields": {<the type's schema fields>}}]}
 A spawn makes the object as if it were in the level's list (pickups, crates, props). With "near_player", "pos" is an
@@ -30,8 +33,9 @@ from pathlib import Path
 
 from jfgstudio import refs
 
-WHEN = ("level start", "enter", "flag", "door opens")
-DO = ("message", "music", "music_stop", "fog", "flag", "unlock_door", "warp", "spawn")
+WHEN = ("level start", "enter", "flag", "door opens", "talk")
+DO = ("message", "music", "music_stop", "fog", "flag", "unlock_door", "warp", "spawn", "lines")
+BUTTONS = ("", "A", "B", "Z", "START", "DUP", "DDOWN", "DLEFT", "DRIGHT", "L", "R", "CUP", "CDOWN", "CLEFT", "CRIGHT")
 NO_SPAWN = {5, 0x60, 0x61, 0x69}  # region and patrol data: the game refuses them
 
 
@@ -104,8 +108,12 @@ def _level_expr(ref: str, project=None) -> str:
     return f'jfg.level_id({_lua_str("level_" + r.name)})'
 
 
-def _action(a: dict, project) -> str:
+def _action(a: dict, project, trigger: int = 0) -> str:
     kind = a.get("do")
+    if kind == "lines":
+        texts = ", ".join(_lua_str(t) for t in a.get("lines", [])) or '""'
+        return (f"do local t = {{{texts}}}; line[{trigger}] = math.min((line[{trigger}] or 0) + 1, #t); "
+                f"jfg.message(t[line[{trigger}]], {float(a.get('seconds', 4))}) end")
     if kind == "message":
         return f"jfg.message({_lua_str(a.get('text', ''))}, {float(a.get('seconds', 3))})"
     if kind == "music":
@@ -156,14 +164,14 @@ def _spawn(a: dict) -> str:
 def compile_triggers(triggers: list[dict], project=None) -> str:
     """The triggers as one Lua script for the port."""
     lines = ["-- Made by JFG-Studio from triggers.json: edit the triggers in the editor, not this file.",
-             "local fired = {}", "local seen = {}", "local levels = {}", ""]
+             "local fired = {}", "local seen = {}", "local near = {}", "local line = {}", "local levels = {}", ""]
     for k, t in enumerate(triggers):
         lines.append(f"levels[{k + 1}] = function() return {_level_expr(t['level'], project)} end")
     lines.append("")
     on_level, on_tick = [], []
     for k, t in enumerate(triggers):
         i = k + 1
-        body = "\n".join("      " + _action(a, project) for a in t.get("then", [])) or "      -- (no actions)"
+        body = "\n".join("      " + _action(a, project, i) for a in t.get("then", [])) or "      -- (no actions)"
         once = f"      fired[{i}] = true\n" if t.get("once", True) else ""
         guard = f"not fired[{i}] and " if t.get("once", True) else ""
         when = t.get("when", {})
@@ -183,13 +191,24 @@ def compile_triggers(triggers: list[dict], project=None) -> str:
                            f"      if locked then seen[{i}] = true\n"
                            f"      elseif locked == false and seen[{i}] then\n        fired[{i}] = true\n"
                            f"{inner}\n      end\n    end")
+        elif kind == "talk":
+            px, pz = (float(v) for v in when.get("at", (0, 0)))
+            r = float(when.get("radius", 150))
+            button = when.get("button", "")
+            go = f'jfg.pressed("{button}")' if button else f"not near[{i}]"
+            inner = "\n".join("  " + line for line in f"{once}{body}".split("\n"))
+            on_tick.append(f"{header}\n    if level == levels[{i}]() and x then\n"
+                           f"      local close = (x - {px})^2 + (z - {pz})^2 <= {r * r}\n"
+                           f"      if close and {guard}{go} then\n{inner}\n      end\n"
+                           f"      near[{i}] = close\n    end")
         elif kind == "flag":
             on_tick.append(f"{header}\n    if {guard}level == levels[{i}]() and jfg.flag({int(when['flag'])}) "
                            f"then\n{once}{body}\n    end")
         else:
             raise ValueError(f"trigger {k + 1}: unknown 'when' {kind!r}")
     if on_level:
-        lines += ["jfg.on(\"level\", function(level)", "  fired = {}", "  seen = {}", *on_level, "end)", ""]
+        lines += ["jfg.on(\"level\", function(level)", "  fired = {}", "  seen = {}", "  near = {}", *on_level, "end)",
+                  ""]
     if on_tick:
         lines += ["jfg.on(\"tick\", function(level, seconds)", "  local x, y, z = jfg.player()", *on_tick, "end)", ""]
     return "\n".join(lines) + "\n"
@@ -229,6 +248,11 @@ def check(project) -> list[str]:
             out.append(f"{where}: unknown 'when' {when.get('kind')!r}")
         if when.get("kind") == "enter" and len(when.get("box", [])) != 4:
             out.append(f"{where}: an 'enter' trigger needs a box [x0, z0, x1, z1]")
+        if when.get("kind") == "talk":
+            if len(when.get("at", [])) != 2:
+                out.append(f"{where}: a 'talk' trigger needs a point [x, z]")
+            if when.get("button", "") not in BUTTONS:
+                out.append(f"{where}: unknown button {when.get('button')!r}")
         for a in t.get("then", []):
             if a.get("do") not in DO:
                 out.append(f"{where}: unknown action {a.get('do')!r}")

@@ -13,6 +13,7 @@ jfg.message(text [, seconds])     a line on screen
 jfg.music(name) / jfg.music_stop()  one of the pack's music/ tracks
 jfg.fog(r, g, b, near, far, ticks)  fade the level's fog
 jfg.player()                      x, y, z of the hero (or nil)
+jfg.pressed(b) / jfg.held(b)      a button ("A", "B", "Z", "L", "R", "CUP", "DUP", ...) this tick / now
 jfg.level() / jfg.level_id("level_name" | "stock:21")
 jfg.flag(n) / jfg.set_flag(n, on) the game's flags
 jfg.unlock_door(id)               as a squadron's death does
@@ -27,7 +28,8 @@ ACTIONS = {"message": {"do": "message", "text": "Hello", "seconds": 4}, "music":
            "fog": {"do": "fog", "rgb": [120, 120, 160], "near": 990, "far": 1022, "ticks": 60},
            "flag": {"do": "flag", "flag": 0, "on": True}, "unlock_door": {"do": "unlock_door", "door": 1},
            "warp": {"do": "warp", "level": "", "start": 0},
-           "spawn": {"do": "spawn", "type": "", "pos": [0, 20, -100], "near_player": True}}
+           "spawn": {"do": "spawn", "type": "", "pos": [0, 20, -100], "near_player": True},
+           "lines": {"do": "lines", "lines": ["Hello there."], "seconds": 4}}
 
 
 def _app():
@@ -92,6 +94,26 @@ def triggers_window() -> None:
                         changed = True
                     else:
                         S.message = "Select objects in the Scene to frame the area"
+            elif when["kind"] == "talk":
+                c, when["at"] = imgui.input_float2("Talker x z", [float(v) for v in when.get("at", [0, 0])], "%.0f")
+                changed |= c
+                c, when["radius"] = imgui.input_int("Radius", int(when.get("radius", 150)))
+                changed |= c
+                buttons = list(scr.BUTTONS)
+                c, b = imgui.combo("Button", buttons.index(when.get("button", "")) if when.get("button", "") in buttons
+                                   else 0, [n or "(none: on approach)" for n in buttons])
+                if c:
+                    when["button"] = buttons[b]
+                    changed = True
+                if imgui.button("Talker at the Scene's selection"):
+                    sel = [o for o in S.objects() if o["uid"] in S.selection]
+                    if sel:
+                        when["at"] = [sel[0]["pos"][0], sel[0]["pos"][2]]
+                        changed = True
+                    else:
+                        S.message = "Select the talker's object in the Scene"
+                if t.get("once", True):
+                    A._muted("A talker usually speaks every time: untick 'Every time' only for a one-off.")
             elif when["kind"] == "door opens":
                 c, when["door"] = imgui.input_int("Door id", int(when.get("door", 1)))
                 changed |= c
@@ -192,6 +214,16 @@ def _action_fields(a: dict) -> bool:
         imgui.same_line()
         c, a["near_player"] = imgui.checkbox("from hero", bool(a.get("near_player", False)))
         changed |= c
+    elif kind == "lines":
+        lines = a.setdefault("lines", [])
+        text = "\n".join(lines)
+        c, text = imgui.input_text_multiline("##lines", text, imgui.ImVec2(hello_imgui.em_size(18),
+                                                                           hello_imgui.em_size(4)))
+        if c:
+            a["lines"] = [line for line in text.split("\n")]
+            changed = True
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("One line per row: each time the trigger fires the next one shows (the last repeats)")
     elif kind == "warp":
         from jfgstudio.gui import level_tools
         names = dict(level_tools.level_choices())
