@@ -13,7 +13,10 @@ it; the player plays it. Every tool saves the project as it goes, and each level
    start points, by number, for player 0.
 5. Lay out the play: `surface_at` and `find_flat` tell you where the floor is; `place` puts objects on it.
 6. Enemies with `place_squad`, doors and keys, pickups, lights; levels joined with `connect`.
-7. `validate` until there are no errors, then `play` (builds, installs and starts the game in the level). You can't
+7. Reshaping a level later: export it again from Blender and `reimport_geometry` it into the level (one undo step).
+   Its objects stay; the result lists the ones the new shape left buried, floating, sunk or over a pit.
+   `settle_objects` puts those with a floor back on it; move the rest yourself.
+8. `validate` (it includes that placement check) until there are no errors, then `play` (builds, installs and starts the game in the level). You can't
    play it yourself: say what to try, and the player reports back.
 
 ## Blender (when you model geometry)
@@ -45,6 +48,9 @@ before modelling.
   deck with no ramp onto it is walked under, not onto.
 - Objects that walk (enemies, start points) stand a few units above the floor (`place` does this): a spawn even a
   fraction below a sloped floor falls through it.
+- Levels that edit one of the game's own levels are on the game's own track: its exported heights don't match the
+  game's yet, so the floor tools refuse there. Give such positions as [x, y, z] with `on_floor` false, taking y from
+  an object of that level near the spot.
 
 ## Objects
 

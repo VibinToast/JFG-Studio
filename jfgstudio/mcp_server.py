@@ -58,6 +58,16 @@ TOOLS = [
           lambda s, a: s.import_geometry(a["path"], a.get("name")),
           {"path": {"type": "string"}, "name": {"type": "string", "description": "geometry name (default: the "
                                                                                  "file's)"}}, ["path"]),
+    _tool("reimport_geometry", "Replace a level's geometry with a new export of it (undoable). Its objects stay; the "
+          "result lists those the new shape left buried, floating, sunk or over a pit.",
+          lambda s, a: s.reimport_geometry(a["level"], a["path"]),
+          {"level": _LEVEL, "path": {"type": "string", "description": "the new .glb"}}, ["level", "path"]),
+    _tool("check_placement", "A level's objects that should stand on the floor but are buried, floating, sunk or over "
+          "a pit, with where each would stand.", lambda s, a: s.check_placement(a["level"]),
+          {"level": _LEVEL}, ["level"]),
+    _tool("settle_objects", "Put objects back on the floor where check_placement found one (all of them, or uids), "
+          "as one undo step.", lambda s, a: s.settle_objects(a["level"], a.get("uids")),
+          {"level": _LEVEL, "uids": {"type": "array", "items": {"type": "string"}}}, ["level"]),
     _tool("geometry_info", "Bounds, triangles, surfaces and images of a geometry file or a level's track, against "
           "the game's limits.", lambda s, a: s.geometry_info(a["name"]),
           {"name": {"type": "string", "description": "a level or a geometry name"}}, ["name"]),
@@ -145,8 +155,12 @@ TOOLS = [
     _tool("import_music", "Copy an .ogg into the project's music.", lambda s, a: s.import_music(a["path"],
                                                                                                 a.get("name")),
           {"path": {"type": "string"}, "name": {"type": "string"}}, ["path"]),
-    _tool("validate", "Check the project against the game's rules; each problem names its file and object.",
-          lambda s, a: s.validate(a.get("notes", False)), {"notes": {"type": "boolean"}}),
+    _tool("validate", "Check the project against the game's rules, and each level's objects against its geometry; "
+          "each problem names its file and object.",
+          lambda s, a: s.validate(a.get("notes", False), a.get("geometry", True)),
+          {"notes": {"type": "boolean"},
+           "geometry": {"type": "boolean", "description": "also check placement against the geometry (default "
+                                                          "true)"}}),
     _tool("build", "Build the .nrm pack.", lambda s, a: s.build(a.get("out")), {"out": {"type": "string"}}),
     _tool("play", "Build, install into the port and start the game in a level, for the player to play.",
           lambda s, a: s.play(a.get("level"), a.get("start_point", 0), a.get("character", "juno"),

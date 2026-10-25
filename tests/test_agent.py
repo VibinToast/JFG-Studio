@@ -18,15 +18,13 @@ def _quad(x0, z0, x1, z1, y):
     return [[a, b, c], [a, c, d]]
 
 
-class FakeMesh:
-    """A track without jfgformats: flat ground at 0 with a riverbed at -30 under water at -5 (z 300-500), a raised
-    deck at 100 (x 600-800), and a kill floor at -500 under a pit (x -900 to -700) that has no ground."""
+class QuadMesh:
+    """A track without jfgformats, from flat quads per surface kind (TrackMesh's interface)."""
 
-    def __init__(self):
-        ground = (_quad(-1000, -1000, -900, 1000, 0) + _quad(-700, -1000, 1000, 300, 0)
-                  + _quad(-700, 500, 1000, 1000, 0) + _quad(-700, 300, 1000, 500, -30) + _quad(600, -200, 800, 0, 100))
-        self.tris = {"solid": np.array(ground, "f8"), "water": np.array(_quad(-700, 300, 1000, 500, -5), "f8"),
-                     "kill": np.array(_quad(-2000, -2000, 2000, 2000, -500), "f8")}
+    def __init__(self, solid, water=(), kill=()):
+        def tris(quads):
+            return np.array(quads, "f8").reshape(-1, 3, 3) if quads else np.zeros((0, 3, 3))
+        self.tris = {"solid": tris(solid), "water": tris(water), "kill": tris(kill)}
         self.collision = self.tris["solid"]
         self.bounds = (np.array([-2000, -500, -2000]), np.array([2000, 100, 2000]))
         self.images = {}
@@ -36,6 +34,37 @@ class FakeMesh:
 
     def kind_triangles(self, kind):
         return self.tris.get(kind, np.zeros((0, 3, 3)))
+
+
+def _block(x0, z0, x1, z1, y0, y1):
+    """A box's top and four walls (no bottom, as a modelled block standing on ground)."""
+    def wall(a, b):
+        p, q, r, s = (a[0], y0, a[1]), (b[0], y0, b[1]), (b[0], y1, b[1]), (a[0], y1, a[1])
+        return [[p, q, r], [p, r, s]]
+    corners = [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]
+    return _quad(x0, z0, x1, z1, y1) + sum((wall(corners[k], corners[(k + 1) % 4]) for k in range(4)), [])
+
+
+KILL = _quad(-2000, -2000, 2000, 2000, -500)
+
+
+def fake_mesh():
+    """Flat ground at 0 with a riverbed at -30 under water at -5 (z 300-500), a raised deck at 100 (x 600-800), and a
+    kill floor at -500 under a pit (x -900 to -700) that has no ground."""
+    ground = (_quad(-1000, -1000, -900, 1000, 0) + _quad(-700, -1000, 1000, 300, 0)
+              + _quad(-700, 500, 1000, 1000, 0) + _quad(-700, 300, 1000, 500, -30) + _quad(600, -200, 800, 0, 100))
+    return QuadMesh(ground, _quad(-700, 300, 1000, 500, -5), KILL)
+
+
+def reshaped_mesh():
+    """The same level after a new export: the ground at 20, no deck, the pit kept (x -900 to -700, from z -500), a
+    hill (top 100) over x -100..100, z -700..-500 with no ground under it, and a block (top 60) standing on the ground
+    over x 300..500, z -400..-200."""
+    ground = (_quad(-1000, -1000, 1000, -700, 20) + _quad(-1000, -500, -900, 1000, 20)
+              + _quad(-700, -500, 1000, 1000, 20) + _quad(-1000, -700, -100, -500, 20)
+              + _quad(100, -700, 1000, -500, 20) + _quad(-100, -700, 100, -500, 100)
+              + _block(300, -400, 500, -200, 20, 60))
+    return QuadMesh(ground, (), KILL)
 
 
 # Made-up catalog types (names and numbers are the tests' own).
@@ -53,8 +82,8 @@ class AgentTest(unittest.TestCase):
         self.s = agent.Session()
         self.s._catalog_error = "tests have no catalog"  # never the player's ROM, even when one is found nearby
         self.s.open(Path(self.tmp.name) / "sample.jfgproj")
-        mesh = FakeMesh()
-        self.s._mesh = lambda name: mesh
+        self.mesh = fake_mesh()
+        self.s._mesh = lambda name: self.mesh
 
     def tearDown(self):
         if self.old_config is None:
@@ -179,6 +208,56 @@ class Geometry(AgentTest):
             self.assertFalse(260 <= s["z"] <= 540)
         hit = self.s.raycast("home", [0, 50, 0], [0, -1, 0])
         self.assertEqual(hit["point"], [0.0, 0.0, 0.0])
+
+
+class Reimport(AgentTest):
+    def test_reimport_keeps_objects_and_finds_misplaced_ones(self):
+        health = self.s.place("home", "health", [100, 100])[0]["uid"]                                  # y 2
+        deck = self.s.place("home", "startpoint", [650, -100], fields={"startPoint": 1})[0]["uid"]     # y 108
+        hill = self.s.place("home", "startpoint", [0, -600], fields={"startPoint": 2})[0]["uid"]       # y 8
+        light = self.s.place("home", "light", [300, 300], lift=60)[0]["uid"]
+        pit = self.s.place("home", "ammo", [-800, 0, 0], on_floor=False)[0]["uid"]
+        block = self.s.place("home", "ammo", [400, 22, -300], on_floor=False)[0]["uid"]  # on the new ground (20)
+        self.assertEqual({f["uid"]: f["problem"] for f in self.s.check_placement("home")}, {pit: "over a pit"})
+
+        new = Path(self.tmp.name) / "field_v2.glb"
+        new.write_bytes(b"new export")
+        geometry = self.s.p.geometry_path("field")
+        self.mesh = reshaped_mesh()  # what the new file holds
+        out = self.s.reimport_geometry("home", str(new))
+        self.assertEqual(geometry.read_bytes(), b"new export")
+        self.assertEqual(out["sharedWith"], ["gemini"])  # both levels are on pack:track/field
+        found = {f["uid"]: f for f in out["placement"]["home"]}
+        self.assertEqual(found[health]["problem"], "sunk")
+        self.assertEqual(found[health]["standOn"], [100, 22, 100])
+        self.assertEqual((found[deck]["problem"], found[deck]["standOn"]), ("floating", [650, 28, -100]))
+        self.assertEqual((found[hill]["problem"], found[hill]["standOn"]), ("buried", [0, 108, -600]))
+        self.assertEqual((found[block]["problem"], found[block]["standOn"]), ("buried", [400, 62, -300]))
+        self.assertNotIn(light, found)  # lights may hang anywhere
+        self.assertEqual(found[pit]["problem"], "over a pit")
+        self.assertIn("placement", {p["rule"] for p in self.s.validate()["problems"]})
+
+        settled = self.s.settle_objects("home")
+        self.assertEqual({m["uid"] for m in settled["moved"]}, {health, deck, hill, block, "start0"})  # start0 at 0
+        self.assertEqual(settled["left"], [{"uid": pit, "problem": "over a pit"}])
+        self.assertEqual([f["uid"] for f in self.s.check_placement("home")], [pit])
+
+        self.s.undo("home")  # the settling
+        self.s.undo("home")  # the re-import
+        self.assertEqual(geometry.read_bytes(), b"glTF")
+        with self.assertRaises(agent.AgentError):
+            self.s.reimport_geometry("home", str(Path(self.tmp.name) / "missing.glb"))
+
+    def test_stock_track_levels_are_refused(self):
+        self.s.set_level("home", {"track": "stock:track/3"})
+        with self.assertRaises(agent.AgentError):
+            self.s.reimport_geometry("home", "x.glb")
+        for call in (lambda: self.s.check_placement("home"), lambda: self.s.surface_at("home", [[0, 0]]),
+                     lambda: self.s.place("home", "health", [0, 0])):  # the export's heights aren't the game's
+            with self.assertRaises(agent.AgentError):
+                call()
+        self.assertEqual(self.s.place("home", "health", [0, 15, 0], on_floor=False)[0]["pos"], [0, 15, 0])
+        self.assertNotIn("placement", {p["rule"] for p in self.s.validate()["problems"]})
 
 
 class Server(AgentTest):
