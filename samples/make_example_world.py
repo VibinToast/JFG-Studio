@@ -172,6 +172,10 @@ def glacia_mesh() -> wk.Mesh:
                             ("crystal", "crystal", "opaque")):
         m.material(name, img, kind)
     m.floor("snow", -1300, -1500, 1300, -300, 0, 140, step=400)                  # the south field
+    # Play-tested 2026-10-25: in the open, the squads shot Juno down within seconds of arriving (as in the arena).
+    m.box("stone", "stone_wall", -260, -1130, 260, -1070, 0, 230)               # the entry screen
+    for x0, x1 in ((-760, -560), (560, 760)):
+        m.box("ice", "ice_wall", x0, -900, x1, -860, 0, 150)                    # low cover on the way north
     m.floor("ice", -700, -300, 700, 500, -10, 160, step=350)                     # the frozen lake
     m.floor("snow", -1300, -300, -700, 500, 0, 140, step=400)
     m.floor("snow", 700, -300, 1300, 500, 0, 140, step=400)
@@ -195,6 +199,8 @@ def nimbus_mesh() -> wk.Mesh:
                             ("void_kill", "rock", "kill")):
         m.material(name, img, kind)
     m.disc("cloud", "stone_wall", 0, -1100, 380, -120, 0, n=20)                # the landing island
+    m.box("stone", "stone_wall", -230, -900, 230, -850, 0, 230)                # a screen: the middle island's squad
+                                                                                 # shot at the start (play-tested)
     m.box("stone", "stone_wall", -60, -730, 60, -420, -60, 0)                  # bridge 1
     m.disc("cloud", "stone_wall", 0, -50, 520, -120, 0, n=24)                  # the middle island
     for sx in (-1, 1):
@@ -503,8 +509,9 @@ def main() -> int:
     mv, pl = views["glacia"], w.placer(d)
     w.start(pl, mv, 0, -1350, 0, YAW_NORTH)
     w.exit(pl, mv, 0, 1480, f"stock:level/{FOREST_FIRST}", 0, "the way home to Goldwood")
-    w.squad(pl, mv, "BlueAnt", (0, 100), 3, [(-600, -250), (600, -250), (600, 450), (-600, 450)])
-    w.squad(pl, mv, "Cyborg", (0, 800), 2, [(-1100, 600), (1100, 600), (1100, 1050), (-1100, 1050)], spread=250)
+    w.squad(pl, mv, "BlueAnt", (0, 250), 3, [(-600, 0), (600, 0), (600, 450), (-600, 450)])
+    w.squad(pl, mv, "Cyborg", (0, 850), 2, [(-1100, 650), (1100, 650), (1100, 1050), (-1100, 1050)], spread=250)
+    w.pickup(pl, mv, HEALTH, 0, -1250, amount=2)  # full health behind the entry screen
     for x, z in ((300, -1200), (-1000, 300), (1000, 300), (0, 1100)):
         w.pickup(pl, mv, HEALTH, x, z)
     for x, z in ((-300, -1200), (600, 900)):
