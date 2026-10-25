@@ -48,7 +48,17 @@ NO_SPAWN = {5, 0x60, 0x61, 0x69}  # region and patrol data: the game refuses the
 # angle units (65536 = a full turn), speed the projectile's speed. throw_delay only counts for thrown weapons.
 WEAPON_FIELDS = {"damage": (0, 255), "delay": (0, 255), "throw_delay": (1, 127), "lifetime": (1, 255),
                  "spread_x": (0, 8192), "spread_y": (0, 8192), "speed": (0.1, 2000.0)}
-WEAPON_COUNT = 16
+# The heroes' weapons as the port numbers them (its WEAPON_INFO), with the fields each one uses: the port ignores the
+# others. Weapon 15 is not one of them and the port refuses it (jfg.weapon(15, ...) stops the weapons script).
+_ALL = ("damage", "delay", "lifetime", "spread_x", "spread_y", "speed")
+_THROWN = ("damage", "delay", "throw_delay", "lifetime", "speed")
+WEAPONS = (("Pistol", _ALL), ("Homing Missiles", _ALL), ("Machine Gun", _ALL),
+           ("Plasma Shotgun", ("delay", "lifetime", "spread_x", "spread_y", "speed")),
+           ("Shocker", ("delay", "spread_x", "spread_y")), ("Tri-Rocket Launcher", _ALL),
+           ("Flamethrower", ("spread_x", "spread_y")), ("Sniper Rifle", _ALL), ("Grenades", _THROWN),
+           ("Shuriken", _THROWN), ("Fish Food", _THROWN[1:]), ("Timed Mines", ("damage", "delay", "lifetime", "speed")),
+           ("Remote Mines", _THROWN), ("Flares", _THROWN[1:]), ("Cluster Bombs", _THROWN[1:]))
+WEAPON_COUNT = len(WEAPONS)
 
 
 def weapons_path(project) -> Path:

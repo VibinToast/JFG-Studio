@@ -207,6 +207,23 @@ class Triggers(unittest.TestCase):
             scr.save_weapons(p, {})
             self.assertFalse(scr.weapons_path(p).exists())
 
+    def test_weapon_slots(self):
+        # the port takes weapons 0-14 only: weapon 15 must not get past the check
+        from jfgstudio import scripts as scr
+        self.assertEqual(scr.WEAPON_COUNT, 15)
+        self.assertEqual(scr.WEAPONS[0][0], "Pistol")
+        self.assertEqual(scr.WEAPONS[14][0], "Cluster Bombs")
+        self.assertEqual(scr.WEAPONS[6][1], ("spread_x", "spread_y"))
+        self.assertTrue(all(set(used) <= set(scr.WEAPON_FIELDS) for _, used in scr.WEAPONS))
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            scr.save_weapons(p, {"14": {"delay": 4}})
+            self.assertEqual(scr.check(p), [])
+            scr.save_weapons(p, {"14": {"delay": 4}, "15": {"delay": 4}})
+            problems = scr.check(p)
+            self.assertEqual(len(problems), 1)
+            self.assertIn("weapon '15' is not 0-14", problems[0])
+
     def test_spawn(self):
         from jfgstudio import scripts as scr
         oid, tail = scr.spawn_entry({"do": "spawn", "type": "stock:objtype/0xA9", "fields": {"amount": 2}})

@@ -263,7 +263,7 @@ WEAPON_HELP = {"damage": "the projectile's power", "delay": "frames between shot
 
 
 def weapons_window() -> None:
-    """The pack's values for the heroes' 16 weapons (jfg.weapon). Only the fields set here change; the rest keep the
+    """The pack's values for the heroes' 15 weapons (jfg.weapon). Only the fields set here change; the rest keep the
     game's values, and a player's own Weapons tab settings win over the pack's."""
     A = _app()
     S = A.S
@@ -278,14 +278,17 @@ def weapons_window() -> None:
         S.message = "Weapons saved (the build makes them a script)"
     A._muted("Weapon numbers as the game counts them (0 is the starting gun). Tick a field to change it in this "
              "pack; the game's own values are not shown (the port's Weapons tab reads them from your game).")
-    for n in range(scr.WEAPON_COUNT):
+    for n, (title, used) in enumerate(scr.WEAPONS):
         fields = S.weapons.setdefault(str(n), {})
-        if not imgui.collapsing_header(f"Weapon {n}{'  (changed)' if fields else ''}###w{n}"):
+        if not imgui.collapsing_header(f"Weapon {n}: {title}{'  (changed)' if fields else ''}###w{n}"):
             continue
         imgui.push_id(n)
         for name, (lo, hi) in scr.WEAPON_FIELDS.items():
             on = name in fields
+            # a field the weapon doesn't use stays greyed out (one set before can still be unticked)
+            imgui.begin_disabled(name not in used and not on)
             c, on = imgui.checkbox(f"##on{name}", on)
+            imgui.end_disabled()
             if c:
                 if on:
                     fields[name] = 1.0 if isinstance(lo, float) else max(lo, 1)
@@ -304,7 +307,8 @@ def weapons_window() -> None:
                 S.weapons_dirty = True
             imgui.end_disabled()
             if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-                imgui.set_tooltip(WEAPON_HELP[name])
+                imgui.set_tooltip(WEAPON_HELP[name] if name in used
+                                  else f"{title} doesn't use this (the port ignores it)")
         imgui.pop_id()
     for k in [k for k, v in S.weapons.items() if not v]:
         S.weapons.pop(k)
