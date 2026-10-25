@@ -132,6 +132,11 @@ def arena_mesh() -> wk.Mesh:
     m.disc("stone", "stone_wall", 0, 0, 900, -120, 0, n=32)                     # the arena
     m.box("stone", "stone_wall", -150, -1300, 150, -860, -120, 0)               # the entry platform
     m.box("stone", "stone_wall", -320, 860, 320, 1500, -120, 0)                 # the finale platform
+    # Play-tested 2026-10-25: in the open, both squads shot Juno down within seconds of arriving. A screen wall hides
+    # the entry, and low walls give cover on the way to the pillars.
+    m.box("stone", "stone_wall", -230, -800, 230, -740, 0, 230)                 # the entry screen
+    for x0, x1 in ((-330, -130), (130, 330)):
+        m.box("stone", "stone_wall", x0, -280, x1, -240, 0, 150)                # low cover walls
     for sx, sz in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
         x, z = 450 * sx, 450 * sz
         m.box("metal", "metal", x - 70, z - 70, x + 70, z + 70, -10, 240)        # pillars (cover)
@@ -415,14 +420,15 @@ def main() -> int:
     w.exit(pl, mv, 0, 1380, f"stock:level/{FOREST_FIRST}", 0, "victory: home to Goldwood")
     door_c = pl.free("door", "doorId")
     p.meta.setdefault("x-arena-door", door_c)  # the finale trigger watches this door (removed before saving)
-    ring = [(-620, -620), (620, -620), (620, 620), (-620, 620)]  # inside the arena disc
-    w.squad(pl, mv, "BigShieldAnt", (-350, 200), 3, ring, door_id=door_c)
-    w.squad(pl, mv, "Cyborg", (350, 200), 2, ring, door_id=door_c)
+    ring = [(-620, 0), (620, 0), (620, 620), (-620, 620)]  # the arena's north half: they hold the gate
+    w.squad(pl, mv, "BigShieldAnt", (-350, 350), 2, ring, door_id=door_c)
+    w.squad(pl, mv, "Cyborg", (350, 350), 2, ring, door_id=door_c)
     w.door(pl, mv, 0, 950, "final gate (opens when both squads are down)", {"doorId": door_c, "yaw": 0})
     for x, z in ((600, 0), (-600, 0), (0, -600), (0, 700)):
         w.pickup(pl, mv, HEALTH, x, z, below=50)
     for x, z in ((300, -500), (-300, -500)):
         w.pickup(pl, mv, AMMO, x, z, below=50)
+    w.pickup(pl, mv, HEALTH, 0, -1000, amount=2)  # full health on the entry platform
     for sx, sz in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
         w.light(pl, mv, 450 * sx, 450 * sz, (120, 140, 255), radius=450, lift=320, track=True)
         w.glow(pl, mv, 450 * sx, 450 * sz, (160, 120, 255), lift=40, below=400)

@@ -82,7 +82,7 @@
    "pos": [
     -620,
     0,
-    -620
+    0
    ],
    "size": 12,
    "type": "stock:objtype/0x5",
@@ -97,7 +97,7 @@
    "pos": [
     620,
     0,
-    -620
+    0
    ],
    "size": 12,
    "type": "stock:objtype/0x5",
@@ -136,7 +136,7 @@
   {
    "fields": {
     "baddyType": 156,
-    "count": 3,
+    "count": 2,
     "doorId": 1,
     "region": 1,
     "squadronId": 1
@@ -145,7 +145,7 @@
    "pos": [
     -350,
     0,
-    200
+    350
    ],
    "stock": {
     "entry": 60,
@@ -162,7 +162,7 @@
    "pos": [
     -350,
     0,
-    350
+    500
    ],
    "schema": "squadmember",
    "stock": {
@@ -178,9 +178,9 @@
    },
    "name": "BigShieldAnt",
    "pos": [
-    -220,
+    -350,
     0,
-    125
+    200
    ],
    "schema": "squadmember",
    "stock": {
@@ -192,24 +192,6 @@
   },
   {
    "fields": {
-    "squadron": 1
-   },
-   "name": "BigShieldAnt",
-   "pos": [
-    -480,
-    0,
-    125
-   ],
-   "schema": "squadmember",
-   "stock": {
-    "entry": 22,
-    "list": 413
-   },
-   "type": "stock:objtype/0x9C",
-   "uid": "bigshieldant3"
-  },
-  {
-   "fields": {
     "corner": 0,
     "region": 2
    },
@@ -217,7 +199,7 @@
    "pos": [
     -620,
     0,
-    -620
+    0
    ],
    "size": 12,
    "type": "stock:objtype/0x5",
@@ -232,7 +214,7 @@
    "pos": [
     620,
     0,
-    -620
+    0
    ],
    "size": 12,
    "type": "stock:objtype/0x5",
@@ -280,7 +262,7 @@
    "pos": [
     350,
     0,
-    200
+    350
    ],
    "stock": {
     "entry": 1,
@@ -297,7 +279,7 @@
    "pos": [
     350,
     0,
-    350
+    500
    ],
    "schema": "squadmember",
    "stock": {
@@ -315,7 +297,7 @@
    "pos": [
     350,
     0,
-    50
+    200
    ],
    "schema": "squadmember",
    "stock": {
@@ -415,6 +397,20 @@
    "size": 16,
    "type": "stock:objtype/0xE8",
    "uid": "ammo2"
+  },
+  {
+   "fields": {
+    "amount": 2
+   },
+   "name": "health",
+   "pos": [
+    0,
+    0,
+    -1000
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "health5"
   },
   {
    "fields": {
