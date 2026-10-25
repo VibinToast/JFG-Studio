@@ -7,6 +7,7 @@ the menus. Edits go through jfgstudio.edit's per-level undo history.
 import copy
 import json
 import math
+import os
 import struct
 import threading
 import zlib
@@ -1569,6 +1570,10 @@ def _layout() -> hello_imgui.DockingParams:
         win("Prefabs", "BottomSpace", prefabs),
     ]
     params.dockable_windows[-1].focus_window_at_next_frame = True
+    focus = os.environ.get("JFGSTUDIO_FOCUS")  # tests and screenshots: bring that window to the front
+    for w in params.dockable_windows:
+        if focus and w.label == focus:
+            w.focus_window_at_next_frame = True
     params.layout_condition = hello_imgui.DockingLayoutCondition.first_use_ever  # then the user's own layout
     return params
 
