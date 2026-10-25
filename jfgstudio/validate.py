@@ -43,6 +43,7 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     for name, planet in project.planets.items():
         out += _check_planet(project, name, planet)
     out += _check_planets_together(project)
+    out += _check_scripts(project)
     return out
 
 
@@ -52,6 +53,11 @@ def _ref(text, category, file, uid, out) -> refs.Ref | None:
     except refs.RefError as e:
         out.append(Problem(ERROR, "reference", file, str(e), uid))
         return None
+
+
+def _check_scripts(project: Project) -> list[Problem]:
+    from jfgstudio import scripts as scr
+    return [Problem(ERROR, "triggers", "triggers.json", p) for p in scr.check(project)]
 
 
 def _check_level(project: Project, level, schemas) -> list[Problem]:

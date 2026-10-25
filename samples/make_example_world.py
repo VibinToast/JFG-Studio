@@ -250,6 +250,53 @@ def fire_ant(p, cat) -> None:
                            "textures": textures}
 
 
+def world_scripts(p) -> None:
+    """The world's triggers (made in the editor's Triggers window; compiled to Lua by the build) and one script written
+    by hand, for the port's Lua runtime."""
+    from jfgstudio import scripts
+
+    def say(text, seconds=5):
+        return {"do": "message", "text": text, "seconds": seconds}
+
+    scripts.save_triggers(p, [
+        {"name": "the portal", "level": f"stock:level/{FOREST_FIRST}", "when": {"kind": "level start"},
+         "then": [say("A strange blue portal has opened just ahead...")]},
+        {"name": "landing intro", "level": "pack:level/landing", "when": {"kind": "level start"},
+         "then": [say("ZEPHYRA - Ants hold the north gate. The yellow key waits on the west ledge.", 6)]},
+        {"name": "caverns intro", "level": "pack:level/caverns", "when": {"kind": "level start"},
+         "then": [say("EMBER CAVERNS - Mind the lava. The north door needs the yellow key.", 6)]},
+        {"name": "fire ants", "level": "pack:level/caverns", "when": {"kind": "enter", "box": [-380, -650, 380, -100]},
+         "then": [say("Fire Ants!", 2)]},
+        {"name": "arena intro", "level": "pack:level/arena", "when": {"kind": "level start"},
+         "then": [say("SKY ARENA - Defeat both squads to open the final gate.", 6)]},
+        {"name": "victory", "level": "pack:level/arena", "when": {"kind": "enter", "box": [-300, 1000, 300, 1500]},
+         "then": [say("Victory! The way home is open.", 6),
+                  {"do": "fog", "rgb": [200, 190, 255], "near": 1000, "far": 1023, "ticks": 120}]},
+    ])
+    (p.path / "scripts").mkdir(exist_ok=True)
+    (p.path / "scripts" / "zephyra.lua").write_text("""\
+-- Zephyra's own script (written by hand; the triggers are in triggers.json).
+-- Counts the time spent in the Sky Arena and says it at the finale platform.
+local arena_start = nil
+local said = false
+
+jfg.on("level", function(level)
+  jfg.log("Zephyra: level " .. level)
+  arena_start = (level == jfg.level_id("level_arena")) and 0 or nil
+  said = false
+end)
+
+jfg.on("tick", function(level, seconds)
+  if arena_start == nil or said then return end
+  local x, y, z = jfg.player()
+  if z and z > 1000 and x > -300 and x < 300 then
+    said = true
+    jfg.log(string.format("Zephyra: the arena took %.0f seconds", seconds))
+  end
+end)
+""", encoding="utf-8", newline="\n")
+
+
 def level_header(level, fog, clear, extra=None):
     hd = level.level["header"]
     hd.update({"fogNear": fog[3], "fogFar": fog[4], "fog3": fog[3], "fogR": fog[0], "fogG": fog[1], "fogB": fog[2],
@@ -387,6 +434,7 @@ def main() -> int:
     f.objects["objects"] = pl.made
 
     p.save()
+    world_scripts(p)
     print(f"wrote {OUT}: {len(p.levels)} levels, "
           f"{sum(len(lv.objects['objects']) for lv in p.levels.values())} objects")
     return 0

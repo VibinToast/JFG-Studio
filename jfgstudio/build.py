@@ -446,6 +446,11 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     music = music_manifest(project, b.catalog.level_count())
     for name in sorted(music["tracks"]):
         files[f"music/{name}.ogg"] = project.music_path(name).read_bytes()
+    from jfgstudio import scripts as scr
+    script_files = scr.pack_scripts(project)
+    files.update(script_files)
+    if script_files:
+        log(f"scripts: {', '.join(script_files)}")
     meta = project.meta
     manifest = {"id": meta["id"], "version": meta["version"], "display_name": meta["name"],
                 "authors": meta.get("authors", []), "description": meta.get("description", ""),
@@ -471,8 +476,10 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
             if objtypes:
                 doc["objtypes"], doc["animRows"] = objtypes, animrows
             z.writestr("jfg_assets.json", json.dumps(doc, indent=1))
-        if music["levels"]:
+        if music["tracks"]:
             z.writestr("jfg_music.json", json.dumps(music, indent=1, sort_keys=True))
+        if script_files:
+            z.writestr("jfg_scripts.json", json.dumps({"scripts": sorted(script_files)}, indent=1))
         for name, raw in sorted(files.items()):
             z.writestr(name, raw)
         if patch:
@@ -489,6 +496,8 @@ def music_manifest(project: Project, stock_levels: int = STOCK_LEVELS) -> dict:
     (or a stock-level edit, or a fixedId that replaces a stock level) is named by its number; an appended level by its
     append name, which the port's linker resolves (an appended number may change at load)."""
     tracks, levels = {}, {}
+    if (project.path / "music").is_dir():  # every track: scripts and triggers can play any of them
+        tracks = {f.stem: f"music/{f.name}" for f in sorted((project.path / "music").glob("*.ogg"))}
     for name, level in project.levels.items():
         if not level.level.get("music"):
             continue

@@ -1,0 +1,112 @@
+{
+ "format": 1,
+ "triggers": [
+  {
+   "level": "stock:level/21",
+   "name": "the portal",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 5,
+     "text": "A strange blue portal has opened just ahead..."
+    }
+   ],
+   "when": {
+    "kind": "level start"
+   }
+  },
+  {
+   "level": "pack:level/landing",
+   "name": "landing intro",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 6,
+     "text": "ZEPHYRA - Ants hold the north gate. The yellow key waits on the west ledge."
+    }
+   ],
+   "when": {
+    "kind": "level start"
+   }
+  },
+  {
+   "level": "pack:level/caverns",
+   "name": "caverns intro",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 6,
+     "text": "EMBER CAVERNS - Mind the lava. The north door needs the yellow key."
+    }
+   ],
+   "when": {
+    "kind": "level start"
+   }
+  },
+  {
+   "level": "pack:level/caverns",
+   "name": "fire ants",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 2,
+     "text": "Fire Ants!"
+    }
+   ],
+   "when": {
+    "box": [
+     -380,
+     -650,
+     380,
+     -100
+    ],
+    "kind": "enter"
+   }
+  },
+  {
+   "level": "pack:level/arena",
+   "name": "arena intro",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 6,
+     "text": "SKY ARENA - Defeat both squads to open the final gate."
+    }
+   ],
+   "when": {
+    "kind": "level start"
+   }
+  },
+  {
+   "level": "pack:level/arena",
+   "name": "victory",
+   "then": [
+    {
+     "do": "message",
+     "seconds": 6,
+     "text": "Victory! The way home is open."
+    },
+    {
+     "do": "fog",
+     "far": 1023,
+     "near": 1000,
+     "rgb": [
+      200,
+      190,
+      255
+     ],
+     "ticks": 120
+    }
+   ],
+   "when": {
+    "box": [
+     -300,
+     1000,
+     300,
+     1500
+    ],
+    "kind": "enter"
+   }
+  }
+ ]
+}
