@@ -1,0 +1,17 @@
+{
+ "key": "regioninfo",
+ "name": "Region settings",
+ "ids": ["0x69"],
+ "behaviour": null,
+ "minSize": "0x12",
+ "category": "Enemies & navigation",
+ "hidden": true,
+ "status": "partial",
+ "description": "Optional settings for one navigation region. MSR 'Region settings'.",
+ "fields": [
+  {"name": "region", "offset": "0x0A", "type": "u8", "link": "region", "description": "the region it describes"},
+  {"name": "flags", "offset": "0x0B", "type": "u8", "default": 1, "description": "region flags; 0x02 or 0x10 gives it its own edge BSP (stock mostly 1)"},
+  {"name": "link", "offset": "0x0C", "type": "u8", "link": "region", "description": "the region it joins into one area (0 = none)"},
+  {"name": "anchored", "offset": "0x0D", "type": "u8", "description": "non-zero: the region moves with the object found at this entry's position"}
+ ]
+}

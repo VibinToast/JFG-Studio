@@ -16,7 +16,8 @@ Neighbours in `JetForceGemini/`: the decomp (`Decomp/`, read-only; Studio import
 |---|---|
 | `jfgstudio/cli.py` | `jfgstudio new / validate / settings / catalog / build / test / gui` |
 | `jfgstudio/project.py`, `schemas/project/` | the project folder format and its JSON schemas |
-| `jfgstudio/objects.py`, `schemas/objects/` | object-list entries and per-type field schemas |
+| `jfgstudio/objects.py`, `schemas/objects/` | object-list entries and per-type field schemas (fields, named values, roles, categories) |
+| `jfgstudio/prefabs.py` | what the Prefabs window places: single objects and linked groups (squad, exit pair, region) |
 | `jfgstudio/validate.py` | the validator (rules from the decomp's tested pitfalls and its review) |
 | `jfgstudio/build.py`, `bps.py` | the pack builder and the map patch encoder |
 | `jfgstudio/catalog.py`, `rom.py`, `formats.py`, `settings.py` | the user's ROM, the local catalog, jfgformats, paths |

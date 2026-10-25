@@ -1,0 +1,16 @@
+{
+ "key": "texscroll",
+ "name": "Texture scroll",
+ "ids": ["0x0F"],
+ "behaviour": 35,
+ "minSize": "0x0E",
+ "category": "Lights & effects",
+ "hidden": true,
+ "status": "decoded",
+ "description": "Scrolls one of the track's textures (water, lava). Placement does not matter. MSR 'Texture scroll'.",
+ "fields": [
+  {"name": "texture", "offset": "0x0A", "type": "s16", "description": "index into the track's texture list"},
+  {"name": "uSpeed", "offset": "0x0C", "type": "s8", "description": ""},
+  {"name": "vSpeed", "offset": "0x0D", "type": "s8", "default": 48, "description": ""}
+ ]
+}

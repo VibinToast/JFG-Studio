@@ -1,0 +1,20 @@
+{
+ "key": "audio",
+ "name": "Sound emitter",
+ "ids": ["0x20"],
+ "behaviour": 45,
+ "minSize": "0x14",
+ "category": "Lights & effects",
+ "hidden": true,
+ "status": "decoded",
+ "description": "A looped or one-shot sound at a point. MSR 'Sound emitter'.",
+ "fields": [
+  {"name": "sound", "offset": "0x0A", "type": "u16", "description": "sound bank id"},
+  {"name": "range", "offset": "0x0C", "type": "u16", "default": 1500, "description": ""},
+  {"name": "volume", "offset": "0x0E", "type": "u8", "default": 100, "description": "0-127"},
+  {"name": "minVolume", "offset": "0x0F", "type": "u8", "description": "looped: never quieter"},
+  {"name": "pitch", "offset": "0x10", "type": "u8", "default": 100, "description": "percent"},
+  {"name": "falloff", "offset": "0x11", "type": "u8", "description": "0 linear, else squared"},
+  {"name": "priority", "offset": "0x12", "type": "u8", "default": 64, "description": ""}
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "key": "key",
+ "name": "Coloured key",
+ "ids": ["0x258", "0x259", "0x25A", "0x25B", "0x25C", "0x25D", "0x25E", "0x25F", "0x260", "0x261"],
+ "behaviour": 60,
+ "minSize": "0x0E",
+ "category": "Pickups",
+ "hidden": false,
+ "status": "decoded",
+ "description": "Which key comes from the object id (yellow 0x258 ... blue 0x261); a door needs it when its keyLock is item + 2. MSR 'Keys'.",
+ "fields": [
+  {"name": "size", "offset": "0x0B", "type": "u8", "default": 64, "role": "scale", "scale": {"div": 64, "min": 0.1}, "description": "scale, 64 = normal"}
+ ]
+}

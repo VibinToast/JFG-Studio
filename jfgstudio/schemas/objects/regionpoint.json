@@ -4,8 +4,10 @@
  "ids": ["0x05"],
  "behaviour": null,
  "minSize": "0x0C",
+ "category": "Enemies & navigation",
+ "hidden": true,
  "status": "decoded",
- "description": "One corner of a navigation region polygon (x and z are the corner; corners in order). Not spawned as an object: the squad system builds its regions from these. A squadron needs RegionPoints for the region it names.",
+ "description": "One corner of a navigation region polygon (x and z are the corner; corners in order). Not spawned as an object: the squad system builds its regions from these. A squadron needs corners for the region it names.",
  "fields": [
   {"name": "region", "offset": "0x0A", "type": "u8", "link": "region", "description": "region id"},
   {"name": "corner", "offset": "0x0B", "type": "u8", "description": "corner index, in order around the polygon"}

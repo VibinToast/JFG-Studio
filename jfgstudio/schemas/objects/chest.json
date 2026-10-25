@@ -1,0 +1,19 @@
+{
+ "key": "chest",
+ "name": "Chest",
+ "ids": ["0x1AA"],
+ "behaviour": 98,
+ "minSize": "0x14",
+ "category": "Pickups",
+ "hidden": false,
+ "status": "decoded",
+ "description": "Gives a weapon or item when opened; it starts open when the hero already has it. MSR 'Chest'.",
+ "fields": [
+  {"name": "contents", "offset": "0x0A", "type": "u8", "enum": {"0": "shotgun (weapon 3)", "1": "homing missiles (weapon 1)", "2": "machine gun (weapon 2)", "3": "machine gun (weapon 2)", "4": "shuriken (weapon 9)", "5": "grenades (weapon 8)", "6": "green key (item 3)", "7": "miner's item (item 0x10)", "8": "cluster bombs (weapon 0xE)", "9": "flares (weapon 0xD)", "10": "cluster bombs (weapon 0xE)", "11": "remote mines (weapon 0xC)", "12": "timed mines (weapon 0xB)", "13": "fish food (weapon 0xA)", "14": "sniper (weapon 7)", "15": "flamethrower (weapon 6)", "16": "electricity (weapon 4)", "17": "night goggles (item 0x16)", "18": "blue key (item 9)", "19": "red key (item 1)", "20": "rockets (weapon 5)", "255": "nothing"}, "description": "what it gives (past 20: empty)"},
+  {"name": "size", "offset": "0x0B", "type": "u8", "default": 100, "role": "scale", "scale": {"div": 100, "min": 0.0}, "description": "scale, 100 = normal"},
+  {"name": "yaw", "offset": "0x0C", "type": "s16", "unit": "angle16", "role": "yaw", "description": "facing"},
+  {"name": "cameraHeight", "offset": "0x0E", "type": "s16", "default": 75, "description": "opening camera height above the chest"},
+  {"name": "cameraDistance", "offset": "0x10", "type": "u16", "default": 200, "description": "opening camera distance"},
+  {"name": "cameraAngle", "offset": "0x12", "type": "s16", "default": 4096, "description": "opening camera angle, minus the chest's yaw"}
+ ]
+}

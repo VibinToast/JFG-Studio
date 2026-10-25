@@ -1,0 +1,17 @@
+{
+ "key": "ammo",
+ "name": "Ammo",
+ "ids": ["0xE8", "0xE7", "0xCF", "0x17E"],
+ "behaviour": 66,
+ "minSize": "0x10",
+ "category": "Pickups",
+ "hidden": false,
+ "status": "decoded",
+ "description": "Ammo pickups: full ammo (0xE8), the capacity upgrade (0xE7), extra ammo (0xCF) and a clip (0x17E). MSR 'Ammo'.",
+ "fields": [
+  {"name": "respawn", "offset": "0x0A", "type": "s8", "description": "respawn delay in seconds; 0 = gone for good"},
+  {"name": "weapon", "offset": "0x0B", "type": "u8", "description": "weapon number (0-15)"},
+  {"name": "yaw", "offset": "0x0C", "type": "u8", "unit": "angle8", "role": "yaw", "description": "facing"},
+  {"name": "upgrade", "offset": "0x0E", "type": "u16", "description": "capacity upgrade only: which one (saved as game flag 0x80 + n)"}
+ ]
+}

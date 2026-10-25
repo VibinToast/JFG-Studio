@@ -1,0 +1,16 @@
+{
+ "key": "damagecrate",
+ "name": "Breakable crate",
+ "ids": ["0x135", "0x168"],
+ "behaviour": 91,
+ "minSize": "0x0E",
+ "category": "Props",
+ "hidden": false,
+ "status": "decoded",
+ "description": "Crates, drums and other breakables. MSR 'Damage crate'.",
+ "fields": [
+  {"name": "size", "offset": "0x0B", "type": "u8", "default": 64, "role": "scale", "scale": {"div": 64, "min": 0.1}, "description": "scale, 64 = normal"},
+  {"name": "yaw", "offset": "0x0C", "type": "u8", "unit": "angle8", "role": "yaw", "description": "facing"},
+  {"name": "unused0D", "offset": "0x0D", "type": "u8", "default": 1, "description": "not read; stock writes 1"}
+ ]
+}

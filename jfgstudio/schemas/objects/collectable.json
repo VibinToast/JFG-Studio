@@ -1,0 +1,12 @@
+{
+ "key": "collectable",
+ "name": "Collectable",
+ "ids": [],
+ "behaviour": 59,
+ "minSize": "0x0C",
+ "category": "Pickups",
+ "hidden": false,
+ "status": "decoded",
+ "description": "Ship parts, sidekick parts, coins and other collectables: what each gives is fixed by its object id. No parameters. Set \"schema\": \"collectable\" on the object.",
+ "fields": []
+}

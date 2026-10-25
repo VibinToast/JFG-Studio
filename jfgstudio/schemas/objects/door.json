@@ -4,9 +4,13 @@
  "ids": [],
  "behaviour": 7,
  "minSize": "0x24",
+ "category": "Doors & switches",
+ "hidden": false,
  "status": "partial",
- "description": "A door that opens for the player inside a level (the level change is an exit behind it). Applies to every behaviour-7 type: set \"schema\": \"door\" on the object. Lock bits other than the squadron lock are not decoded yet.",
+ "description": "A door that opens for the player inside a level (the level change is an exit behind it). Applies to every behaviour-7 type. MSR 'Doors that open when a squadron is dead'.",
  "fields": [
-  {"name": "doorId", "offset": "0x14", "type": "u8", "link": "doorId", "description": "squadrons with this door id lock it (0 = none); only the first door with an id gets locked, so give each locked door its own id"}
+  {"name": "keyLock", "offset": "0x12", "type": "u8", "enum": {"0": "not locked", "1": "unlocked by squadron / switch", "2": "yellow key", "3": "red key", "4": "magenta key", "5": "green key", "6": "light blue key", "7": "lime key", "8": "purple key", "9": "tango key", "10": "lemon key", "11": "blue key"}, "description": "0 open; 1 locked until unlocked by a squadron or switch; n >= 2 needs item n - 2"},
+  {"name": "doorId", "offset": "0x14", "type": "u8", "link": "doorId", "description": "squadrons with this door id lock it (0 = none); only the first door with an id gets locked, so give each locked door its own id"},
+  {"name": "otherLocks", "offset": "0x22", "type": "u8", "description": "bits 0-3: hero not allowed; 0x80 needs Floyd; 0x40 needs game flag 0"}
  ]
 }

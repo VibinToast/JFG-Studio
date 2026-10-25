@@ -1,0 +1,17 @@
+{
+ "key": "cellswitch",
+ "name": "Shootable flag switch",
+ "ids": ["0x1EE"],
+ "behaviour": 116,
+ "minSize": "0x10",
+ "category": "Doors & switches",
+ "hidden": false,
+ "status": "decoded",
+ "description": "Sets a game flag when shot enough (flag triggers wait for it). MSR 'Shootable flag switch'.",
+ "fields": [
+  {"name": "gameFlag", "offset": "0x0A", "type": "u8", "link": "gameFlag", "description": "the game flag it sets"},
+  {"name": "hitPoints", "offset": "0x0B", "type": "u8", "default": 1, "description": "health in units"},
+  {"name": "yaw", "offset": "0x0C", "type": "s16", "unit": "angle16", "role": "yaw", "description": "facing"},
+  {"name": "pitch", "offset": "0x0E", "type": "s16", "unit": "angle16", "role": "pitch", "description": ""}
+ ]
+}

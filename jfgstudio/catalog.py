@@ -1,9 +1,11 @@
 """The local catalog (task S3): what Studio knows about the user's ROM, decoded once into the user's data folder.
 
     <data>/catalog/<sha1 prefix>/levels.json      every level: name, world, track, sky, object lists, music
-    <data>/catalog/<sha1 prefix>/objtypes.json    every object list id: its definition's name and behaviour
+    <data>/catalog/<sha1 prefix>/objtypes.json    every object list id: its definition's name, behaviour, models,
+                                                  scale, and where stock lists use it
     <data>/catalog/<sha1 prefix>/map.json         the planet map (points, discs, routes, entry levels)
     <data>/catalog/<sha1 prefix>/tracks/NNN.glb   a track's geometry, exported on first use
+    <data>/catalog/<sha1 prefix>/models/XXXX.glb  a model (rest pose), exported on first use
 
 All of it is derived from the user's ROM and stays on the user's machine: never in a project, a pack or the repo.
 """
@@ -15,11 +17,16 @@ from pathlib import Path
 from jfgstudio import formats, rom, settings
 
 OBJINDEX_ASSET, OBJDEF_TABLE, OBJDEF_DATA = 0x30, 0x2E, 0x2F
+CATALOG_FORMAT = 2  # objtypes.json is rebuilt when it is older
+EXAMPLES = 8  # stock entries kept per object type, for the Prefabs window's "start from" list
+ASSET_KINDS = {0: "models", 1: "sprites", 4: "textures"}
 
 
 def object_types(assets) -> dict[int, dict]:
-    """List object id -> {"name", "behaviour", "def"} from the object index (0x30) and definitions (0x2E/0x2F):
-    a definition's name is at +0x04 (16 bytes), its behaviour id the s16 at +0x1C."""
+    """List object id -> {"name", "behaviour", "def", "scale", "kind", "assets"} from the object index (0x30) and the
+    definitions (0x2E/0x2F), MSR D9: +0x00 f32 scale, +0x04 name (16 bytes), +0x1C s16 behaviour, +0x1E what +0x30
+    lists (0 models, 1 sprites, 4 textures), +0x1F how many, +0x30 the offset of their s32 ids (models: one per LOD,
+    bit 0x8000 = simple instance)."""
     jf = formats.load()
     index = assets.section(OBJINDEX_ASSET)
     objindex = struct.unpack(f">{len(index) // 2}h", index[:len(index) // 2 * 2])
@@ -29,9 +36,16 @@ def object_types(assets) -> dict[int, dict]:
     for oid, d in enumerate(objindex):
         if 0 <= d < count:
             raw = data[table[d]:table[d + 1]]
-            if len(raw) >= 0x1E:
-                out[oid] = {"name": raw[4:0x14].split(b"\0")[0].decode("ascii", "replace"),
-                            "behaviour": struct.unpack(">h", raw[0x1C:0x1E])[0], "def": d}
+            if len(raw) < 0x34:
+                continue
+            kind, n = struct.unpack_from(">bb", raw, 0x1E)
+            at = struct.unpack_from(">i", raw, 0x30)[0]
+            ids = ([struct.unpack_from(">i", raw, at + 4 * i)[0] & 0x7FFF for i in range(n)]
+                   if n > 0 and 0 <= at and at + 4 * n <= len(raw) else [])
+            out[oid] = {"name": raw[4:0x14].split(b"\0")[0].decode("ascii", "replace"),
+                        "behaviour": struct.unpack_from(">h", raw, 0x1C)[0], "def": d,
+                        "scale": round(struct.unpack_from(">f", raw, 0)[0], 6),
+                        "kind": ASSET_KINDS.get(kind, str(kind)), "assets": ids}
     return out
 
 
@@ -83,7 +97,17 @@ class Catalog:
                            "sky": f["track2"], "objectList0": f["objectList0"], "objectList1": f["objectList1"],
                            "tune": f["tune"], "region": f["region"]})
         self._write("levels.json", levels)
-        self._write("objtypes.json", {f"0x{k:X}": v for k, v in object_types(self.assets).items()})
+        types = object_types(self.assets)
+        lists = self.pair(self.levels_mod.OBJLIST_TABLE, self.levels_mod.OBJLIST_DATA)
+        for n, raw in enumerate(lists):
+            for i, e in enumerate(self.levels_mod.objlist_entries(raw)):
+                if e is not None and e[0] in types:
+                    t = types[e[0]]
+                    t["uses"] = t.get("uses", 0) + 1
+                    if len(t.setdefault("examples", [])) < EXAMPLES:
+                        t["examples"].append([n, i])
+        self._write("objtypes.json", {"format": CATALOG_FORMAT,
+                                      "types": {f"0x{k:X}": v for k, v in types.items()}})
         self._write("map.json", self.mapdata.decode_map(bytearray(self.image)))
         log(f"catalog: {len(levels)} levels, map, object types -> {self.dir}")
         return self.dir
@@ -97,6 +121,32 @@ class Catalog:
             data = models.ModelData(self.assets)
             tracks.export_track(data, tracks.read_track(tracks.TrackData(self.assets).track(track_id)), track_id,
                                 str(path))
+        return path
+
+    def objtypes(self) -> dict[int, dict]:
+        """objtypes.json (built when missing or older than this Studio's format), by object id."""
+        path = self.dir / "objtypes.json"
+        doc = None
+        if path.exists():
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+        if not doc or doc.get("format") != CATALOG_FORMAT:
+            self.build(log=lambda _: None)
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+        return {int(k, 16): v for k, v in doc["types"].items()}
+
+    def model_glb(self, model_id: int) -> Path:
+        """A model in its rest pose as .glb in the catalog (exported the first time)."""
+        from jfgformats import models
+        path = self.dir / "models" / f"{model_id:04X}.glb"
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not hasattr(self, "_models"):
+                self._models = models.ModelData(self.assets)
+            tmp = path.with_suffix(".tmp")
+            models.export_gltf(self._models, self._models.model(model_id), str(tmp), False)
+            tmp.replace(path)
         return path
 
     def _write(self, name: str, doc) -> None:

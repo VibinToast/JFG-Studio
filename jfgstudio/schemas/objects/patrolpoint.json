@@ -1,0 +1,21 @@
+{
+ "key": "patrolpoint",
+ "name": "Patrol point",
+ "ids": ["0x61"],
+ "behaviour": null,
+ "minSize": "0x16",
+ "category": "Enemies & navigation",
+ "hidden": true,
+ "status": "partial",
+ "description": "A node of the squad patrol network. Node numbers run 1..N with no gaps. MSR 'Squad patrol network'.",
+ "fields": [
+  {"name": "command", "offset": "0x0A", "type": "u8", "default": 1, "description": "done on arrival (0 or 1 = none)"},
+  {"name": "arg1", "offset": "0x0B", "type": "u8", "description": "the command's first argument (command 8: chance of not stopping)"},
+  {"name": "arg2", "offset": "0x0C", "type": "u8", "description": "second argument (command 8: heading)"},
+  {"name": "arg3", "offset": "0x0D", "type": "u8", "description": "third argument"},
+  {"name": "wait", "offset": "0x0E", "type": "u8", "description": "wait time at the node"},
+  {"name": "node", "offset": "0x0F", "type": "u8", "link": "patrolNode", "description": "node number 1..N, unique"},
+  {"name": "flags", "offset": "0x10", "type": "u8", "description": "0x02 sniper point; 0x04 sets squad flag 0x1000 while heading here"},
+  {"name": "startAtLoad", "offset": "0x15", "type": "s8", "description": "low 2 bits non-zero: the nearest patrolling squadron starts at level load"}
+ ]
+}

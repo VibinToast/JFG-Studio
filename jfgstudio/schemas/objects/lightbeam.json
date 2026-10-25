@@ -1,0 +1,31 @@
+{
+ "key": "lightbeam",
+ "name": "Light beam",
+ "ids": ["0xC3"],
+ "behaviour": 68,
+ "minSize": "0x24",
+ "category": "Lights & effects",
+ "hidden": true,
+ "status": "decoded",
+ "description": "A see-through shaft of light (lights nothing). MSR 'Light beam'.",
+ "fields": [
+  {"name": "width", "offset": "0x0A", "type": "u16", "default": 60, "description": "opening width"},
+  {"name": "height", "offset": "0x0C", "type": "u16", "default": 60, "description": "opening height"},
+  {"name": "spreadX", "offset": "0x0E", "type": "s16", "description": "spread point (object space)"},
+  {"name": "spreadY", "offset": "0x10", "type": "s16", "description": ""},
+  {"name": "spreadZ", "offset": "0x12", "type": "s16", "default": 300, "description": ""},
+  {"name": "fadeStart", "offset": "0x14", "type": "u8", "default": 10, "description": ""},
+  {"name": "fadeEnd", "offset": "0x15", "type": "u8", "default": 50, "description": ""},
+  {"name": "red", "offset": "0x16", "type": "u8", "default": 255, "description": "far end colour"},
+  {"name": "green", "offset": "0x17", "type": "u8", "default": 255, "description": ""},
+  {"name": "blue", "offset": "0x18", "type": "u8", "default": 255, "description": ""},
+  {"name": "alpha", "offset": "0x19", "type": "u8", "default": 128, "description": "opacity at the opening"},
+  {"name": "length", "offset": "0x1A", "type": "u16", "default": 200, "description": "beam length"},
+  {"name": "widthPct", "offset": "0x1C", "type": "u8", "default": 100, "description": ""},
+  {"name": "heightPct", "offset": "0x1D", "type": "u8", "default": 100, "description": ""},
+  {"name": "flags", "offset": "0x1E", "type": "u8", "default": 7, "description": "0x2 draws the far end (stock 7 or 2)"},
+  {"name": "roll", "offset": "0x1F", "type": "s8", "role": "roll", "description": "rotation.z = value << 6"},
+  {"name": "pitch", "offset": "0x20", "type": "s16", "unit": "angle16", "role": "pitch", "description": ""},
+  {"name": "yaw", "offset": "0x22", "type": "s16", "unit": "angle16", "role": "yaw", "description": "facing"}
+ ]
+}

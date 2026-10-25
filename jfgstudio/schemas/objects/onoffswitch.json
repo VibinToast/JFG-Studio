@@ -1,0 +1,20 @@
+{
+ "key": "onoffswitch",
+ "name": "Shot switch",
+ "ids": ["0x190"],
+ "behaviour": 96,
+ "minSize": "0x14",
+ "category": "Doors & switches",
+ "hidden": false,
+ "status": "decoded",
+ "description": "Starts and holds an animation path when shot. MSR 'Shot switch'.",
+ "fields": [
+  {"name": "startsOn", "offset": "0x0A", "type": "u8", "description": "bit 0: on at load"},
+  {"name": "path", "offset": "0x0B", "type": "u8", "description": "animation path index"},
+  {"name": "mode", "offset": "0x0C", "type": "u8", "enum": {"0": "toggle", "1": "timed"}, "description": "how a hit works"},
+  {"name": "size", "offset": "0x0D", "type": "u8", "default": 20, "role": "scale", "scale": {"div": 20, "min": 0.0}, "description": "scale, 20 = normal"},
+  {"name": "yaw", "offset": "0x0E", "type": "s16", "unit": "angle16", "role": "yaw", "description": "facing"},
+  {"name": "pitch", "offset": "0x10", "type": "s16", "unit": "angle16", "role": "pitch", "description": ""},
+  {"name": "time", "offset": "0x12", "type": "u16", "description": "timed mode: on for this many tenths of a second"}
+ ]
+}

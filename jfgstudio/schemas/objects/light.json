@@ -1,0 +1,27 @@
+{
+ "key": "light",
+ "name": "Light",
+ "ids": ["0x10"],
+ "behaviour": 30,
+ "minSize": "0x20",
+ "category": "Lights & effects",
+ "hidden": true,
+ "status": "decoded",
+ "description": "A coloured light for objects and (flag 0x40) the track. The level header's light slots (+0x104) limit them. MSR 'Light'.",
+ "fields": [
+  {"name": "kind", "offset": "0x0A", "type": "u8", "default": 19, "enum": {"3": "directional", "19": "point", "35": "cylinder", "51": "spot"}, "description": "high 4 bits: 0 directional, 1 point, 2 cylinder, 3 spot; low 4 bits: falloff"},
+  {"name": "spot", "offset": "0x0B", "type": "u8", "description": "(value & 0xE0) == 0x40 makes it a spot"},
+  {"name": "red", "offset": "0x0C", "type": "u8", "default": 255, "description": ""},
+  {"name": "green", "offset": "0x0D", "type": "u8", "default": 255, "description": ""},
+  {"name": "blue", "offset": "0x0E", "type": "u8", "default": 255, "description": ""},
+  {"name": "intensity", "offset": "0x0F", "type": "u8", "default": 255, "description": "0 = off"},
+  {"name": "radius", "offset": "0x10", "type": "s16", "default": 300, "description": "reach"},
+  {"name": "halfHeight", "offset": "0x12", "type": "s16", "default": 8, "description": "cylinder only"},
+  {"name": "pitch", "offset": "0x16", "type": "s16", "unit": "angle16", "description": "direction (directional and spot)"},
+  {"name": "yaw", "offset": "0x18", "type": "s16", "unit": "angle16", "description": "direction (directional and spot)"},
+  {"name": "pitchSpeed", "offset": "0x1A", "type": "s16", "description": "added each frame"},
+  {"name": "yawSpeed", "offset": "0x1C", "type": "s16", "description": "added each frame"},
+  {"name": "colourCycle", "offset": "0x1E", "type": "u8", "default": 8, "description": "0-6 follow a header colour cycle; 7 or more = fixed"},
+  {"name": "flags", "offset": "0x1F", "type": "u8", "default": 64, "description": "0x40 also lights the track; 0x01 does not light objects"}
+ ]
+}

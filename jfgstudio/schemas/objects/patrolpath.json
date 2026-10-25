@@ -1,0 +1,17 @@
+{
+ "key": "patrolpath",
+ "name": "Patrol link",
+ "ids": ["0x60"],
+ "behaviour": null,
+ "minSize": "0x10",
+ "category": "Enemies & navigation",
+ "hidden": true,
+ "status": "partial",
+ "description": "A link between two patrol points (at most 6 outgoing links per node).",
+ "fields": [
+  {"name": "nodeA", "offset": "0x0A", "type": "u8", "link": "patrolNode", "description": "node number"},
+  {"name": "nodeB", "offset": "0x0B", "type": "u8", "link": "patrolNode", "description": "node number"},
+  {"name": "weight", "offset": "0x0C", "type": "u8", "default": 1, "description": "low 5 bits: how likely this link is picked (0 = never at random)"},
+  {"name": "flags", "offset": "0x0F", "type": "u8", "default": 192, "enum": {"64": "A to B", "128": "B to A", "192": "two-way"}, "description": "0x40 A -> B, 0x80 B -> A (0xC0 two-way)"}
+ ]
+}

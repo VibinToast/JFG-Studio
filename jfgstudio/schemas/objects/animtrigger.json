@@ -1,0 +1,21 @@
+{
+ "key": "animtrigger",
+ "name": "Animation trigger",
+ "ids": ["0xC2"],
+ "behaviour": 52,
+ "minSize": "0x16",
+ "category": "Doors & switches",
+ "hidden": true,
+ "status": "decoded",
+ "description": "Starts an animation path or group when a player comes near (lifts, platforms). MSR 'Lifts and moving platforms'.",
+ "fields": [
+  {"name": "radius", "offset": "0x0A", "type": "u16", "default": 100, "description": "trigger radius"},
+  {"name": "exitRadius", "offset": "0x0C", "type": "u16", "default": 150, "description": "with pauseOnExit, leaving this radius pauses again"},
+  {"name": "ignoreHeight", "offset": "0x0E", "type": "u8", "description": "0 = sphere, non-zero = cylinder"},
+  {"name": "index", "offset": "0x0F", "type": "u8", "description": "path index (flag 0x80) or group index"},
+  {"name": "flags", "offset": "0x10", "type": "u8", "description": "0x80 path; 0x40 explosion triggers it; 0x20 no group set-up; 0x01 keep playing"},
+  {"name": "pauseOnExit", "offset": "0x11", "type": "u8", "description": "non-zero: pause on leaving the exit radius"},
+  {"name": "pathSound", "offset": "0x12", "type": "s16", "description": "sound started on the path, 0 = none"},
+  {"name": "sound", "offset": "0x14", "type": "s16", "description": "one-shot sound on entry, 0 = none"}
+ ]
+}

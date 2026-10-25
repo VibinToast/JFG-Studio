@@ -30,10 +30,33 @@ class Objects(unittest.TestCase):
         self.schemas = obj.load_schemas()
 
     def test_schemas_load(self):
-        self.assertEqual(set(self.schemas), {"exit", "startpoint", "squadron", "squadmember", "door", "regionpoint"})
+        self.assertTrue({"exit", "startpoint", "squadron", "squadmember", "door", "regionpoint", "chest", "light"}
+                        <= set(self.schemas))
+        ids = [i for s in self.schemas.values() for i in s.ids]
+        self.assertEqual(len(ids), len(set(ids)), "an object id is in two schemas")
+        for s in self.schemas.values():
+            ends = sorted((f.offset, f.end, f.name) for f in s.fields)
+            for a, b in zip(ends, ends[1:], strict=False):
+                self.assertLessEqual(a[1], b[0], f"{s.key}: {a[2]} overlaps {b[2]}")
+            for f in s.fields:
+                self.assertGreaterEqual(f.offset, obj.PARAMS_OFFSET, f"{s.key}.{f.name}")
+                self.assertLessEqual(f.end, s.min_size, f"{s.key}.{f.name}")
         self.assertEqual(self.schemas["squadron"].min_size, 0x44)
         self.assertEqual(self.schemas["door"].min_size, 0x24)
         self.assertEqual(self.schemas["exit"].min_size, 0x1C)
+
+    def test_schema_lookup_and_angles(self):
+        self.assertEqual(obj.schema_for_id(0x1AA, self.schemas).key, "chest")
+        self.assertIsNone(obj.schema_for_id(0x999, self.schemas))
+        self.assertEqual(obj.schema_for_id(0x999, self.schemas, {0x999: 7}).key, "door")
+        chest = self.schemas["chest"]
+        self.assertEqual(chest.field("contents").enum[0], "shotgun (weapon 3)")
+        self.assertEqual(chest.defaults()["size"], 100)
+        yaw = chest.role("yaw")
+        self.assertEqual(obj.value_of_angle(yaw, obj.angle_of(yaw, -0x4000)), -0x4000)
+        byte = self.schemas["ammo"].role("yaw")
+        self.assertEqual(obj.value_of_angle(byte, obj.angle_of(byte, 0xC0)), 0xC0)
+        self.assertAlmostEqual(obj.scale_of(self.schemas["key"].role("scale"), 32), 0.5)
 
     def test_entry_round_trip(self):
         s = self.schemas["exit"]
@@ -228,3 +251,24 @@ class Cli(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CrashLog(unittest.TestCase):
+    def test_write(self):
+        from jfgstudio import crashlog
+        with tempfile.TemporaryDirectory() as tmp:
+            old = os.environ.get("JFGSTUDIO_DATA_DIR")
+            os.environ["JFGSTUDIO_DATA_DIR"] = tmp
+            try:
+                try:
+                    raise ValueError("boom")
+                except ValueError as e:
+                    path = crashlog.write(e, "a test")
+                text = path.read_text(encoding="utf-8")
+            finally:
+                if old is None:
+                    del os.environ["JFGSTUDIO_DATA_DIR"]
+                else:
+                    os.environ["JFGSTUDIO_DATA_DIR"] = old
+        self.assertIn("where: a test", text)
+        self.assertIn("ValueError: boom", text)

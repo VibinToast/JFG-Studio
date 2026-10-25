@@ -1,0 +1,19 @@
+{
+ "key": "doorswitch",
+ "name": "Door lock light",
+ "ids": ["0xDE", "0xD0", "0xD1", "0xD2", "0xD3", "0xD4", "0xD5", "0xD6", "0xD7", "0xD8", "0xD9"],
+ "behaviour": 67,
+ "minSize": "0x10",
+ "category": "Doors & switches",
+ "hidden": false,
+ "status": "decoded",
+ "description": "The light beside a locked door: lights when the door unlocks, or mirrors the door. MSR 'Door switch'.",
+ "fields": [
+  {"name": "yaw", "offset": "0x0A", "type": "u8", "unit": "angle8", "role": "yaw", "description": "facing"},
+  {"name": "pitch", "offset": "0x0B", "type": "u8", "unit": "angle8", "role": "pitch", "description": ""},
+  {"name": "roll", "offset": "0x0C", "type": "u8", "unit": "angle8", "role": "roll", "description": ""},
+  {"name": "size", "offset": "0x0D", "type": "u8", "default": 64, "role": "scale", "scale": {"div": 64, "min": 0.15625}, "description": "scale, 64 = normal (under 10 counts as 10)"},
+  {"name": "cutscene", "offset": "0x0E", "type": "u8", "description": "camera cutscene played once on unlock, 0 = none"},
+  {"name": "follow", "offset": "0x0F", "type": "u8", "description": "0: lock light; non-zero: mirrors the door"}
+ ]
+}

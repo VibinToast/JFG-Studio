@@ -1,0 +1,17 @@
+{
+ "key": "staticprop",
+ "name": "Static prop",
+ "ids": ["0xA8", "0x87"],
+ "behaviour": 54,
+ "minSize": "0x0E",
+ "category": "Props",
+ "hidden": false,
+ "status": "decoded",
+ "description": "Static crates and props that block shots. MSR 'Static crate and props'.",
+ "fields": [
+  {"name": "model", "offset": "0x0A", "type": "u8", "description": "which of the definition's models to show"},
+  {"name": "size", "offset": "0x0B", "type": "u8", "default": 64, "role": "scale", "scale": {"div": 64, "min": 0.15625}, "description": "scale, 64 = normal"},
+  {"name": "yaw", "offset": "0x0C", "type": "u8", "unit": "angle8", "role": "yaw", "description": "facing"},
+  {"name": "unused0D", "offset": "0x0D", "type": "u8", "default": 1, "description": "not read; stock writes 1"}
+ ]
+}

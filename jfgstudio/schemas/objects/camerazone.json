@@ -1,0 +1,23 @@
+{
+ "key": "camerazone",
+ "name": "Camera zone",
+ "ids": ["0x82"],
+ "behaviour": 19,
+ "minSize": "0x1E",
+ "category": "Lights & effects",
+ "hidden": true,
+ "status": "decoded",
+ "description": "Changes the player camera inside a zone. MSR 'Camera zone'.",
+ "fields": [
+  {"name": "enterRadius", "offset": "0x0A", "type": "u16", "default": 200, "description": ""},
+  {"name": "leaveRadius", "offset": "0x0C", "type": "u16", "default": 250, "description": ""},
+  {"name": "flags", "offset": "0x0E", "type": "u16", "default": 1, "description": "0x1 height; 0x2 distance; 0x4 fixed point; 0x4000 / 0x8000 height limits"},
+  {"name": "height", "offset": "0x10", "type": "s16", "default": 90, "description": "added camera height"},
+  {"name": "distance", "offset": "0x12", "type": "s16", "description": "added camera distance"},
+  {"name": "cameraX", "offset": "0x14", "type": "s16", "description": "fixed point offset"},
+  {"name": "cameraY", "offset": "0x16", "type": "s16", "description": ""},
+  {"name": "cameraZ", "offset": "0x18", "type": "s16", "description": ""},
+  {"name": "enterHalfHeight", "offset": "0x1A", "type": "s16", "default": 17, "description": ""},
+  {"name": "leaveHalfHeight", "offset": "0x1C", "type": "s16", "default": 25, "description": ""}
+ ]
+}

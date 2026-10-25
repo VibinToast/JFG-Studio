@@ -2,9 +2,10 @@
 
 The track comes from a `.glb` (the project's geometry, or a stock track exported into the local catalog), drawn the
 way the game does: vertex colours times the texture, with the level's fog. Water is translucent, lava tinted, kill
-planes red, invisible colliders as wireframe. Objects are markers (no stock models yet: phase 2): a post with a head
-per kind, rings for exit radii, region polygons on the floor, and lines from members to their squadron and from a
-squadron to the door it locks.
+planes red, invisible colliders as wireframe. Objects with a model in the user's catalog are drawn with it, in its rest
+pose, turned and scaled the way the entry says; the rest (zones, lights, markers the game doesn't draw) are markers: a
+post with a head per kind, rings for exit radii, region polygons on the floor, and lines from members to their
+squadron and from a squadron to the door it locks.
 
 The camera works like an engine editor's: right mouse to look with WASD / Q E to fly (Shift faster, the wheel sets the
 speed), middle mouse to pan, Alt + left to orbit around the selection, F to frame it.
@@ -20,10 +21,10 @@ from jfgstudio import formats
 
 TRACK_VS = """
 #version 330
-uniform mat4 mvp;
+uniform mat4 mvp; uniform mat4 model;
 in vec3 in_pos; in vec2 in_uv; in vec4 in_col;
 out vec2 uv; out vec4 col; out float depth;
-void main() { gl_Position = mvp * vec4(in_pos, 1.0); uv = in_uv; col = in_col; depth = gl_Position.w; }
+void main() { gl_Position = mvp * model * vec4(in_pos, 1.0); uv = in_uv; col = in_col; depth = gl_Position.w; }
 """
 TRACK_FS = """
 #version 330
@@ -129,9 +130,12 @@ def _node_matrix(node: dict) -> np.ndarray:
 
 
 class TrackMesh:
-    """A track .glb as triangles per material: positions, UVs, colours, and what kind of surface each is."""
+    """A .glb as triangles per material: positions, UVs, colours, and what kind of surface each is. Tracks read the
+    surface from the material; a model (`surfaces=False`) is solid all over. A skinned model is drawn in its rest
+    pose: each vertex through its joints' rest matrices and inverse bind matrices."""
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, surfaces: bool = True):
+        self.surfaces = surfaces
         jf = formats.load()
         from jfgformats import gltf, png
         doc, blob = gltf.read_glb(path)
@@ -139,24 +143,38 @@ class TrackMesh:
         self.images = {}
         nodes = doc.get("nodes", [])
 
+        world = {}
+
         def walk(index, parent):
-            node = nodes[index]
-            m = parent @ _node_matrix(node)
-            if "mesh" in node:
-                self._mesh(doc, blob, doc["meshes"][node["mesh"]], m, gltf, png)
-            for child in node.get("children", []):
-                walk(child, m)
+            world[index] = parent @ _node_matrix(nodes[index])
+            for child in nodes[index].get("children", []):
+                walk(child, world[index])
 
         roots = doc.get("scenes", [{}])[doc.get("scene", 0)].get("nodes", list(range(len(nodes)))) if nodes else []
         for r in roots:
             walk(r, np.identity(4))
+        for index in sorted(world):
+            node = nodes[index]
+            if "mesh" not in node:
+                continue
+            skin = None
+            if "skin" in node:
+                sk = doc["skins"][node["skin"]]
+                joints = sk["joints"]
+                inverse = (np.array(gltf.read_accessor(doc, blob, sk["inverseBindMatrices"]), "f8").reshape(-1, 4, 4)
+                           .transpose(0, 2, 1) if "inverseBindMatrices" in sk else np.tile(np.identity(4),
+                                                                                           (len(joints), 1, 1)))
+                skin = np.array([world.get(j, np.identity(4)) @ inverse[k] for k, j in enumerate(joints)])
+            self._mesh(doc, blob, doc["meshes"][node["mesh"]], world[index], gltf, png, skin)
         tris = [p[0] for p in self.parts if p[5] not in ("nocollide", "water", "kill")]
         self.collision = np.concatenate(tris).reshape(-1, 3, 3) if tris else np.zeros((0, 3, 3))
+        tris = [p[0] for p in self.parts if p[5] != "hidden"]
+        self.visible = np.concatenate(tris).reshape(-1, 3, 3) if tris else np.zeros((0, 3, 3))
         allpos = np.concatenate([p[0] for p in self.parts]) if self.parts else np.zeros((1, 3))
         self.bounds = (allpos.min(axis=0), allpos.max(axis=0))
         self.version = jf.__version__
 
-    def _mesh(self, doc, blob, mesh, matrix, gltf, png):
+    def _mesh(self, doc, blob, mesh, matrix, gltf, png, skin=None):
         for prim in mesh.get("primitives", []):
             if prim.get("mode", 4) != 4:
                 continue
@@ -173,10 +191,19 @@ class TrackMesh:
                     col = np.hstack([col, np.ones((count, 1), "f4")])
             else:
                 col = np.ones((count, 4), "f4")
-            homog = np.hstack([pos, np.ones((count, 1), "f4")]) @ matrix.T
-            pos = homog[:, :3].astype("f4")
+            homog = np.hstack([pos, np.ones((count, 1), "f4")])
+            if skin is not None and "JOINTS_0" in attrs and "WEIGHTS_0" in attrs:
+                joints = np.array(gltf.read_accessor(doc, blob, attrs["JOINTS_0"]), "i4")
+                weights = np.array(gltf.read_accessor(doc, blob, attrs["WEIGHTS_0"]), "f8")
+                weights /= np.maximum(weights.sum(axis=1, keepdims=True), 1e-9)
+                blended = np.einsum("nk,nkij->nij", weights, skin[np.clip(joints, 0, len(skin) - 1)])
+                pos = np.einsum("nij,nj->ni", blended, homog)[:, :3].astype("f4")  # a skinned mesh ignores its node
+            else:
+                pos = (homog @ matrix.T)[:, :3].astype("f4")
             idx = np.array(idx, "i4")
             mat = doc.get("materials", [{}])[prim["material"]] if "material" in prim else {}
+            if not self.surfaces:
+                col[:, 3] = 1.0  # a model's vertex alpha is not its opacity (many are 0); texture alpha still cuts out
             image, size = None, (1, 1)
             tex = mat.get("pbrMetallicRoughness", {}).get("baseColorTexture")
             if tex is not None:
@@ -188,7 +215,7 @@ class TrackMesh:
                     except Exception:  # an image Studio can't read draws untextured
                         self.images[key] = (None, (1, 1))
                 image, size = self.images[key]
-            self.parts.append((pos[idx], uv[idx], col[idx], image, size, _surface(mat)))
+            self.parts.append((pos[idx], uv[idx], col[idx], image, size, _surface(mat) if self.surfaces else "solid"))
 
     def floor_height(self, x: float, z: float, below: float | None = None) -> float | None:
         """The highest floor under (x, z) (below a height when given): a ray down against the solid triangles."""
@@ -213,6 +240,26 @@ class TrackMesh:
         if below is not None:
             ys = ys[ys <= below + 1.0]
         return float(ys.max()) if len(ys) else None
+
+
+def raycast(triangles: np.ndarray, origin, direction) -> float | None:
+    """Distance along a ray to the nearest of the triangles (n, 3, 3), or None (Moller-Trumbore, both sides)."""
+    if not len(triangles):
+        return None
+    o, d = np.asarray(origin, "f8"), np.asarray(direction, "f8")
+    a = triangles[:, 0].astype("f8")
+    e1, e2 = triangles[:, 1] - a, triangles[:, 2] - a
+    p = np.cross(d, e2)
+    det = np.einsum("ij,ij->i", e1, p)
+    ok = np.abs(det) > 1e-9
+    inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+    t_vec = o - a
+    u = np.einsum("ij,ij->i", t_vec, p) * inv
+    q = np.cross(t_vec, e1)
+    v = (q @ d) * inv
+    t = np.einsum("ij,ij->i", e2, q) * inv
+    hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 1e-3)
+    return float(t[hit].min()) if hit.any() else None
 
 
 def _surface(mat: dict) -> str:
@@ -245,6 +292,8 @@ class Viewport:
         self.show_fog = True
         self.show_hidden = True
         self.error = ""
+        self.models = {}  # .glb path -> TrackMesh (or None when it could not be read)
+        self.model_parts = {}  # .glb path -> uploaded parts
 
     def _init(self):
         self.ctx = moderngl.create_context()
@@ -268,9 +317,19 @@ class Viewport:
         except Exception as e:  # shown in the Scene window, not raised into the editor
             self.error = f"can't show {path}: {e}"
 
-    def _upload(self):
+    def model(self, path: str) -> "TrackMesh | None":
+        """A model .glb, read once."""
+        if path not in self.models:
+            try:
+                self.models[path] = TrackMesh(path, surfaces=False)
+            except Exception:  # an unreadable model is drawn as a marker
+                self.models[path] = None
+        return self.models[path]
+
+    def _upload(self, mesh=None):
         textures = {}
-        for pos, uv, col, image, size, kind in self.mesh.parts:
+        out = [] if mesh is not None else self.gpu_parts
+        for pos, uv, col, image, size, kind in (mesh or self.mesh).parts:
             data = np.hstack([pos, uv, col]).astype("f4")
             vbo = self.ctx.buffer(data.tobytes())
             vao = self.ctx.vertex_array(self.track_prog, [(vbo, "3f 2f 4f", "in_pos", "in_uv", "in_col")])
@@ -283,10 +342,12 @@ class Viewport:
                     t.filter = (moderngl.LINEAR, moderngl.LINEAR)
                     textures[key] = t
                 tex = textures[key]
-            self.gpu_parts.append((vao, len(data), tex, kind))
+            out.append((vao, len(data), tex, kind))
+        return out
 
-    def render(self, width: int, height: int, camera: Camera, lines: np.ndarray) -> int | None:
-        """Draws into the off-screen texture; returns its GL id, or None when there is nothing to show."""
+    def render(self, width: int, height: int, camera: Camera, lines: np.ndarray, instances=()) -> int | None:
+        """Draws into the off-screen texture; returns its GL id, or None when there is nothing to show.
+        `instances`: (model .glb path, 4x4 model matrix, tint rgba) for every object drawn with its model."""
         if width < 8 or height < 8:
             return None
         if self.ctx is None:
@@ -309,6 +370,7 @@ class Viewport:
         self.ctx.enable(moderngl.DEPTH_TEST)
         prog = self.track_prog
         prog["mvp"].write(mvp.T.tobytes())
+        prog["model"].write(np.identity(4, "f4").tobytes())
         fog_on = bool(self.fog) and self.show_fog
         prog["fog_on"].value = fog_on
         if self.fog:
@@ -335,6 +397,18 @@ class Viewport:
                 self.ctx.wireframe = False
                 self.ctx.depth_mask = True
                 self.ctx.disable(moderngl.BLEND)
+        prog["alpha"].value = 1.0
+        for path, matrix, tint in instances:
+            if path not in self.model_parts:
+                mesh = self.model(path)
+                self.model_parts[path] = self._upload(mesh) if mesh is not None else []
+            prog["model"].write(np.asarray(matrix, "f4").T.tobytes())
+            prog["tint"].value = tuple(tint)
+            for vao, count, tex, _ in self.model_parts[path]:
+                prog["textured"].value = tex is not None
+                (tex or self.white).use(0)
+                vao.render(moderngl.TRIANGLES, vertices=count)
+        prog["model"].write(np.identity(4, "f4").tobytes())
         if len(lines):
             self.line_prog["mvp"].write(mvp.T.tobytes())
             vbo = self.ctx.buffer(lines.astype("f4").tobytes())
@@ -359,9 +433,11 @@ def project(camera: Camera, size, point) -> tuple[float, float] | None:
     return ((x + 1) * 0.5 * w, (1 - y) * 0.5 * h)
 
 
-def marker_lines(objects: list, keys: dict, selection: set, links: list) -> np.ndarray:
-    """Line vertices (x, y, z, r, g, b, a) for every object's marker, ring and link."""
+def marker_lines(objects: list, keys: dict, selection: set, links: list, boxes: dict | None = None) -> np.ndarray:
+    """Line vertices (x, y, z, r, g, b, a) for every object's marker, ring and link. `boxes`: uid -> the 8 world
+    corners of the model an object is drawn with; those get no post, and a box when selected."""
     out = []
+    boxes = boxes or {}
 
     def seg(a, b, c):
         out.append((*a, *c))
@@ -371,6 +447,13 @@ def marker_lines(objects: list, keys: dict, selection: set, links: list) -> np.n
         x, y, z = (float(v) for v in o["pos"])
         key = keys.get(o["uid"])
         col = SELECTED_COLOUR if o["uid"] in selection else KIND_COLOURS.get(key, OTHER_COLOUR)
+        if o["uid"] in boxes:
+            if o["uid"] in selection:
+                c = boxes[o["uid"]]
+                for i, j in ((0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3), (2, 6), (3, 7), (4, 5), (4, 6), (5, 7),
+                             (6, 7)):
+                    seg(c[i], c[j], col)
+            continue
         if key == "regionpoint":
             seg((x, y, z), (x, y + 15, z), col)
             continue
@@ -445,13 +528,37 @@ def unpack_matrix(values) -> np.ndarray:
     return np.array(list(values), "f8").reshape(4, 4).T
 
 
-def object_matrix(pos, yaw: float = 0.0) -> np.ndarray:
+def object_matrix(pos, yaw: float = 0.0, pitch: float = 0.0, roll: float = 0.0, scale: float = 1.0) -> np.ndarray:
+    """Translation, then yaw (about y), pitch (about x), roll (about z), then a uniform scale."""
+    def rot(i, j, a):
+        r = np.identity(4)
+        c, s = math.cos(a), math.sin(a)
+        r[i, i], r[i, j], r[j, i], r[j, j] = c, s, -s, c
+        return r
     m = np.identity(4)
-    c, s = math.cos(yaw), math.sin(yaw)
-    m[0, 0], m[0, 2], m[2, 0], m[2, 2] = c, s, -s, c
     m[:3, 3] = pos
-    return m
+    return m @ rot(0, 2, yaw) @ rot(1, 2, pitch) @ rot(0, 1, roll) @ np.diag([scale, scale, scale, 1.0])
 
 
-__all__ = ["Camera", "TrackMesh", "Viewport", "decode_fog", "marker_lines", "object_matrix", "pack_matrix",
-           "project", "region_links", "struct", "unpack_matrix"]
+def box_corners(bounds, matrix) -> list[tuple]:
+    """The 8 corners of a model's bounds (lo, hi) in world space."""
+    lo, hi = bounds
+    pts = np.array([[(hi if i & 1 else lo)[0], (hi if i & 2 else lo)[1], (hi if i & 4 else lo)[2], 1.0]
+                    for i in range(8)])
+    return [tuple(p[:3]) for p in pts @ np.asarray(matrix).T]
+
+
+def screen_ray(camera: Camera, size, mx: float, my: float):
+    """World origin and unit direction of the ray under a pixel of the Scene image."""
+    w, h = size
+    inv = np.linalg.inv(camera.projection(w / h) @ camera.view())
+    ndc = (2 * mx / w - 1, 1 - 2 * my / h)
+    near = inv @ np.array([*ndc, -1.0, 1.0])
+    far = inv @ np.array([*ndc, 1.0, 1.0])
+    a, b = near[:3] / near[3], far[:3] / far[3]
+    d = b - a
+    return a, d / np.linalg.norm(d)
+
+
+__all__ = ["Camera", "TrackMesh", "Viewport", "box_corners", "decode_fog", "marker_lines", "object_matrix",
+           "pack_matrix", "project", "raycast", "region_links", "screen_ray", "struct", "unpack_matrix"]

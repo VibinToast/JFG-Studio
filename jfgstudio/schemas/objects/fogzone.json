@@ -1,0 +1,20 @@
+{
+ "key": "fogzone",
+ "name": "Fog zone",
+ "ids": ["0x09"],
+ "behaviour": 9,
+ "minSize": "0x14",
+ "category": "Lights & effects",
+ "hidden": true,
+ "status": "decoded",
+ "description": "Changes the fog inside a circle. MSR 'Fog zone'.",
+ "fields": [
+  {"name": "radius8", "offset": "0x0A", "type": "u8", "default": 50, "description": "radius / 8"},
+  {"name": "red", "offset": "0x0B", "type": "u8", "description": ""},
+  {"name": "green", "offset": "0x0C", "type": "u8", "description": ""},
+  {"name": "blue", "offset": "0x0D", "type": "u8", "description": ""},
+  {"name": "near", "offset": "0x0E", "type": "s16", "default": 900, "description": "fog start"},
+  {"name": "far", "offset": "0x10", "type": "s16", "default": 1000, "description": "fog end (at most 0x3FF)"},
+  {"name": "fadeTime", "offset": "0x12", "type": "s16", "default": 60, "description": "ticks to change over; never 0"}
+ ]
+}
