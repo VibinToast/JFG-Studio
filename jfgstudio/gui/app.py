@@ -21,7 +21,7 @@ from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
 from jfgstudio import validate as val
-from jfgstudio.gui import level_tools, planet_tools, theme
+from jfgstudio.gui import level_tools, model_viewer, planet_tools, theme
 from jfgstudio.gui import viewport as vp
 
 gz = imguizmo.im_guizmo
@@ -1398,6 +1398,7 @@ def _layout() -> hello_imgui.DockingParams:
         win("Scene", "MainDockSpace", scene),
         win("Level Graph", "MainDockSpace", level_graph),
         win("Planet", "MainDockSpace", planet_tools.planet_window),
+        win("Models", "MainDockSpace", model_viewer.models_window),
         win("Hierarchy", "LeftSpace", hierarchy),
         win("Inspector", "RightSpace", labelled(inspector)),
         win("Level", "RightSpace", labelled(level_tools.level_window)),
