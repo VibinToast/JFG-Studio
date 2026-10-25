@@ -43,10 +43,11 @@ class Schema:
     fields: list[Field]
     status: str
     description: str = ""
+    size: int = 0  # the smallest entry the game's code reads (schema "minSize"); every stock size is even
     min_size: int = field(init=False)
 
     def __post_init__(self):
-        self.min_size = max([f.end for f in self.fields] + [PARAMS_OFFSET])
+        self.min_size = max([f.end for f in self.fields] + [PARAMS_OFFSET, self.size])
 
     def field(self, name: str) -> Field | None:
         return next((f for f in self.fields if f.name == name), None)
@@ -65,7 +66,8 @@ def load_schemas() -> dict[str, Schema]:
             if f.type not in _FORMATS:
                 raise ValueError(f"{item.name}: field {f.name} has unknown type {f.type}")
         out[doc["key"]] = Schema(doc["key"], doc["name"], [int(i, 0) for i in doc.get("ids", [])],
-                                 doc.get("behaviour"), fields, doc.get("status", "decoded"), doc.get("description", ""))
+                                 doc.get("behaviour"), fields, doc.get("status", "decoded"), doc.get("description", ""),
+                                 int(doc.get("minSize", "0"), 0))
     return out
 
 

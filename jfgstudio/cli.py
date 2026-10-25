@@ -56,6 +56,41 @@ def cmd_settings(args) -> int:
     return 0
 
 
+def cmd_build(args) -> int:
+    from jfgstudio import build, formats, rom
+
+    try:
+        project = proj.load(args.project)
+        out = args.out or str(project.path / "build" / f"{project.id}.nrm")
+        build.build(project, out, rom_path=args.rom)
+    except (proj.ProjectError, build.BuildError) as e:
+        for p in e.problems:
+            print(f"error: {p}")
+        return 1
+    except (formats.FormatsUnavailable, rom.RomError) as e:
+        print(f"error: {e}")
+        return 1
+    return 0
+
+
+def cmd_catalog(args) -> int:
+    from jfgstudio import formats, rom
+    from jfgstudio.catalog import Catalog
+
+    try:
+        Catalog.open(args.rom).build()
+    except (formats.FormatsUnavailable, rom.RomError) as e:
+        print(f"error: {e}")
+        return 1
+    return 0
+
+
+def cmd_test(args) -> int:
+    from jfgstudio import testrun
+
+    return testrun.main(args)
+
+
 def cmd_not_yet(args) -> int:
     print(f"jfgstudio {args.command}: not built yet (phase 0 task {args.task}, Docs/PHASE0_TASKS.md)")
     return 2
@@ -91,11 +126,24 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("value", nargs="?")
     s.set_defaults(run=cmd_settings)
 
-    for name, task, what in (("build", "S6", "build a .nrm"), ("test", "S8", "build and play in the port"),
-                             ("catalog", "S3", "build the local catalog from your ROM")):
-        c = sub.add_parser(name, help=f"{what} (not built yet)")
-        c.add_argument("rest", nargs="*")
-        c.set_defaults(run=cmd_not_yet, task=task)
+    b = sub.add_parser("build", help="build the project into a .nrm pack")
+    b.add_argument("project")
+    b.add_argument("-o", "--out", help="the .nrm to write (default: <project>/build/<id>.nrm)")
+    b.add_argument("--rom", help="your US ROM (default: the rom setting)")
+    b.set_defaults(run=cmd_build)
+
+    c = sub.add_parser("catalog", help="build the local catalog from your ROM (in your data folder)")
+    c.add_argument("--rom", help="your US ROM (default: the rom setting)")
+    c.set_defaults(run=cmd_catalog)
+
+    t = sub.add_parser("test", help="build, install into the port and start the game in a level")
+    t.add_argument("project")
+    t.add_argument("--level", help="pack level name or number (default: the first level)")
+    t.add_argument("--start-point", type=int, default=0)
+    t.add_argument("--character", choices=["vela", "juno", "lupus"], default="juno")
+    t.add_argument("--rom", help="your US ROM (default: the rom setting)")
+    t.add_argument("--no-launch", action="store_true", help="build and install, but don't start the game")
+    t.set_defaults(run=cmd_test)
     return ap
 
 

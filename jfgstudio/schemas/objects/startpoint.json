@@ -3,6 +3,7 @@
  "name": "Start point",
  "ids": ["0x0D"],
  "behaviour": 6,
+ "minSize": "0x0E",
  "status": "decoded",
  "description": "Where a player appears when a level is entered at this start point number. MSR mod #6, 'How levels link'.",
  "fields": [

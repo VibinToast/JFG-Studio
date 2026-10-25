@@ -1,0 +1,20 @@
+{
+ "format": 1,
+ "objects": [
+  {"fields": {"player": 0, "startPoint": 0, "yaw": 0}, "name": "Start", "pos": [0, 10, 0], "stock": {"entry": 0, "list": 424}, "type": "stock:objtype/0xD", "uid": "start0"},
+  {"fields": {"condition": -1, "radius": 110, "startPoint": 0, "unlockWorld": -1, "usePlane": 0}, "name": "Exit to Goldwood", "pos": [-600, 0, 0], "stock": {"entry": 7, "list": 424}, "target": "stock:level/21", "type": "stock:objtype/0xB", "uid": "exit_home"},
+  {"name": "Health (platform 1)", "pos": [0, 25, 400], "stock": {"entry": 271, "list": 424}, "type": "stock:objtype/0xA9", "uid": "health1"},
+  {"name": "Health (platform 2)", "pos": [0, 50, 650], "stock": {"entry": 271, "list": 424}, "type": "stock:objtype/0xA9", "uid": "health2"},
+  {"name": "Health (platform 3)", "pos": [0, 75, 900], "stock": {"entry": 271, "list": 424}, "type": "stock:objtype/0xA9", "uid": "health3"},
+  {"name": "Ammo", "pos": [-500, 0, -500], "stock": {"entry": 281, "list": 424}, "type": "stock:objtype/0xE8", "uid": "ammo1"},
+  {"name": "Ammo", "pos": [500, 0, -500], "stock": {"entry": 281, "list": 424}, "type": "stock:objtype/0xE8", "uid": "ammo2"},
+  {"fields": {"doorId": 1, "region": 1, "squadronId": 26}, "name": "Ant squad", "pos": [-350, 0, -200], "stock": {"entry": 260, "list": 424}, "type": "stock:objtype/0x4F", "uid": "squad"},
+  {"fields": {"squadron": 26}, "name": "Blue ant", "pos": [-454, 0, 23], "schema": "squadmember", "stock": {"entry": 261, "list": 424}, "type": "stock:objtype/0x78", "uid": "ant1"},
+  {"fields": {"squadron": 26}, "name": "Blue ant", "pos": [-612, 0, 323], "schema": "squadmember", "stock": {"entry": 262, "list": 424}, "type": "stock:objtype/0x78", "uid": "ant2"},
+  {"fields": {"doorId": 1}, "name": "Door (opens when the ants are dead)", "pos": [-520, 0, 0], "schema": "door", "stock": {"entry": 274, "list": 424}, "type": "stock:objtype/0x1AD", "uid": "door"},
+  {"fields": {"corner": 0, "region": 1}, "pos": [-950, 0, -950], "size": 12, "type": "stock:objtype/0x5", "uid": "region1_0"},
+  {"fields": {"corner": 1, "region": 1}, "pos": [-950, 0, 950], "size": 12, "type": "stock:objtype/0x5", "uid": "region1_1"},
+  {"fields": {"corner": 2, "region": 1}, "pos": [950, 0, 950], "size": 12, "type": "stock:objtype/0x5", "uid": "region1_2"},
+  {"fields": {"corner": 3, "region": 1}, "pos": [950, 0, -950], "size": 12, "type": "stock:objtype/0x5", "uid": "region1_3"}
+ ]
+}

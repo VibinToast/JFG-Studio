@@ -31,7 +31,8 @@ class Objects(unittest.TestCase):
 
     def test_schemas_load(self):
         self.assertEqual(set(self.schemas), {"exit", "startpoint", "squadron", "squadmember", "door", "regionpoint"})
-        self.assertEqual(self.schemas["squadron"].min_size, 0x40)
+        self.assertEqual(self.schemas["squadron"].min_size, 0x44)
+        self.assertEqual(self.schemas["door"].min_size, 0x24)
         self.assertEqual(self.schemas["exit"].min_size, 0x1C)
 
     def test_entry_round_trip(self):
@@ -52,7 +53,7 @@ class Objects(unittest.TestCase):
         with self.assertRaises(ValueError):
             obj.encode_entry(0x4F, (0, 0, 0), 0x20, s, {"region": 1})  # +0x3F does not fit 0x20 bytes
         with self.assertRaises(ValueError):
-            obj.encode_entry(0x4F, (0, 0, 0), 0x40, s, {"region": 300})
+            obj.encode_entry(0x4F, (0, 0, 0), 0x44, s, {"region": 300})
         with self.assertRaises(ValueError):
             obj.encode_entry(0x4F, (0, 0, 0), 0x100, s, {})
 
@@ -172,6 +173,29 @@ class Validator(unittest.TestCase):
                                   disc=dict(p.planets["gemini"]["disc"], index=9))
         self.assertEqual([x.rule for x in self.errors(p)], ["route"])
 
+    def test_header_must_set(self):
+        p = clone(self.base)
+        del p.levels["gemini"].level["header"]["tune"]
+        p.levels["gemini"].level["header"]["regionIndex"] = 40
+        self.assertEqual([x.rule for x in self.errors(p)], ["header", "header"])
+
+    def test_two_doors_one_lock(self):
+        p = clone(self.base)
+        p.levels["gemini"].objects["objects"].append(dict(self.objects(p)["door1"], uid="door2"))
+        self.assertIn((val.ERROR, "door-link"), self.rules(p))
+
+    def test_stock_squadron_region_and_members(self):
+        p = clone(self.base)
+        squad = self.objects(p)["squad1"]
+        del squad["fields"]["region"]
+        squad["stock"] = {"list": 424, "entry": 260}
+        p.levels["gemini"].objects["objects"] = [o for o in p.levels["gemini"].objects["objects"]
+                                                 if not o["uid"].startswith("ant")]
+        rules = self.rules(p)
+        self.assertIn((val.INFO, "squad-region"), rules)
+        self.assertIn((val.INFO, "squad-members"), rules)
+        self.assertFalse(self.errors(p))
+
     def test_missing_track(self):
         p = clone(self.base)
         p.levels["gemini"].level["track"] = "pack:track/none"
@@ -200,7 +224,6 @@ class Cli(unittest.TestCase):
         self.assertEqual(cli.main(["settings", "set", "decomp", "C:/decomp"]), 0)
         self.assertEqual(settings.get("decomp"), "C:/decomp")
         self.assertEqual(cli.main(["settings", "set", "nope", "x"]), 1)
-        self.assertEqual(cli.main(["build"]), 2)
 
 
 if __name__ == "__main__":

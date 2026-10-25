@@ -1,0 +1,28 @@
+{
+ "fixedId": 412,
+ "fixedObjectLists": {
+  "slot0": 85,
+  "slot1": 488
+ },
+ "format": 1,
+ "header": {
+  "clearB": 70,
+  "clearG": 20,
+  "clearR": 90,
+  "cutsceneData": 3,
+  "fog3": 983,
+  "fogB": 200,
+  "fogFar": 1016,
+  "fogG": 80,
+  "fogNear": 983,
+  "fogR": 255,
+  "region": 0,
+  "regionIndex": 0,
+  "tune": 46,
+  "tuneChannelMask": 65535,
+  "world": 15
+ },
+ "name": "Planet Gemini",
+ "sky": 180,
+ "track": "pack:track/field"
+}

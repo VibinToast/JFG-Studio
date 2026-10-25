@@ -8,6 +8,13 @@
   "format": {"const": 1},
   "name": {"type": "string", "minLength": 1, "maxLength": 31, "description": "the level's name in the game (header +0x00)"},
   "fixedId": {"type": "integer", "minimum": 0, "maximum": 2047, "description": "phase 0 only: the level id to use until the port's content linker exists"},
+  "fixedObjectLists": {
+   "type": "object",
+   "required": ["slot0", "slot1"],
+   "additionalProperties": false,
+   "description": "phase 0 only: the object lists to replace (an unused level's) until the content linker exists",
+   "properties": {"slot0": {"type": "integer", "minimum": 0}, "slot1": {"type": "integer", "minimum": 0}}
+  },
   "track": {"type": "string", "description": "pack:track/<name> (geometry/<name>.glb) or stock:track/<n>"},
   "sky": {"type": "integer", "minimum": -1, "description": "sky object id (header +0x58), -1 = none (black)"},
   "header": {

@@ -15,6 +15,10 @@ from jfgstudio.project import Project
 ERROR, WARNING, INFO = "error", "warning", "info"
 CUTSCENE_DATA_COUNT = 406  # asset 0x41 entries; 3 = the empty list
 FREE_WORLD = 15
+REGION_BLOCKS = 32  # per-level saved-flag blocks
+# Header fields a new level must set (jfgformats levels.NEW_LEVEL_TEMPLATE "mustSet"); Studio itself fills track,
+# track2 (sky) and the two object lists.
+MUST_SET = ("world", "region", "regionIndex", "fogNear", "fogFar", "fog3", "fogR", "fogG", "fogB", "tune")
 OPPOSITE = {"left": "right", "right": "left", "up": "down", "down": "up"}
 
 
@@ -72,6 +76,14 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
     elif world > FREE_WORLD:
         out.append(Problem(ERROR, "world", lf, f"world {world}: worlds past 15 need the port's planet registry"))
 
+    missing = [f for f in MUST_SET if f not in header]
+    if missing:
+        out.append(Problem(ERROR, "header", lf, f"header needs {', '.join(missing)} (a new level's header has no "
+                                                f"stock level to take them from)"))
+    for f in ("region", "regionIndex"):
+        if header.get(f, 0) >= REGION_BLOCKS:
+            out.append(Problem(ERROR, "header", lf, f"{f} {header[f]}: the game has {REGION_BLOCKS} (0-31)"))
+
     track = _ref(level.level["track"], "track", lf, None, out)
     if track and track.is_pack and not project.geometry_path(track.name).is_file():
         out.append(Problem(ERROR, "track", lf, f"{track}: geometry/{track.name}.glb does not exist"))
@@ -99,8 +111,10 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
         if size is not None:
             total += size
             if schema and size < schema.min_size:
-                out.append(Problem(ERROR, "size", of, f"size 0x{size:X} is smaller than {schema.name}'s fields need "
+                out.append(Problem(ERROR, "size", of, f"size 0x{size:X} is smaller than {schema.name}'s code reads "
                                                       f"(0x{schema.min_size:X})", uid))
+            if size % 2:
+                out.append(Problem(WARNING, "size", of, f"odd size 0x{size:X}: every stock entry is even", uid))
         for name, value in o.get("fields", {}).items():
             f = schema.field(name) if schema else None
             if f is None:
@@ -149,18 +163,35 @@ def _check_squads(squadrons, members, doors, region_corners, of) -> list[Problem
         if "squadronId" not in f:
             out.append(Problem(ERROR, "squadron-id", of, "the squadron has no squadronId", s["uid"]))
         region = f.get("region")
-        if region is None:
+        if region is None and "stock" in s:
+            # An unchanged stock squadron: jfgformats' build checks it against the regions of its stock list.
+            out.append(Problem(INFO, "squad-region", of, "the squadron keeps its stock region: the build checks the "
+                                                         "list has that stock list's regions", s["uid"]))
+        elif region is None:
             out.append(Problem(ERROR, "squad-region", of, "the squadron has no region (+0x3F)", s["uid"]))
+        elif region > 127:
+            out.append(Problem(ERROR, "squad-region", of, f"region {region}: the game reads it signed (0-127)",
+                               s["uid"]))
         elif len(region_corners.get(region, ())) < 3:
             out.append(Problem(ERROR, "squad-region", of, f"region {region} has no RegionPoint polygon in this list: "
                                                           "the game crashes when the level starts (region 0 "
                                                           "included). Add a region of at least 3 corners", s["uid"]))
+        elif len(region_corners[region]) != 4:
+            out.append(Problem(INFO, "squad-region", of, f"region {region} has {len(region_corners[region])} "
+                                                         "corners; only 4-corner regions have been tested", s["uid"]))
         door = f.get("doorId", 0)
         if door and not any(d.get("fields", {}).get("doorId") == door for d in doors):
             out.append(Problem(WARNING, "door-link", of, f"the squadron locks door id {door}, but no door has it",
                                s["uid"]))
         if not any(m.get("fields", {}).get("squadron") == f.get("squadronId") for m in members):
-            out.append(Problem(WARNING, "squad-members", of, "the squadron has no members", s["uid"]))
+            out.append(Problem(INFO, "squad-members", of, "the squadron has no members here (most stock "
+                                                          "squadrons have none either)", s["uid"]))
+    locked = {s.get("fields", {}).get("doorId") for s in squadrons} - {None, 0}
+    for door_id, n in Counter(d.get("fields", {}).get("doorId") for d in doors).items():
+        if door_id in locked and n > 1:
+            out.append(Problem(ERROR, "door-link", of, f"{n} doors have door id {door_id}: a squadron locks only the "
+                                                       "first of them, and its death opens them all; give each its "
+                                                       "own id"))
     for m in members:
         if m.get("fields", {}).get("squadron") not in ids:
             out.append(Problem(ERROR, "squad-members", of, "the member names a squadron this list does not have "

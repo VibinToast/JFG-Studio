@@ -3,6 +3,7 @@
  "name": "Navigation region corner",
  "ids": ["0x05"],
  "behaviour": null,
+ "minSize": "0x0C",
  "status": "decoded",
  "description": "One corner of a navigation region polygon (x and z are the corner; corners in order). Not spawned as an object: the squad system builds its regions from these. A squadron needs RegionPoints for the region it names.",
  "fields": [

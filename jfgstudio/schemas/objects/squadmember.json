@@ -3,6 +3,7 @@
  "name": "Squad member",
  "ids": [],
  "behaviour": 24,
+ "minSize": "0x1A",
  "status": "partial",
  "description": "An enemy or tribal spawned by its squadron, not by the list. Applies to many object types: set \"schema\": \"squadmember\" on the object. The game writes its saved-flag index into +0x18.",
  "fields": [

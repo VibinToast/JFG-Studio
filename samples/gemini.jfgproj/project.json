@@ -1,0 +1,11 @@
+{
+ "authors": [
+  "VibinToast"
+ ],
+ "dependencies": [],
+ "description": "JFG-Studio's sample: a new planet, Gemini, left of Tawfret on the map. A field with platforms, a pool and a lava strip; two blue ants keep a door shut until they are dead.",
+ "format": 1,
+ "id": "jfgstudio_sample_gemini",
+ "name": "Planet Gemini (JFG-Studio sample)",
+ "version": "0.1.0"
+}

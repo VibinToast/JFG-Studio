@@ -19,13 +19,13 @@ def _objects() -> list[dict]:
          "fields": {"player": 0, "startPoint": 0, "yaw": 0}},
         {"uid": "exit0", "name": "Exit home", "type": EXIT, "pos": [-600, 0, 0], "size": 0x1C,
          "target": "pack:level/home", "fields": {"startPoint": 0, "radius": 110, "unlockWorld": -1}},
-        {"uid": "squad1", "name": "Ant squad", "type": SQUADRON, "pos": [-350, 0, -200], "size": 0x40,
+        {"uid": "squad1", "name": "Ant squad", "type": SQUADRON, "pos": [-350, 0, -200], "size": 0x44,
          "fields": {"squadronId": 7, "doorId": 1, "region": 1}},
         {"uid": "ant1", "type": "stock:objtype/0x29", "schema": "squadmember", "pos": [-450, 0, 20], "size": 0x1C,
          "fields": {"squadron": 7}},
         {"uid": "ant2", "type": "stock:objtype/0x29", "schema": "squadmember", "pos": [-610, 0, 320], "size": 0x1C,
          "fields": {"squadron": 7}},
-        {"uid": "door1", "type": "stock:objtype/0x100", "schema": "door", "pos": [-520, 0, 0], "size": 0x18,
+        {"uid": "door1", "type": "stock:objtype/0x100", "schema": "door", "pos": [-520, 0, 0], "size": 0x24,
          "fields": {"doorId": 1}},
     ]
     for k, (x, z) in enumerate(corners):
@@ -39,9 +39,12 @@ def sample_project(root: Path) -> proj.Project:
     gem = proj.new_level(p, "gemini", "Planet Gemini", "pack:track/field")
     gem.level["fixedId"] = 412
     gem.level["sky"] = 180
-    gem.level["header"].update({"fogNear": 900, "fogFar": 1000, "fogR": 255, "fogG": 80, "fogB": 200})
+    gem.level["header"].update({"fogNear": 900, "fogFar": 1000, "fog3": 900, "fogR": 255, "fogG": 80, "fogB": 200,
+                                "tune": 46})
     gem.objects["objects"] = _objects()
     home = proj.new_level(p, "home", "Home", "pack:track/field")
+    home.level["header"].update({"fogNear": 900, "fogFar": 1000, "fog3": 900, "fogR": 0, "fogG": 0, "fogB": 0,
+                                 "tune": 4})
     home.objects["objects"] = [
         {"uid": "start0", "type": START, "pos": [0, 0, 0], "size": 0x10, "fields": {"player": 0, "startPoint": 0}},
     ]
