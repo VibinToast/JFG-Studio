@@ -54,6 +54,6 @@ class OnGround(unittest.TestCase):
     def test_lift(self):
         from jfgstudio import objects as obj
         schemas = obj.load_schemas()
-        self.assertEqual(obj.on_ground(-2.6, schemas["squadmember"]), 6)  # rounded up, then lifted: never inside a slope
+        self.assertEqual(obj.on_ground(-2.6, schemas["squadmember"]), 6)  # rounded up, then lifted
         self.assertEqual(obj.on_ground(3.2, schemas["health"]), 6)
         self.assertEqual(obj.on_ground(0.0, None), 8)
