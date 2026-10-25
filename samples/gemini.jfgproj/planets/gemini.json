@@ -1,12 +1,4 @@
 {
- "disc": {
-  "baseTexture": 61,
-  "index": 8,
-  "orbitParent": -1,
-  "radius": 14,
-  "x": 60,
-  "y": 320
- },
  "displayName": {
   "en": "Gemini"
  },
@@ -17,15 +9,10 @@
  },
  "fixedWorld": 15,
  "format": 1,
- "routes": [
-  {
-   "back": "right",
-   "corners": [[130, 320], [78, 320]],
-   "dir": "left",
-   "from": "stock:mappoint/2"
-  }
- ],
+ "replaces": "stock:mappoint/6",
  "unlock": {
-  "newGame": ["juno"]
+  "newGame": [
+   "juno"
+  ]
  }
 }

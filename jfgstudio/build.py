@@ -26,7 +26,6 @@ from jfgstudio.project import Project
 
 GAME_ID = "jet-force-gemini"
 DEFAULT_MIN_RECOMP = "1.1.8"
-DIRECTIONS = {"left": 0, "right": 1, "up": 2, "down": 3}
 HEROES = ("vela", "juno", "lupus")
 # (table asset, data asset, what, how to compare two entries)
 SETS = (
@@ -160,6 +159,14 @@ class _Builder:
 
     # the patch side
     def map_image(self) -> bytes | None:
+        """The planet map, edited in place in a copy of the ROM.
+
+        In the port only in-place edits of overlay 9's data work: the port recompiles every overlay ahead of time from
+        the original ROM and finds its code by ROM address, so a grown map (overlay 9 moved to the ROM end, as the
+        decomp's `--grow-map` does for emulators) has no code and the game stops when the map opens (2026-10-25).
+        Patches to recompiled code (the new-game unlock) do nothing there either. So a phase 0 planet takes over an
+        existing map point ("replaces"); extra points and unlocks come with the port's planet registry (P4).
+        """
         if not self.p.planets:
             return None
         img = bytearray(self.image)
@@ -168,42 +175,39 @@ class _Builder:
             world = p.get("fixedWorld")
             if world is None:
                 raise BuildError([f"planets/{name}: phase 0 needs \"fixedWorld\" (15)"])
-            disc = p["disc"]
-            point = len(doc["points"])
-            doc["points"].append({"kind": "disc", "index": disc["index"], "world": world,
-                                  "scale": p.get("scale", 10.0), "unk8": -3000})
-            first = refs.parse(p["routes"][0]["from"])
-            src_icon = doc["icons"][doc["points"][first.number()]["index"]]
-            icon = doc["icons"][disc["index"]]
-            for k in ("topTexture", "baseScrollInterval", "baseScrollU", "baseScrollV", "topScrollU", "topScrollV",
-                      "topColour"):
-                icon[k] = src_icon[k]
-            icon.update({"x": disc["x"], "y": disc["y"], "radius": disc["radius"],
-                         "orbitParent": disc.get("orbitParent", -1)})
-            for k in ("baseTexture", "topTexture"):
-                if k in disc:
-                    icon[k] = disc[k]
-            doc["worldLevels"].append({"world": world,
-                                       "levels": [self.level_number(p["entryLevel"][h]) for h in HEROES]})
-            for route in p["routes"]:
-                src = refs.parse(route["from"])
-                if not src.is_stock or src.category != "mappoint":
-                    raise BuildError([f"planets/{name}: phase 0 routes start at a stock map point"])
-                doc["routes"].append({"from": src.number(), "to": point,
-                                      "flags": [DIRECTIONS[route["dir"]], DIRECTIONS[route["back"]]],
-                                      "corners": route.get("corners", [])})
-            doc.setdefault("addNames", {})[str(world)] = p["displayName"]["en"]
-            heroes = set(p.get("unlock", {}).get("newGame", []))
-            if heroes - {"juno"}:
-                raise BuildError([f"planets/{name}: phase 0 can unlock a planet at a new game for Juno only"])
-            if heroes:
-                doc["newGameWorldsJuno"] = sorted(set(doc["newGameWorldsJuno"]) | {world})
+            if "replaces" not in p:
+                raise BuildError([f"planets/{name}: phase 0 needs \"replaces\": a stock map point to take over (an "
+                                  "extra map point needs the port's planet registry)"])
+            point = refs.parse(p["replaces"], "mappoint").number()
+            if not 0 <= point < len(doc["points"]):
+                raise BuildError([f"planets/{name}: there is no map point {point}"])
+            old_world = doc["points"][point]["world"]
+            doc["points"][point]["world"] = world
+            row = next((r for r in doc["worldLevels"] if r["world"] == old_world), None)
+            if row is None:
+                raise BuildError([f"planets/{name}: map point {point}'s world has no entry-level row"])
+            row["world"] = world
+            row["levels"] = [self.level_number(p["entryLevel"][h]) for h in HEROES]
+            self.log(f"planet {name}: takes over map point {point} (world {old_world}), now world {world}")
+            # No name string (adding one moves the front-end text, which breaks once the port moves the asset area)
+            # and no new-game unlock (a patch to recompiled code): unlock it with an exit's unlockWorld, or the
+            # all-levels cheat for testing.
+            if p.get("unlock", {}).get("newGame"):
+                self.log(f"planet {name}: the new-game unlock does not work in the port yet (planet registry)")
         problems = self.mapdata.validate_map(doc)
         if problems:
             raise BuildError([f"planet map: {x}" for x in problems])
-        for line in self.mapdata.encode_map(doc, img, grow=True):
+        for line in self.mapdata.encode_map(doc, img, grow=False):
             self.log(line)
         self.jf.fix_crc(img)
+        if len(img) != len(self.image):
+            raise BuildError(["internal: the map patch grows the ROM; the port only takes in-place map edits"])
+        moved = [i for i in range(self.catalog.assets.count)
+                 if self.catalog.assets.section(i) != self.jf.Assets.from_rom(bytes(img)).section(i)]
+        if moved:
+            # The port rebuilds the asset area at a new address when a pack has asset entries, so asset data a
+            # patch points elsewhere (offsets relative to the old place) breaks: game data goes in entries only.
+            raise BuildError([f"internal: the map patch changes asset data ({moved}); that breaks in the port"])
         return bytes(img)
 
 

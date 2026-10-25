@@ -2,11 +2,12 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "title": "JFG-Studio planets/<name>.json",
  "type": "object",
- "required": ["format", "displayName", "disc", "routes", "entryLevel"],
+ "required": ["format", "displayName", "entryLevel"],
  "additionalProperties": false,
  "properties": {
   "format": {"const": 1},
   "displayName": {"type": "object", "required": ["en"], "additionalProperties": {"type": "string", "minLength": 1}},
+  "replaces": {"type": "string", "description": "phase 0 only: stock:mappoint/<n>, the map point this planet takes over (in-place edit; extra points need the planet registry)"},
   "fixedWorld": {"type": "integer", "minimum": 0, "maximum": 15, "description": "phase 0 only: the world number until the port's planet registry exists"},
   "disc": {
    "type": "object",
@@ -23,7 +24,6 @@
   "scale": {"type": "number"},
   "routes": {
    "type": "array",
-   "minItems": 1,
    "items": {
     "type": "object",
     "required": ["from", "dir", "back"],

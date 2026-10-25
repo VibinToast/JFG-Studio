@@ -240,7 +240,12 @@ def _key(o: dict, schemas) -> str | None:
 def _check_planet(project: Project, name: str, p: dict) -> list[Problem]:
     out: list[Problem] = []
     pf = f"planets/{name}.json"
-    disc = p["disc"]
+    if "replaces" in p:
+        _ref(p["replaces"], "mappoint", pf, None, out)
+    elif "disc" not in p or not p.get("routes"):
+        out.append(Problem(ERROR, "planet", pf, "a planet needs \"replaces\" (a stock map point to take over) or a "
+                                                "disc and at least one route"))
+    disc = p.get("disc", {"index": -1})
     if disc["index"] in (8, 9, 10) and disc.get("orbitParent", 0) != -1:
         out.append(Problem(ERROR, "moon-disc", pf, f"disc {disc['index']} is a moon in the stock map: set "
                                                    "orbitParent -1 to make it a planet, or it circles its parent and "
@@ -249,7 +254,7 @@ def _check_planet(project: Project, name: str, p: dict) -> list[Problem]:
         r = _ref(ref, "level", pf, None, out)
         if r and r.is_pack and r.name not in project.levels:
             out.append(Problem(ERROR, "entry-level", pf, f"{hero}: {ref} is not a level of this project"))
-    for route in p["routes"]:
+    for route in p.get("routes", []):
         r = _ref(route["from"], None, pf, None, out)
         if r and r.category not in ("mappoint", "world"):
             out.append(Problem(ERROR, "route", pf, f"{route['from']}: routes start at a map point or a planet"))
@@ -264,7 +269,7 @@ def _check_planet(project: Project, name: str, p: dict) -> list[Problem]:
 
 def _check_planets_together(project: Project) -> list[Problem]:
     out: list[Problem] = []
-    used = Counter((r["from"], r["dir"]) for p in project.planets.values() for r in p["routes"])
+    used = Counter((r["from"], r["dir"]) for p in project.planets.values() for r in p.get("routes", []))
     for (src, d), n in used.items():
         if n > 1:
             out.append(Problem(ERROR, "route", "planets", f"{n} routes leave {src} to the {d}: each stick direction "
@@ -273,7 +278,11 @@ def _check_planets_together(project: Project) -> list[Problem]:
     for w, n in worlds.items():
         if n > 1:
             out.append(Problem(ERROR, "world", "planets", f"fixedWorld {w} is used by {n} planets"))
-    discs = Counter(p["disc"]["index"] for p in project.planets.values())
+    discs = Counter(p["disc"]["index"] for p in project.planets.values() if "disc" in p)
+    taken = Counter(p["replaces"] for p in project.planets.values() if "replaces" in p)
+    for point, n in taken.items():
+        if n > 1:
+            out.append(Problem(ERROR, "planet", "planets", f"{n} planets replace {point}"))
     for d, n in discs.items():
         if n > 1:
             out.append(Problem(ERROR, "disc", "planets", f"disc {d} is used by {n} planets"))

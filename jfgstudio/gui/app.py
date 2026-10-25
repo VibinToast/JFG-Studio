@@ -236,8 +236,8 @@ def project_window() -> None:
         imgui.tree_pop()
     if imgui.tree_node_ex("Planets", imgui.TreeNodeFlags_.default_open):
         for name, p in S.project.planets.items():
-            imgui.bullet_text(f"{p['displayName'].get('en', name)}  (disc {p['disc']['index']}, "
-                              f"world {p.get('fixedWorld', '?')})")
+            where = p.get("replaces") or f"disc {p.get('disc', {}).get('index', '?')}"
+            imgui.bullet_text(f"{p['displayName'].get('en', name)}  ({where}, world {p.get('fixedWorld', '?')})")
         imgui.tree_pop()
     if imgui.tree_node("Geometry"):
         for f in sorted((S.project.path / "geometry").glob("*.glb")):
