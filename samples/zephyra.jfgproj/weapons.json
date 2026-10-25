@@ -1,0 +1,9 @@
+{
+ "format": 1,
+ "weapons": {
+  "0": {
+   "delay": 8,
+   "speed": 140.0
+  }
+ }
+}

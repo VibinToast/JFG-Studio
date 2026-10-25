@@ -278,6 +278,8 @@ def world_scripts(p, arena_door: int) -> None:
                   {"do": "fog", "rgb": [200, 190, 255], "near": 1000, "far": 1023, "ticks": 120}]},
     ])
     (p.path / "scripts").mkdir(exist_ok=True)
+    # Zephyra's air is thin: the starting gun fires faster and its bolts fly faster (the Weapons window).
+    scripts.save_weapons(p, {"0": {"delay": 8, "speed": 140.0}})
     (p.path / "scripts" / "zephyra.lua").write_text("""\
 -- Zephyra's own script (written by hand; the triggers are in triggers.json).
 -- Counts the time spent in the Sky Arena and says it at the finale platform.

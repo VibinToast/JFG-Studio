@@ -18,6 +18,7 @@ jfg.flag(n) / jfg.set_flag(n, on) the game's flags
 jfg.unlock_door(id)               as a squadron's death does
 jfg.door_locked(id)               true while that door is locked, nil if there is none
 jfg.warp(level, start_point)      change level
+jfg.weapon(n, {damage=, delay=, ...}) / jfg.weapon_stats(n)  the heroes' weapons
 jfg.spawn(id, x, y, z [, bytes])  an object as if in the level's list (bytes from entry +0x0A)
 jfg.log(...)                      a line in the port's jfg_mods.log"""
 
@@ -207,6 +208,60 @@ def _action_fields(a: dict) -> bool:
         c, a["start"] = imgui.input_int("start", int(a.get("start", 0)))
         changed |= c
     return changed
+
+
+WEAPON_HELP = {"damage": "the projectile's power", "delay": "frames between shots",
+               "throw_delay": "thrown weapons: frames from the press to the throw",
+               "lifetime": "how long the projectile lives", "spread_x": "random sideways spread (65536 = a full turn)",
+               "spread_y": "random up-down spread", "speed": "the projectile's speed"}
+
+
+def weapons_window() -> None:
+    """The pack's values for the heroes' 16 weapons (jfg.weapon). Only the fields set here change; the rest keep the
+    game's values, and a player's own Weapons tab settings win over the pack's."""
+    A = _app()
+    S = A.S
+    if not S.project:
+        A._muted("Open a project.")
+        return
+    if S.weapons is None:
+        S.weapons = scr.load_weapons(S.project)
+    if imgui.button("Save weapons"):
+        scr.save_weapons(S.project, S.weapons)
+        S.weapons_dirty = False
+        S.message = "Weapons saved (the build makes them a script)"
+    A._muted("Weapon numbers as the game counts them (0 is the starting gun). Tick a field to change it in this "
+             "pack; the game's own values are not shown (the port's Weapons tab reads them from your game).")
+    for n in range(scr.WEAPON_COUNT):
+        fields = S.weapons.setdefault(str(n), {})
+        if not imgui.collapsing_header(f"Weapon {n}{'  (changed)' if fields else ''}###w{n}"):
+            continue
+        imgui.push_id(n)
+        for name, (lo, hi) in scr.WEAPON_FIELDS.items():
+            on = name in fields
+            c, on = imgui.checkbox(f"##on{name}", on)
+            if c:
+                if on:
+                    fields[name] = 1.0 if isinstance(lo, float) else max(lo, 1)
+                else:
+                    fields.pop(name)
+                S.weapons_dirty = True
+            imgui.same_line()
+            imgui.begin_disabled(not on)
+            imgui.set_next_item_width(hello_imgui.em_size(10))
+            if isinstance(lo, float):
+                c, v = imgui.drag_float(name, float(fields.get(name, 1.0)), 0.5, lo, hi, "%.1f")
+            else:
+                c, v = imgui.drag_int(name, int(fields.get(name, lo)), 1, lo, hi)
+            if c and on:
+                fields[name] = v
+                S.weapons_dirty = True
+            imgui.end_disabled()
+            if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+                imgui.set_tooltip(WEAPON_HELP[name])
+        imgui.pop_id()
+    for k in [k for k, v in S.weapons.items() if not v]:
+        S.weapons.pop(k)
 
 
 def scripts_window() -> None:

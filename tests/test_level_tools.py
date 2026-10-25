@@ -175,6 +175,19 @@ class Triggers(unittest.TestCase):
             self.assertIn("music/nope.ogg", problems[0])
             self.assertIn("scripts/_triggers.lua", scr.pack_scripts(p))
 
+    def test_weapons(self):
+        from jfgstudio import scripts as scr
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            scr.save_weapons(p, {"0": {"delay": 8, "damage": 2}, "3": {}, "9": {"speed": 3000.0, "colour": 1}})
+            self.assertEqual(set(scr.load_weapons(p)), {"0", "9"})
+            lua = scr.pack_scripts(p)["scripts/_weapons.lua"].decode()
+            self.assertIn("jfg.weapon(0, {damage = 2, delay = 8})", lua)
+            problems = scr.check(p)
+            self.assertEqual(len(problems), 2)
+            scr.save_weapons(p, {})
+            self.assertFalse(scr.weapons_path(p).exists())
+
     def test_spawn(self):
         from jfgstudio import scripts as scr
         oid, tail = scr.spawn_entry({"do": "spawn", "type": "stock:objtype/0xA9", "fields": {"amount": 2}})

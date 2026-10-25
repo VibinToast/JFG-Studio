@@ -3,6 +3,8 @@ in the editor, compiled to one more script.
 
     scripts/<name>.lua      the project's own Lua scripts (the port's API: jfg.on, jfg.message, jfg.fog ...)
     triggers.json           {"format": 1, "triggers": [...]}: "when ... then ..." rules, compiled to _triggers.lua
+    weapons.json            {"format": 1, "weapons": {"<0-15>": {field: value}}}: the pack's values for the heroes'
+                            weapons (jfg.weapon), compiled to _weapons.lua; the player's own Weapons tab still wins
 
 A trigger:
     {"name": "...", "level": "pack:level/<name>" | "stock:level/<n>",
@@ -31,6 +33,44 @@ from jfgstudio import refs
 WHEN = ("level start", "enter", "flag", "door opens")
 DO = ("message", "music", "music_stop", "fog", "flag", "unlock_door", "warp", "spawn")
 NO_SPAWN = {5, 0x60, 0x61, 0x69}  # region and patrol data: the game refuses them
+
+
+# The weapon fields a pack can set (the port's jfg.weapon), with their ranges. The decomp's mod #6 "The heroes'
+# weapons": damage is the projectile's power, delay the frames between shots, lifetime the projectile's life, spread in
+# angle units (65536 = a full turn), speed the projectile's speed. throw_delay only counts for thrown weapons.
+WEAPON_FIELDS = {"damage": (0, 255), "delay": (0, 255), "throw_delay": (1, 127), "lifetime": (1, 255),
+                 "spread_x": (0, 8192), "spread_y": (0, 8192), "speed": (0.1, 2000.0)}
+WEAPON_COUNT = 16
+
+
+def weapons_path(project) -> Path:
+    return project.path / "weapons.json"
+
+
+def load_weapons(project) -> dict[str, dict]:
+    path = weapons_path(project)
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8")).get("weapons", {})
+
+
+def save_weapons(project, weapons: dict[str, dict]) -> None:
+    from jfgstudio.project import write_json
+    path = weapons_path(project)
+    weapons = {k: v for k, v in sorted(weapons.items(), key=lambda kv: int(kv[0])) if v}
+    if weapons:
+        write_json(path, {"format": 1, "weapons": weapons})
+    elif path.exists():
+        path.unlink()
+
+
+def compile_weapons(weapons: dict[str, dict]) -> str:
+    lines = ["-- Made by JFG-Studio from weapons.json: edit the weapons in the editor, not this file."]
+    for n, fields in sorted(weapons.items(), key=lambda kv: int(kv[0])):
+        if fields:
+            body = ", ".join(f"{k} = {v}" for k, v in sorted(fields.items()))
+            lines.append(f"jfg.weapon({int(n)}, {{{body}}})")
+    return "\n".join(lines) + "\n"
 
 
 def triggers_path(project) -> Path:
@@ -165,6 +205,9 @@ def pack_scripts(project) -> dict[str, bytes]:
     triggers = load_triggers(project)
     if triggers:
         out["scripts/_triggers.lua"] = compile_triggers(triggers, project).encode("utf-8")
+    weapons = load_weapons(project)
+    if any(weapons.values()):
+        out["scripts/_weapons.lua"] = compile_weapons(weapons).encode("utf-8")
     return out
 
 
@@ -196,4 +239,14 @@ def check(project) -> list[str]:
                     spawn_entry(a)
                 except (ValueError, refs.RefError) as e:
                     out.append(f"{where}: {e}")
+    for n, fields in load_weapons(project).items():
+        if not n.isdigit() or not 0 <= int(n) < WEAPON_COUNT:
+            out.append(f"weapons.json: weapon {n!r} is not 0-{WEAPON_COUNT - 1}")
+            continue
+        for k, v in fields.items():
+            if k not in WEAPON_FIELDS:
+                out.append(f"weapons.json: weapon {n}: unknown field {k!r}")
+            elif not isinstance(v, (int, float)) or not WEAPON_FIELDS[k][0] <= v <= WEAPON_FIELDS[k][1]:
+                lo, hi = WEAPON_FIELDS[k]
+                out.append(f"weapons.json: weapon {n}: {k} = {v!r} is outside {lo}..{hi}")
     return out

@@ -67,6 +67,8 @@ class State:
         self.kind: str | None = None  # the Kinds window's kind
         self.triggers: list | None = None  # triggers.json, read when the Triggers window first shows
         self.triggers_dirty = False
+        self.weapons: dict | None = None  # weapons.json, read when the Weapons window first shows
+        self.weapons_dirty = False
         self.script_file: str | None = None  # the Scripts window's file and text
         self.script_text = ""
         self.kind_pick = {"open": False, "filter": "", "base": None, "name": ""}
@@ -101,6 +103,7 @@ class State:
             return
         self.load_errors = []
         self.triggers, self.triggers_dirty, self.script_file = None, False, None
+        self.weapons, self.weapons_dirty = None, False
         self.level = next(iter(self.project.levels), None)
         self.selection.clear()
         self.validate()
@@ -119,6 +122,10 @@ class State:
                 from jfgstudio import scripts as scr
                 scr.save_triggers(self.project, self.triggers)
                 self.triggers_dirty = False
+            if self.weapons is not None and self.weapons_dirty:
+                from jfgstudio import scripts as scr
+                scr.save_weapons(self.project, self.weapons)
+                self.weapons_dirty = False
             self.message = "Saved"
 
     def history(self) -> edit.History | None:
@@ -1553,6 +1560,7 @@ def _layout() -> hello_imgui.DockingParams:
         win("Kinds", "RightSpace", labelled(kind_tools.kinds_window)),
         win("Triggers", "RightSpace", labelled(script_tools.triggers_window)),
         win("Scripts", "MainDockSpace", script_tools.scripts_window),
+        win("Weapons", "RightSpace", labelled(script_tools.weapons_window)),
         win("Hierarchy", "LeftSpace", hierarchy),
         win("Inspector", "RightSpace", labelled(inspector)),
         win("Level", "RightSpace", labelled(level_tools.level_window)),
