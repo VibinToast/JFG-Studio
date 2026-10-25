@@ -79,3 +79,16 @@ class Water(unittest.TestCase):
         self.assertEqual((acc["min"][1], acc["max"][1]), (12.0, 12.0))
         with self.assertRaises(geometry.GeometryError):
             geometry.add_water(data, 0, 0, 0, 100, 12)
+
+
+class StartLevel(unittest.TestCase):
+    def test_start_level_arg(self):
+        from jfgstudio import testrun
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            self.assertEqual(testrun.start_level_arg(p, "gemini", True), "412")
+            del p.levels["gemini"].level["fixedId"]
+            self.assertEqual(testrun.start_level_arg(p, "gemini", True), "test.sample:level_gemini")
+            with self.assertRaises(testrun.TestRunError):
+                testrun.start_level_arg(p, "gemini", False)
+            self.assertEqual(testrun.start_level_arg(p, "21", True), "21")

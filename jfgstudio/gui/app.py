@@ -4,9 +4,11 @@ Hierarchy, Scene (3D: gui/viewport.py), Inspector, Project, Prefabs, Console and
 the menus. Edits go through jfgstudio.edit's per-level undo history.
 """
 
+import copy
 import json
 import math
 import struct
+import threading
 import zlib
 from pathlib import Path
 
@@ -61,6 +63,9 @@ class State:
         self.planet: str | None = None  # the Planet window's planet
         self.planets_dirty = False  # planet edits are saved with the project (they have no undo yet)
         self.map_doc = None
+        self.play_log: list[str] = []  # the last Play / Build run's output, shown in the Console
+        self.playing = False
+        self.play_character = "juno"
         self.errors: list[str] = []  # errors a window hit (logged in crash logs), shown in the Console
         self.errors_seen: set[str] = set()  # why the rotate / scale handle is not shown for the selection
         self.drag_scale = 0  # the size field's value when a scale drag started
@@ -938,6 +943,14 @@ def console() -> None:
         imgui.push_style_color(imgui.Col_.text, theme.colour("ERROR"))
         imgui.text_wrapped(line)
         imgui.pop_style_color()
+    if S.play_log:
+        imgui.separator_text("Play / build" + (" (running)" if S.playing else ""))
+        for line in list(S.play_log):
+            colour = "ERROR" if line.startswith("error") else "TEXT"
+            imgui.push_style_color(imgui.Col_.text, theme.colour(colour))
+            imgui.text_wrapped(line)
+            imgui.pop_style_color()
+        imgui.separator()
     colours = {val.ERROR: "ERROR", val.WARNING: "HIGHLIGHT", val.INFO: "MUTED"}
     for i, p in enumerate(S.problems):
         imgui.push_style_color(imgui.Col_.text, theme.colour(colours[p.severity]))
@@ -1001,12 +1014,20 @@ def toolbar() -> None:
     imgui.same_line()
     imgui.text("|")
     imgui.same_line()
-    imgui.begin_disabled()
-    imgui.button("Play")
+    imgui.begin_disabled(S.project is None or S.playing)
+    if imgui.button("Building..." if S.playing else "Play"):
+        play()
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip("Build and play in the game: needs the port's launch options (task P5a) and the "
-                          "pack builder (S6)")
+        imgui.set_tooltip("Build the pack, install it in the port and start the game in this level (at the selected "
+                          "start point, else start point 0). The output is in the Console")
+    imgui.same_line()
+    imgui.set_next_item_width(hello_imgui.em_size(5.5))
+    if imgui.begin_combo("##hero", S.play_character.title()):
+        for hero in ("juno", "vela", "lupus"):
+            if imgui.selectable(hero.title(), hero == S.play_character)[0]:
+                S.play_character = hero
+        imgui.end_combo()
     imgui.same_line()
     if imgui.button("Validate"):
         S.validate()
@@ -1053,8 +1074,10 @@ def menus() -> None:
     if imgui.begin_menu("Build"):
         if imgui.menu_item("Validate", "", False, S.project is not None)[0]:
             S.validate()
-        imgui.menu_item("Build pack", "", False, False)
-        imgui.menu_item("Play in game", "", False, False)
+        if imgui.menu_item("Build pack", "", False, S.project is not None and not S.playing)[0]:
+            play(launch=False)
+        if imgui.menu_item("Play in game", "", False, S.project is not None and not S.playing)[0]:
+            play()
         imgui.end_menu()
 
 
@@ -1128,6 +1151,47 @@ def new_project_popup() -> None:
         if imgui.button("Cancel"):
             imgui.close_current_popup()
         imgui.end_popup()
+
+
+def play(launch: bool = True) -> None:
+    """Builds (in the background, from a copy of the project as it is now) and, with `launch`, installs the pack and
+    starts the game in the open level. The output goes to the Console."""
+    from jfgstudio import build, formats, rom, testrun
+    if S.project is None or S.playing:
+        return
+    start_point = 0
+    for o in S.objects():
+        if o["uid"] in S.selection and (sc := S.schema(o)) and sc.key == "startpoint":
+            start_point = S.fields(o, sc).get("startPoint", 0)
+    project = copy.deepcopy(S.project)
+    level, hero = S.level, S.play_character
+    S.play_log = [f"{'Play' if launch else 'Build'}: {project.meta['name']}"
+                  + (f", level {level}, start point {start_point}, as {hero.title()}" if launch else "")]
+    S.playing = True
+
+    def run():
+        try:
+            if launch:
+                testrun.play(project, level, start_point, hero, log=S.play_log.append)
+            else:
+                out = project.path / "build" / f"{project.id}.nrm"
+                out.parent.mkdir(exist_ok=True)
+                build.build(project, out, log=S.play_log.append)
+            S.message = "Started the game" if launch else "Built the pack"
+        except build.BuildError as e:
+            S.play_log.extend(f"error: {p}" for p in e.problems)
+            S.message = "The build failed: see the Console"
+        except (testrun.TestRunError, formats.FormatsUnavailable, rom.RomError, OSError) as e:
+            S.play_log.append(f"error: {e}")
+            S.message = "Play failed: see the Console"
+        except Exception as e:  # noqa: BLE001 (logged; the editor keeps running)
+            path = crashlog.write(e, "Play")
+            S.play_log.append(f"error: {type(e).__name__}: {e} (log: {path})")
+            S.message = "Play failed: see the Console"
+        finally:
+            S.playing = False
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def duplicate() -> None:

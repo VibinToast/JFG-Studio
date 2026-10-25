@@ -9,7 +9,10 @@ table sizes, and the planet map.
 
 The planet map is not asset data: it goes into `patch.bps`, an in-place edit of overlay 9's data (see map_image).
 
-Still phase 0 style until the port's content linker exists: fixed ids (`fixedId`, `fixedObjectLists`, `fixedWorld`).
+Numbers: a level with `fixedId` / `fixedObjectLists` replaces those stock entries (phase 0 style). Without them it is
+appended, with its own object list (and one shared empty slot-0 list), and the port's content linker (P2) gives the
+numbers: the header names its track and lists through fixups, and exits name pack levels the same way. The planet map
+still names entry levels by number (until the planet registry, P4), so it uses the numbers the levels expect.
 """
 
 import io
@@ -71,16 +74,27 @@ class _Builder:
         self.schemas = obj.load_schemas()
         self.problems: list[str] = []
 
-    # ids (phase 0: fixed in the project)
+    # ids: fixed in the project, or appended (the expected numbers; the port's linker has the last word)
     def plan_ids(self):
         self.level_ids, self.level_lists = {}, {}
+        next_level = self.catalog.level_count()
+        lists = len(self.catalog.pair(self.lv.OBJLIST_TABLE, self.lv.OBJLIST_DATA))
+        self.list_count = lists
+        self.empty_list = None
         for name, level in self.p.levels.items():
-            if "fixedId" not in level.level:
-                self.problems.append(f"levels/{name}: phase 0 needs \"fixedId\" (the content linker comes later)")
-            if "fixedObjectLists" not in level.level:
-                self.problems.append(f"levels/{name}: phase 0 needs \"fixedObjectLists\" (slot0, slot1)")
-            self.level_ids[name] = level.level.get("fixedId")
-            self.level_lists[name] = level.level.get("fixedObjectLists", {})
+            if "fixedId" in level.level:
+                self.level_ids[name] = level.level["fixedId"]
+            else:
+                self.level_ids[name] = next_level
+                next_level += 1
+            if "fixedObjectLists" in level.level:
+                self.level_lists[name] = level.level["fixedObjectLists"]
+            else:
+                if self.empty_list is None:
+                    self.empty_list = lists
+                    lists += 1
+                self.level_lists[name] = {"slot0": self.empty_list, "slot1": lists}
+                lists += 1
         count = self.catalog.track_count()
         names = sorted({refs.parse(lvl.level["track"]).name for lvl in self.p.levels.values()
                         if refs.parse(lvl.level["track"]).is_pack})
@@ -153,12 +167,17 @@ class _Builder:
                     list_fixups.append({"at": at + 0x0A, "type": "lohi", "ref": f"level_{target.name}"})
                 entries.append(entry)
                 at += len(entry)
-            lists = {slots["slot1"]: (_list_raw(entries), list_fixups), slots["slot0"]: (_list_raw([]), [])}
-            for index, (raw, fixups) in lists.items():
+            lists = {slots["slot1"]: (_list_raw(entries), list_fixups, f"objlist_{name}"),
+                     slots["slot0"]: (_list_raw([]), [], f"objlist_{name}_0")}
+            for index, (raw, fixups, append) in lists.items():
                 problems = self.lv.validate_objlist(raw, True, known)
                 if problems:
                     raise BuildError([f"levels/{name}/objects.json: {x}" for x in problems])
-                e = self._set_entry(0x1C, 0x1D, "objlist", index, raw, counts, f"objlist_{name}_{index}")
+                if index == self.empty_list:
+                    append = "objlist_empty"
+                    if any(e.get("append") == append for e in out):
+                        continue  # one empty slot-0 list for every appended level
+                e = self._set_entry(0x1C, 0x1D, "objlist", index, raw, counts, append)
                 e["fixups"] = fixups
                 out.append(e)
             track = refs.parse(level.level["track"])
@@ -172,12 +191,19 @@ class _Builder:
                 raw = self.lv.new_header(level.level["name"], **fields)
             except self.jf.FormatError as e:
                 raise BuildError([f"levels/{name}/level.json: {e}"]) from e
-            problems = self.lv.validate_header(raw, cutscenes, len(stock_lists))
+            list_total = max(len(stock_lists), self.list_count + len(self.p.levels) + 1)  # with the appended lists
+            problems = self.lv.validate_header(raw, cutscenes, list_total)
             if problems:
                 raise BuildError([f"levels/{name}/level.json: {x}" for x in problems])
             e = self._set_entry(0x1E, 0x1F, "level", self.level_ids[name], raw, counts, f"level_{name}")
+            fixups = []
             if not track.is_stock:
-                e["fixups"] = [{"at": 0x54, "type": "s16", "ref": f"track_{track.name}"}]  # header +0x54: the track
+                fixups.append({"at": 0x54, "type": "s16", "ref": f"track_{track.name}"})  # header +0x54: the track
+            if "fixedObjectLists" not in level.level:  # header +0xCA slot 0, +0x56 slot 1: the appended lists
+                fixups += [{"at": 0x56, "type": "s16", "ref": f"objlist_{name}"},
+                           {"at": 0xCA, "type": "s16", "ref": "objlist_empty"}]
+            if fixups:
+                e["fixups"] = fixups
             out.append(e)
         # A replacement identical to the stock entry is left out (an empty slot-0 list over an empty stock one).
         stock = {table: self.catalog.pair(table, data) for table, data, _, _ in SETS}
@@ -226,6 +252,12 @@ class _Builder:
                 raise BuildError([f"planets/{name}: map point {point}'s world has no entry-level row"])
             row["world"] = world
             row["levels"] = [self.level_number(p["entryLevel"][h]) for h in HEROES]
+            linked = sorted({refs.parse(p["entryLevel"][h], "level").name for h in HEROES
+                             if refs.parse(p["entryLevel"][h], "level").is_pack
+                             and "fixedId" not in self.p.levels[refs.parse(p["entryLevel"][h], "level").name].level})
+            if linked:
+                self.log(f"planet {name}: the map names {', '.join(linked)} by the number expected; it holds unless "
+                         "another pack takes that number first (the planet registry, P4, removes this)")
             self.log(f"planet {name}: takes over map point {point} (world {old_world}), now world {world}")
             # No name string (adding one moves the front-end text, which breaks once the port moves the asset area)
             # and no new-game unlock (a patch to recompiled code): unlock it with an exit's unlockWorld, or the
