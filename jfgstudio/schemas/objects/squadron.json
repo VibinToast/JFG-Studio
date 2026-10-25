@@ -11,6 +11,7 @@
  "fields": [
   {"name": "stance", "offset": "0x0A", "type": "u8", "description": "formation stance (low 2 bits; 2, 3 = alert)"},
   {"name": "count", "offset": "0x0B", "type": "u8", "default": 1, "description": "member count (the door unlock checks this many saved flags)"},
+  {"name": "size", "offset": "0x15", "type": "u8", "default": 40, "description": "the members' size in hundredths (40 = 0.40, stock ants; 0 = 1.0). It replaces the definition's scale, and every member shares it (decomp MSR 'Phase 2 prep: drawn size and facing')"},
   {"name": "kind", "offset": "0x24", "type": "u8", "description": "squadron kind (low 4 bits)"},
   {"name": "heading", "offset": "0x25", "type": "s8", "unit": "angle8", "role": "yaw", "description": "launch / fixed heading"},
   {"name": "squadronId", "offset": "0x2D", "type": "u8", "link": "squadronId", "description": "members name it with their +0x11"},

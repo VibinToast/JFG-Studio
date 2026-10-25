@@ -405,11 +405,31 @@ def _keys(objs) -> dict:
     return {o["uid"]: (sc.key if (sc := S.schema(o)) else None) for o in objs}
 
 
-def _matrix(o: dict, schema: obj.Schema | None, oid: int | None) -> np.ndarray:
-    """Where an object's model goes: its position, the facing and size its entry gives, the definition's scale."""
+def _squad_sizes(objs) -> dict[int, float]:
+    """squadronId -> the size its members are drawn at (entry +0x15 / 100, 0 = 1.0; it replaces their definition's
+    scale), with a kind's Size on top as the build writes it."""
+    out = {}
+    for o in objs:
+        schema = S.schema(o)
+        if schema is None or schema.key != "squadron":
+            continue
+        values = S.fields(o, schema)
+        size = (values.get("size", 0) or 100) / 100.0
+        kind_ref = (o.get("kindFields") or {}).get("baddyType")
+        if kind_ref and kind_ref.startswith("pack:kind/"):
+            size *= S.project.kinds.get(kind_ref.split("/", 1)[1], {}).get("scale", 1.0)
+        out[values.get("squadronId")] = size
+    return out
+
+
+def _matrix(o: dict, schema: obj.Schema | None, oid: int | None, squad_sizes: dict | None = None) -> np.ndarray:
+    """Where an object's model goes: its position, the facing and size its entry gives, the definition's scale (a
+    squad member: its squadron's size instead)."""
     values = S.fields(o, schema)
     angles = {}
     scale = (S.objtypes.get(oid, {}).get("scale") or 1.0) if oid is not None else 1.0
+    if schema and schema.key == "squadmember" and squad_sizes and values.get("squadron") in squad_sizes:
+        scale = squad_sizes[values["squadron"]]
     if schema:
         for role in ("yaw", "pitch", "roll"):
             f = schema.role(role)
@@ -441,6 +461,7 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
     out, boxes = [], {}
     if pickable:
         S.instances = []
+    squad_sizes = _squad_sizes(objs)
     for o in objs:
         oid = kind_tools.base_oid(o)
         schema = S.schema(o)
@@ -450,8 +471,8 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
         mesh = S.view.model(path) if path else None
         if mesh is None or not mesh.parts:
             continue
-        m = _matrix(o, schema, oid)
-        if o["type"].startswith("pack:kind/"):
+        m = _matrix(o, schema, oid, squad_sizes)
+        if o["type"].startswith("pack:kind/") and not (schema and schema.key == "squadmember"):
             kind = S.project.kinds.get(o["type"].split("/", 1)[1], {})
             m = m @ np.diag([kind.get("scale", 1.0)] * 3 + [1.0])
         tint = (1.0, 1.0, 0.2, 0.35) if o["uid"] in S.selection else (0.0, 0.0, 0.0, 0.0)

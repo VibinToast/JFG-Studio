@@ -129,6 +129,14 @@ class _Builder:
         if o.get("target") and schema and schema.key == "exit":
             n = self.level_number(o["target"])
             fields.update({"levelLow": n & 0xFF, "levelHigh": 0xFF if n < 0x100 else n >> 8})
+        kind_ref = (o.get("kindFields") or {}).get("baddyType")
+        if schema and schema.key == "squadron" and kind_ref:
+            # Squad members are drawn at their squadron's size, not their definition's scale: a kind's Size goes there.
+            kind = self.p.kinds.get(refs.parse(kind_ref, "kind").name, {})
+            if kind.get("scale", 1.0) != 1.0:
+                at = schema.field("size").offset - obj.PARAMS_OFFSET
+                current = fields.get("size", raw[at] if len(raw) > at else schema.field("size").default) or 100
+                fields["size"] = max(1, min(255, round(current * kind["scale"])))
         return obj.encode_entry(t.number(), o["pos"], size, schema, fields, raw)
 
     def entry_fixups(self, o: dict, at: int) -> list[dict]:
