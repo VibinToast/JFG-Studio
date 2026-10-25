@@ -21,7 +21,7 @@ from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
 from jfgstudio import validate as val
-from jfgstudio.gui import kind_tools, level_tools, model_viewer, planet_tools, theme
+from jfgstudio.gui import kind_tools, level_tools, model_viewer, planet_tools, script_tools, theme
 from jfgstudio.gui import viewport as vp
 
 gz = imguizmo.im_guizmo
@@ -65,6 +65,10 @@ class State:
         self.exit_filter = ""
         self.stock_pick = {"open": False, "filter": "", "id": None}
         self.kind: str | None = None  # the Kinds window's kind
+        self.triggers: list | None = None  # triggers.json, read when the Triggers window first shows
+        self.triggers_dirty = False
+        self.script_file: str | None = None  # the Scripts window's file and text
+        self.script_text = ""
         self.kind_pick = {"open": False, "filter": "", "base": None, "name": ""}
         self.planet: str | None = None  # the Planet window's planet
         self.planets_dirty = False  # planet edits are saved with the project (they have no undo yet)
@@ -96,6 +100,7 @@ class State:
             self.message = f"Could not open {path}: {len(e.problems)} problems (see Console)"
             return
         self.load_errors = []
+        self.triggers, self.triggers_dirty, self.script_file = None, False, None
         self.level = next(iter(self.project.levels), None)
         self.selection.clear()
         self.validate()
@@ -110,6 +115,10 @@ class State:
             for h in self.histories.values():
                 h.dirty = False
             self.planets_dirty = False
+            if self.triggers is not None and self.triggers_dirty:
+                from jfgstudio import scripts as scr
+                scr.save_triggers(self.project, self.triggers)
+                self.triggers_dirty = False
             self.message = "Saved"
 
     def history(self) -> edit.History | None:
@@ -1542,6 +1551,8 @@ def _layout() -> hello_imgui.DockingParams:
         win("Planet", "MainDockSpace", planet_tools.planet_window),
         win("Models", "MainDockSpace", model_viewer.models_window),
         win("Kinds", "RightSpace", labelled(kind_tools.kinds_window)),
+        win("Triggers", "RightSpace", labelled(script_tools.triggers_window)),
+        win("Scripts", "MainDockSpace", script_tools.scripts_window),
         win("Hierarchy", "LeftSpace", hierarchy),
         win("Inspector", "RightSpace", labelled(inspector)),
         win("Level", "RightSpace", labelled(level_tools.level_window)),

@@ -153,3 +153,24 @@ class Kinds(unittest.TestCase):
             (p.path / "kinds" / "bad.json").write_text('{"format": 1, "name": "x", "base": "pack:kind/y"}')
             with self.assertRaises(proj.ProjectError):
                 proj.load(p.path)
+
+
+class Triggers(unittest.TestCase):
+    def test_compile_and_check(self):
+        from jfgstudio import scripts as scr
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            scr.save_triggers(p, [
+                {"name": "hello", "level": "pack:level/home", "when": {"kind": "level start"},
+                 "then": [{"do": "message", "text": 'say "hi"', "seconds": 2}]},
+                {"name": "gate", "level": "stock:level/21", "when": {"kind": "enter", "box": [10, 20, -10, -20]},
+                 "once": False, "then": [{"do": "unlock_door", "door": 3}, {"do": "music", "track": "nope"}]}])
+            lua = scr.compile_triggers(scr.load_triggers(p), p)
+            self.assertIn('jfg.level_id("level_home")', lua)
+            self.assertIn('jfg.message("say \\"hi\\"", 2.0)', lua)
+            self.assertIn("x >= -10.0 and x <= 10.0 and z >= -20.0 and z <= 20.0", lua)
+            self.assertIn("jfg.unlock_door(3)", lua)
+            problems = scr.check(p)
+            self.assertEqual(len(problems), 1)
+            self.assertIn("music/nope.ogg", problems[0])
+            self.assertIn("scripts/_triggers.lua", scr.pack_scripts(p))
