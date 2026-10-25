@@ -19,7 +19,7 @@ from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
 from jfgstudio import validate as val
-from jfgstudio.gui import level_tools, theme
+from jfgstudio.gui import level_tools, planet_tools, theme
 from jfgstudio.gui import viewport as vp
 
 gz = imguizmo.im_guizmo
@@ -58,6 +58,9 @@ class State:
         self.water_height = 10.0
         self.water_auto = True  # the water height follows the floor where the drag starts (+15)
         self.exit_filter = ""
+        self.planet: str | None = None  # the Planet window's planet
+        self.planets_dirty = False  # planet edits are saved with the project (they have no undo yet)
+        self.map_doc = None
         self.errors: list[str] = []  # errors a window hit (logged in crash logs), shown in the Console
         self.errors_seen: set[str] = set()  # why the rotate / scale handle is not shown for the selection
         self.drag_scale = 0  # the size field's value when a scale drag started
@@ -95,6 +98,7 @@ class State:
             self.project.save()
             for h in self.histories.values():
                 h.dirty = False
+            self.planets_dirty = False
             self.message = "Saved"
 
     def history(self) -> edit.History | None:
@@ -122,7 +126,7 @@ class State:
         self.validate()
 
     def dirty(self) -> bool:
-        return any(h.dirty for h in self.histories.values())
+        return self.planets_dirty or any(h.dirty for h in self.histories.values())
 
     def track_path(self) -> str | None:
         """The .glb the Scene shows for the open level: the project's geometry, or a stock track from the catalog."""
@@ -156,6 +160,7 @@ class State:
         self.cat, self.cat_error, self.objtypes, self.behaviours = None, "", {}, {}
         self.prefab.pop("squads", None)
         self.list_levels, self.model_paths, self.stock_entries = {}, {}, {}
+        self.map_doc = None
 
     def schema(self, o: dict) -> obj.Schema | None:
         self.catalog()
@@ -1202,6 +1207,7 @@ def _layout() -> hello_imgui.DockingParams:
     params.dockable_windows = [
         win("Scene", "MainDockSpace", scene),
         win("Level Graph", "MainDockSpace", level_graph),
+        win("Planet", "MainDockSpace", planet_tools.planet_window),
         win("Hierarchy", "LeftSpace", hierarchy),
         win("Inspector", "RightSpace", labelled(inspector)),
         win("Level", "RightSpace", labelled(level_tools.level_window)),
