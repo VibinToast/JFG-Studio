@@ -46,7 +46,81 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     out += _check_planets_together(project)
     out += _check_galaxies(project)
     out += _check_scripts(project)
+    out += _check_arrivals(project, schemas)
+    out += _check_keys(project, schemas)
+    out += _check_reachable(project, schemas)
     return out
+
+
+KEY_IDS = range(0x258, 0x262)  # the coloured keys: yellow 0x258 ... blue 0x261; a door needs id - 0x258 + 2
+ARRIVAL_MARGIN = 10  # a start point this close to an exit's radius: the player may be sent straight on
+
+
+def _check_arrivals(project: Project, schemas) -> list[Problem]:
+    """A start point inside an exit's radius in its level: arriving there takes the exit again at once."""
+    out = []
+    for level in project.levels.values():
+        objs = level.objects["objects"]
+        exits = [o for o in objs if _key(o, schemas) == "exit" and o.get("fields", {}).get("radius", 0) >= 5]
+        for s in (o for o in objs if _key(o, schemas) == "startpoint"):
+            for e in exits:
+                d = ((s["pos"][0] - e["pos"][0]) ** 2 + (s["pos"][2] - e["pos"][2]) ** 2) ** 0.5
+                if d <= e["fields"]["radius"] + ARRIVAL_MARGIN:
+                    out.append(Problem(WARNING, "arrival", f"levels/{level.name}/objects.json",
+                                       f"start point {s.get('fields', {}).get('startPoint', 0)} is {d:.0f} from exit "
+                                       f"{e['uid']} (radius {e['fields']['radius']}): arriving may take that exit "
+                                       "again", s["uid"]))
+    return out
+
+
+def _check_keys(project: Project, schemas) -> list[Problem]:
+    """A door that needs a coloured key no level of the pack holds."""
+    held = {obj.stock_id(o) - KEY_IDS.start + 2 for lv in project.levels.values() for o in lv.objects["objects"]
+            if obj.stock_id(o) in KEY_IDS}
+    out = []
+    for level in project.levels.values():
+        for o in level.objects["objects"]:
+            lock = o.get("fields", {}).get("keyLock", 0)
+            if _key(o, schemas) == "door" and lock >= 2 and lock not in held:
+                name = schemas["door"].field("keyLock").enum.get(lock, f"item {lock - 2}")
+                out.append(Problem(WARNING, "key", f"levels/{level.name}/objects.json",
+                                   f"the door needs the {name} and no level of the pack holds one (unless the player "
+                                   "brings it from the game)", o["uid"]))
+    return out
+
+
+def _check_reachable(project: Project, schemas) -> list[Problem]:
+    """Planets of the pack the player can't get to: not shown on any map and no exit leads into them."""
+    planets = {n: p for n, p in project.planets.items() if "replaces" not in p}
+    if not planets:
+        return []
+    planet_of = {lv.name: lv.level["planet"] for lv in project.levels.values() if lv.level.get("planet")}
+    for n, p in planets.items():
+        for ref in p.get("entryLevel", {}).values():
+            if ref.startswith("pack:level/"):
+                planet_of.setdefault(ref.split("/", 1)[1], n)
+    exits = [(lv.name, refs.parse(o["target"]).name) for lv in project.levels.values()
+             for o in lv.objects["objects"] if o.get("target", "").startswith("pack:level/")]
+    reached: set[str] = set()
+    while True:
+        before = len(reached)
+        for n, p in planets.items():
+            unlock = p.get("unlock") or ("stock" if not p.get("galaxy") else "start")
+            other = unlock.get("entered") or unlock.get("completed") if isinstance(unlock, dict) else None
+            shown = unlock in ("start", "stock", "script") or (isinstance(unlock, dict) and "newGame" in unlock) or (
+                other is not None and other != n and other in reached)
+            # an exit from a game level (an edit of one, or a level on no planet) or a reached planet's level
+            portal = any(planet_of.get(dst) == n and planet_of.get(src) != n
+                         and (planet_of.get(src) is None or planet_of.get(src) in reached) for src, dst in exits)
+            if shown or portal:
+                reached.add(n)
+        if len(reached) == before:
+            break
+    return [Problem(WARNING, "reachable", f"planets/{n}.json",
+                    "the player can't get here: the planet only shows once it is entered or another planet is, and no "
+                    "exit from the game's levels leads in. Give it unlock \"start\" (shown from the beginning; L / R "
+                    "on the planet map to its galaxy), or an exit into it from an edit of a game level")
+            for n in planets if n not in reached]
 
 
 def _ref(text, category, file, uid, out) -> refs.Ref | None:

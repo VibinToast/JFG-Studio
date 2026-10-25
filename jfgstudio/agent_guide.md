@@ -27,14 +27,23 @@ Through a Blender MCP server, run Python in Blender and use it rather than writi
 ```python
 import bpy, jfg64
 jfg64.set_surface(bpy.data.materials["river"], "water")    # solid, water, lava, kill, collider, nocollide
-jfg64.bake_light(obj.data, obj.matrix_world, sun_dir, sun_colour, ambient)   # vertex light, per mesh
-jfg64.budgets([o for o in bpy.context.scene.objects])      # {"triangles", "images", "far", "surfaces"}
-jfg64.export("C:/path/level.glb")                          # +Y up, custom properties, vertex colours
+jfg64.bake_light(obj.data, obj.matrix_world, sun_dir, sun_colour, ambient, tint=True)  # one mesh
+jfg64.bake_scene(objects, tint=True)                       # several, with the scene's Sun lamp
+jfg64.budgets(objects)                                     # {"triangles", "images", "far", "surfaces"}
+jfg64.export("C:/path/level.glb", collection="level_1")    # or objects=[...]; default: everything visible
 ```
 
+- **Colour**: the game draws only the vertex colours (the `Col` layer the bake writes), never a material's colour.
+  Bake with `tint=True` to carry each material's Base Color in; untextured geometry is otherwise grey.
+- **Spaces**: Blender's own (Z up). `sun_dir` is the direction the light travels ((0, 0, -1) = straight down);
+  colours are RGB 0-1. `help(jfg64)` lists everything.
+- **Several levels in one .blend**: one collection per level, exported with `collection=`.
+- **Don't take over the player's Blender**: work in a new scene or file of your own, and leave what was open as it
+  was.
+
 Then `import_geometry` the `.glb` here. If `import jfg64` fails, the add-on isn't installed or enabled: ask the
-player to install it (Edit > Preferences > Add-ons, the ▾ menu > Install from Disk..., `jfg64.zip`, tick "jfg64: Jet Force Gemini levels")
-before modelling.
+player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the ▾ menu > Install from Disk...,
+`jfg64.zip`, tick "jfg64: Jet Force Gemini levels") before modelling.
 
 ## Units and space
 
@@ -48,6 +57,16 @@ before modelling.
   deck with no ramp onto it is walked under, not onto.
 - Objects that walk (enemies, start points) stand a few units above the floor (`place` does this): a spawn even a
   fraction below a sloped floor falls through it.
+- **Scale** (hero size, jump height, steepest walkable slope, door sizes) is not written down yet. Until it is, take
+  sizes from the example world (`samples/zephyra.jfgproj` in Studio's folder: read its files, don't change them) or
+  measure a game level with `geometry_info` and `surface_at`, and tell the player which sizes are guesses.
+- **Facing**: `place`, `update_object` and `connect` take degrees (0 = towards -z, the way a start point at yaw 0
+  faces). Types store it in their own steps: `describe_type` gives each angle field's `perTurn` (64 for angle10,
+  256 for angle8, 65536 for angle16).
+- **Fog** (level header): `fogNear` and `fogFar` are on the game's depth scale, 0-1023, where nearly all of the view
+  is in the top few dozen values. The example world's light haze is `fogNear` 985-990, `fogFar` 1020-1022, `fog3` =
+  `fogNear`. Around 700 the fog starts at the hero's feet. Change it a few units at a time; use a `fogzone` for
+  local mist.
 
 ## Objects
 
@@ -69,11 +88,34 @@ before modelling.
   level a way back. An exit's `arg1A` 1 (the default) shows the game's stats screen when it leads into another region.
 - **Planets**: a level's `planet` puts it in that planet's region (at most 32 levels per planet; the port has room
   for 9 mod regions in all). The planet's `entryLevel` is where the map starts it.
-- **Mood**: `fogzone`, `light`, `glow`, and the level header's fog colour and distances; music per level.
+- **Mood**: `fogzone`, `light`, `glow`, and the level header's fog colour and distances (see Fog); music per level.
+- **The game's own levels**: `stock_levels` lists them (`stock:level/<id>`); it marks where a new game starts, the
+  usual way back to the game.
+
+## Planets and galaxies: how the player gets in
+
+A planet is open on the map by its `unlock`: `"start"` (from the beginning: the default on a galaxy of the pack's
+own), `"stock"` (on the game's galaxy, the default: once the game's map point its route leaves from is open),
+`{"entered": "<planet>"}` / `{"completed": "<planet>"}` (once that planet's entry level was entered / it was
+completed by a script), or `"script"` (when a trigger or script opens it). A galaxy of the pack's own appears to L / R
+on the planet map as soon as one of its planets is open. So a pack is reachable when:
+- a planet of its galaxy is `"start"`: the player presses R on the map and flies there; or
+- a planet of the game's galaxy has a route from a game map point (`routes`: `from` `stock:mappoint/<n>`, a stick
+  `dir`, the `back` direction); or
+- an exit in one of the game's levels leads in (a portal): `edit_stock_level`, then `connect` from it to the planet's
+  entry level. The example world does this, and its first planet waits for `{"entered": itself}` so it shows on the
+  map once the portal was used.
+`validate` warns about a planet nothing leads to. The planet's `disc` is its look on the map: `index` the game disc
+whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `radius`, and optional `colour`.
+`set_planet` and `set_galaxy` take the files' full formats, with every key described.
 - **Pacing**: a start area with no enemies in view, a squad guarding each gate, pickups (health, ammo) after fights,
   a key or switch that sends the player back through what they cleared.
 
 ## Checking
 
-- `validate` names the file and the object (uid) of each problem; fix errors before `build` or `play`.
+- `validate` names the file and the object (uid) of each problem; fix errors before `build` or `play`. Besides the
+  game's rules it warns about start points inside an exit's radius, key doors whose key no level holds, planets
+  nothing leads to, and objects the geometry leaves buried, floating or over a pit. It can't tell whether a door
+  fills its opening or a gap lets the player around it: look.
+- `level_preview` draws a level from above with its objects on it: look at each level once it is laid out.
 - `geometry_info` for the limits; `surface_at` to check an object isn't over water, a pit or nothing.

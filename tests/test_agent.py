@@ -73,6 +73,13 @@ TYPES = {0x29: {"name": "Bug", "behaviour": 24, "uses": 3, "examples": [[10, 4]]
          0x1AD: {"name": "Gate", "behaviour": 7, "uses": 1, "examples": [[11, 7]]}}
 
 
+class FakeCatalog:
+    """Made-up stock levels (the tests' own names)."""
+
+    def levels(self):
+        return [{"id": i, "name": f"Place {i}", "world": i // 10, "track": i + 1} for i in range(25)]
+
+
 class AgentTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -93,7 +100,7 @@ class AgentTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def with_catalog(self):
-        self.s._catalog, self.s._catalog_error, self.s._types = "fake", None, TYPES
+        self.s._catalog, self.s._catalog_error, self.s._types = FakeCatalog(), None, TYPES
 
     def errors(self):
         return [p for p in val.validate(self.s.p) if p.severity == val.ERROR]
@@ -252,6 +259,67 @@ class Reimport(AgentTest):
         self.s.set_level("home", {"track": "stock:track/3"})
         with self.assertRaises(agent.AgentError):  # the game's own track: not the pack's file to replace
             self.s.reimport_geometry("home", "x.glb")
+
+
+class TrialFindings(AgentTest):
+    """What the first agent trial (a three-level planet from a brief) asked for."""
+
+    def test_types_levels_and_facing(self):
+        short = self.s.object_types()
+        self.assertNotIn("types", short)  # the schemas only, short, unless asked for the game's types
+        self.assertNotIn("description", short["schemas"][0])
+        door = self.s.describe_type("door")  # shared by a behaviour: its fields, not an error
+        self.assertIn("keyLock", [f["name"] for f in door["fields"]])
+        self.with_catalog()
+        self.assertEqual(self.s.describe_type("door")["ids"], ["0x1AD"])
+        yaw = next(f for f in self.s.describe_type("startpoint")["fields"] if f["name"] == "yaw")
+        self.assertEqual(yaw["perTurn"], 64)
+        start = self.s.place("home", "startpoint", [0, 0], fields={"startPoint": 5}, facing=180)[0]
+        self.assertEqual(start["fields"]["yaw"], 32)
+        self.assertEqual(self.s.update_object("home", start["uid"], facing=90)["fields"]["yaw"], 16)
+        with self.assertRaises(agent.AgentError):
+            self.s.place("home", "health", [0, 0], facing=90)  # no yaw field
+        levels = self.s.stock_levels()["levels"]
+        self.assertIn("note", next(lv for lv in levels if lv["id"] == agent.NEW_GAME_LEVEL))
+        self.assertEqual([lv["id"] for lv in self.s.stock_levels("place 2")["levels"]], [2] + list(range(20, 25)))
+        made = self.s.edit_stock_level("portal_level", agent.NEW_GAME_LEVEL)
+        self.assertEqual(made["track"], f"stock:track/{agent.NEW_GAME_LEVEL + 1}")  # the catalog's, not a guess
+        self.assertEqual(self.s.p.levels["portal_level"].level["name"], "portal_level")  # no game names
+        tools = {t["name"]: t for t in mcp_server.tool_list()}
+        planet = tools["set_planet"]["inputSchema"]["properties"]["planet"]
+        self.assertIn("unlock", planet["properties"])
+        self.assertNotIn("format", planet["required"])
+
+    def test_validator_rules(self):
+        def rules():
+            return [(p.rule, p.uid or p.file) for p in val.validate(self.s.p)
+                    if p.rule in ("arrival", "key", "reachable")]
+        self.assertEqual(rules(), [])
+        self.s.place("home", "exit", [300, 0], fields={"radius": 70}, target="pack:level/gemini")
+        near = self.s.place("home", "startpoint", [340, 0], fields={"startPoint": 3})[0]["uid"]
+        self.assertEqual(rules(), [("arrival", near)])
+        self.s.delete_objects("home", [near])
+        self.s.update_object("gemini", "door1", fields={"keyLock": "yellow key"})
+        self.assertEqual(rules(), [("key", "door1")])
+        self.s.place("home", "0x258", [0, 0])  # the yellow key
+        self.assertEqual(rules(), [])
+        planet = dict(self.s.p.planets["gemini"], unlock={"entered": "gemini"})
+        self.s.set_planet("gemini", {k: v for k, v in planet.items() if k != "format"})
+        self.assertEqual(rules(), [])  # home (on no planet) has an exit into it: a way in
+        exit_ = next(o["uid"] for o in self.s.level_info("home")["objects"] if o.get("target"))
+        self.s.delete_objects("home", [exit_])
+        self.assertEqual(rules(), [("reachable", "planets/gemini.json")])
+
+    def test_preview(self):
+        self.with_catalog()
+        self.s.place_squad("home", [0, -400], "0x29", members=2, door="new", door_type="0x1AD", door_pos=[0, -150])
+        out = Path(self.tmp.name) / "home.png"
+        shot = self.s.preview("home", 256, str(out))
+        self.assertTrue(shot["png"].startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertEqual(out.read_bytes(), shot["png"])
+        self.assertEqual(shot["legend"]["up"], "-z")
+        content = mcp_server.call(self.s, "level_preview", {"level": "home", "size": 128})["content"]
+        self.assertEqual([c["type"] for c in content], ["image", "text"])
 
 
 class Server(AgentTest):

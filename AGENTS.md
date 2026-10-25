@@ -20,6 +20,7 @@ Neighbours in `JetForceGemini/`: the decomp (`Decomp/`, read-only; Studio import
 | `jfgstudio/prefabs.py` | what the Prefabs window places: single objects and linked groups (squad, exit pair, region) |
 | `jfgstudio/agent.py`, `mcp_server.py`, `agent_guide.md` | `jfgstudio mcp`: Studio as tools for AI agents (one `Session` over edit/prefabs/validate/build; stdio MCP; the guide its first tool returns) |
 | `jfgstudio/placement.py` | objects against a level's geometry (buried, floating, sunk, over a pit), for re-imports |
+| `jfgstudio/preview.py` | a level from above with its objects, as a PNG (the agent's `level_preview`) |
 | `jfgstudio/validate.py` | the validator (rules from the decomp's tested pitfalls and its review) |
 | `jfgstudio/build.py`, `bps.py` | the pack builder and the map patch encoder |
 | `jfgstudio/catalog.py`, `rom.py`, `formats.py`, `settings.py` | the user's ROM, the local catalog, jfgformats, paths |

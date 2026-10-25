@@ -19,7 +19,7 @@ from pathlib import Path
 
 import jsonschema
 
-from jfgstudio import edit, formats, importer, placement, prefabs, refs, rom, scripts
+from jfgstudio import edit, formats, importer, placement, prefabs, preview, refs, rom, scripts
 from jfgstudio import objects as obj
 from jfgstudio import project as proj
 from jfgstudio import validate as val
@@ -30,6 +30,7 @@ LEVEL_KEYS = ("name", "track", "sky", "music", "planet", "ambient", "header")
 SURFACES = ("solid", "lava", "hidden", "water", "kill", "nocollide")  # TrackMesh's kinds; the first three are floor
 FLOOR_KINDS = ("solid", "lava", "hidden")
 LIST_LIMIT = 150  # catalog types listed at once
+NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way back to the game
 
 
 class AgentError(Exception):
@@ -133,11 +134,17 @@ class Session:
         return {k: v["behaviour"] for k, v in (self._types or {}).items()}
 
     def object_types(self, search: str | None = None, behaviour: int | None = None) -> dict:
-        """The object-type schemas, and (with a catalog) the game's own object types matching `search`."""
-        schemas = [{"key": s.key, "name": s.name, "ids": [f"0x{i:X}" for i in s.ids], "behaviour": s.behaviour,
-                    "category": s.category, "status": s.status, "description": s.description}
+        """The object-type schemas (short); with `search` or `behaviour`, also the game's own object types that match
+        (from the catalog)."""
+        schemas = [{"key": s.key, "name": s.name, "category": s.category, "status": s.status,
+                    **({"ids": [f"0x{i:X}" for i in s.ids[:3]] + (["..."] if len(s.ids) > 3 else [])} if s.ids
+                       else {"behaviour": s.behaviour})}
                    for s in sorted(self.schemas.values(), key=lambda s: (s.category, s.key))]
         out = {"schemas": schemas}
+        if search is None and behaviour is None:
+            out["next"] = ("describe_type <key> for a schema's fields and ids; object_types with search (a name) or "
+                           "behaviour (a schema's behaviour number) for the game's own types")
+            return out
         if self.catalog() is None:
             out["catalog"] = f"not available ({self._catalog_error}): only the schemas' own ids can be named"
             return out
@@ -157,6 +164,15 @@ class Session:
         return out
 
     def describe_type(self, type) -> dict:
+        if isinstance(type, str) and type in self.schemas and not self.schemas[type].ids:
+            s = self.schemas[type]  # shared by every type with one behaviour (doors, squad members): no id of its own
+            out = {"schema": s.key, "name": s.name, "status": s.status, "description": s.description,
+                   "fields": [self._field_doc(f) for f in s.fields], "behaviour": s.behaviour,
+                   "note": f"place one by the id of a game type with behaviour {s.behaviour}"}
+            if self.catalog() is not None:
+                ids = sorted((t.get("uses", 0), oid) for oid, t in self._types.items() if t["behaviour"] == s.behaviour)
+                out["ids"] = [f"0x{oid:X}" for _, oid in reversed(ids)][:LIST_LIMIT]
+            return out
         oid, schema, kind = self._type(type)
         out = {"id": f"0x{oid:X}" if oid is not None else None, "kind": kind}
         if schema is not None:
@@ -180,9 +196,23 @@ class Session:
         for k in ("unit", "link", "role", "description"):
             if getattr(f, k):
                 d[k] = getattr(f, k)
+        if f.unit in obj.ANGLE_SHIFT:
+            d["perTurn"] = 0x10000 >> obj.ANGLE_SHIFT[f.unit]  # steps in a full turn (facing: degrees)
         if f.enum:
             d["values"] = {str(k): v for k, v in f.enum.items()}
         return d
+
+    def stock_levels(self, search: str | None = None) -> dict:
+        """The game's own levels (from the catalog): id, name, world and track; `search` filters by name. Exits and
+        entry levels name them stock:level/<id>."""
+        if self.catalog() is None:
+            raise AgentError(f"the catalog is not available ({self._catalog_error})")
+        out = [{"id": lv["id"], "name": lv["name"], "world": lv["world"], "track": lv["track"]}
+               for lv in self._catalog.levels() if not search or search.lower() in lv["name"].lower()]
+        for lv in out:
+            if lv["id"] == NEW_GAME_LEVEL:
+                lv["note"] = "where a new game starts (Juno); the usual way back to the game"
+        return {"levels": out[:LIST_LIMIT * 3]}
 
     def _type(self, type) -> tuple[int | None, obj.Schema | None, str | None]:
         """(stock object id, schema, pack kind ref) of a type named by schema key, id or kind."""
@@ -399,6 +429,16 @@ class Session:
             out["next"] = "settle_objects puts sunk and floating ones on the floor; move the others yourself"
         return out
 
+    def preview(self, level: str, size: int = 512, out: str | None = None) -> dict:
+        """A top-down picture of the level with its objects ("png": the bytes), and its legend; `out` also saves it."""
+        lv = self._level(level)
+        png, legend = preview.render(self._mesh(level), lv.objects["objects"], self.schemas, self._behaviours(),
+                                     _as_int(size, "size"))
+        if out:
+            Path(out).write_bytes(png)
+            legend["saved"] = str(out)
+        return {"png": png, "legend": legend}
+
     def check_placement(self, level: str) -> list[dict]:
         """The level's objects that should stand on the floor but are buried, floating, sunk or over a pit."""
         lv = self._level(level)
@@ -481,6 +521,25 @@ class Session:
             level.level["planet"] = planet
         self._save()
         return {"level": name, "next": "place a start point (type startpoint, fields startPoint 0, player 0)"}
+
+    def edit_stock_level(self, name: str, level_id: int) -> dict:
+        """A level of the project that adds objects to one of the game's own levels (a portal into the pack, say):
+        what it holds is added to that level when the pack loads. Its track is the game level's own."""
+        if self.catalog() is None:
+            raise AgentError(f"the catalog is not available ({self._catalog_error}): it gives the level's track")
+        level_id = _as_int(level_id, "level_id")
+        levels = self._catalog.levels()
+        if not 0 <= level_id < len(levels):
+            raise AgentError(f"there is no stock level {level_id} (0-{len(levels) - 1}; stock_levels lists them)")
+        lv = levels[level_id]
+        try:
+            # the project's own name for it, not the catalog's (the player's game data stays out of the project)
+            proj.edit_stock_level(self.p, name, level_id, name[:31], lv["track"])
+        except proj.ProjectError as e:
+            raise AgentError("\n".join(e.problems)) from e
+        self._save()
+        return {"level": name, "base": f"stock:level/{level_id}", "track": f"stock:track/{lv['track']}",
+                "next": "place objects in it like any level (its own objects stay); connect an exit to the pack"}
 
     def set_level(self, name: str, values: dict) -> dict:
         """Level settings: name, track, sky, music, planet, ambient, and header fields (merged by name)."""
@@ -570,11 +629,15 @@ class Session:
         return [self._describe(o) for o in made]
 
     def place(self, level: str, type, pos, fields: dict | None = None, name: str | None = None,
-              on_floor: bool = True, lift: float = 0, example=None, target: str | None = None) -> list[dict]:
-        """One object. A type that isn't fully decoded starts from a stock entry (from the catalog, or `example`)."""
+              on_floor: bool = True, lift: float = 0, example=None, target: str | None = None,
+              facing: float | None = None) -> list[dict]:
+        """One object. A type that isn't fully decoded starts from a stock entry (from the catalog, or `example`).
+        `facing`: degrees, 0 = towards -z (as start points face), for the type's yaw field in its own steps."""
         lv = self._level(level)
         oid, schema, kind = self._type(type)
         checked = self._fields(schema, fields)
+        if facing is not None:
+            checked.update([self._facing(schema, facing)])
         at = self._pos(lv, pos, schema, on_floor, lift)
         ex = self._example(oid, schema, example)
         placer = prefabs.Placer(lv, self.schemas, self._behaviours())
@@ -594,6 +657,16 @@ class Session:
                 raise AgentError("only exits have a target")
             o["target"] = target
         return self._add(lv, placer.made, f"place {name or o['uid']}")
+
+    @staticmethod
+    def _facing(schema, degrees) -> tuple[str, int]:
+        """(yaw field, value) for a facing in degrees, in whatever angle steps the type's yaw field takes."""
+        f = schema.role("yaw") if schema else None
+        if f is None:
+            raise AgentError(f"{schema.key if schema else 'this type'} has no facing (no yaw field)")
+        if isinstance(degrees, bool) or not isinstance(degrees, int | float):
+            raise AgentError("facing is in degrees")
+        return f.name, obj.value_of_angle(f, math.radians(float(degrees)))
 
     def _target(self, target: str) -> None:
         try:
@@ -701,13 +774,16 @@ class Session:
         return o
 
     def update_object(self, level: str, uid: str, fields: dict | None = None, pos=None, on_floor: bool = False,
-                      name: str | None = None, target: str | None = None) -> dict:
+                      name: str | None = None, target: str | None = None, facing: float | None = None) -> dict:
         """Changes an object's fields (merged), position, name or exit target, as one undo step."""
         lv = self._level(level)
         o = self._object(lv, uid)
         schema = obj.schema_for(o, self.schemas, self._behaviours())
         changes = []
-        for k, v in self._fields(schema, fields).items():
+        values = self._fields(schema, fields)
+        if facing is not None:
+            values.update([self._facing(schema, facing)])
+        for k, v in values.items():
             changes.append(edit.Change(uid, ("fields", k), o.get("fields", {}).get(k), v))
         if pos is not None:
             changes.append(edit.Change(uid, ("pos",), list(o["pos"]), self._pos(lv, pos, schema, on_floor)))

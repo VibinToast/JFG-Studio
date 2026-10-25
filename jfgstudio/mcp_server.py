@@ -5,12 +5,15 @@ stdout, so whatever the tools print goes to stderr. Written here rather than wit
 part is small and Studio keeps its dependencies few.
 """
 
+import base64
 import contextlib
+import copy
 import json
 import sys
 import traceback
 
 from jfgstudio import __version__, agent
+from jfgstudio import project as proj
 
 PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
 INSTRUCTIONS = ("JFG-Studio makes levels and modpacks for Jet Force Gemini: Recompiled. Call guide first (workflow, "
@@ -26,6 +29,21 @@ _TYPE = {"type": ["string", "integer"],
 _EXAMPLE = {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2,
             "description": "[object list, entry]: the stock entry a not fully decoded type starts from (the catalog "
                            "picks one when left out)"}
+
+
+_FACING = {"type": "number", "description": "facing in degrees, 0 = towards -z (as start points face); written into "
+                                            "the type's yaw field in its own angle steps"}
+
+
+def _doc_schema(name: str) -> dict:
+    """A project file's JSON schema as a tool's input: the agent sees every key and what it means ("format" is added
+    for it)."""
+    doc = copy.deepcopy(proj._SCHEMAS[name])
+    for k in ("$schema", "title"):
+        doc.pop(k, None)
+    doc["properties"].pop("format", None)
+    doc["required"] = [r for r in doc.get("required", []) if r != "format"]
+    return doc
 
 
 def _tool(name, description, run, properties=None, required=()):
@@ -62,6 +80,12 @@ TOOLS = [
           "result lists those the new shape left buried, floating, sunk or over a pit.",
           lambda s, a: s.reimport_geometry(a["level"], a["path"]),
           {"level": _LEVEL, "path": {"type": "string", "description": "the new .glb"}}, ["level", "path"]),
+    _tool("level_preview", "A top-down picture of a level: the geometry shaded by height and coloured by surface, with "
+          "start points, exits (their radius), squads and their regions, doors (across their facing), keys and "
+          "pickups drawn on. Up is -z. Look at it after laying a level out.",
+          lambda s, a: s.preview(a["level"], a.get("size", 512), a.get("out")),
+          {"level": _LEVEL, "size": {"type": "integer", "description": "pixels across (default 512, at most 2048)"},
+           "out": {"type": "string", "description": "also save the PNG here"}}, ["level"]),
     _tool("check_placement", "A level's objects that should stand on the floor but are buried, floating, sunk or over "
           "a pit, with where each would stand.", lambda s, a: s.check_placement(a["level"]),
           {"level": _LEVEL}, ["level"]),
@@ -99,8 +123,9 @@ TOOLS = [
           ["level", "values"]),
     _tool("place", "Place one object, on the floor by default.",
           lambda s, a: s.place(a["level"], a["type"], a["pos"], a.get("fields"), a.get("name"),
-                               a.get("on_floor", True), a.get("lift", 0), a.get("example"), a.get("target")),
-          {"level": _LEVEL, "type": _TYPE, "pos": _POS,
+                               a.get("on_floor", True), a.get("lift", 0), a.get("example"), a.get("target"),
+                               a.get("facing")),
+          {"level": _LEVEL, "type": _TYPE, "pos": _POS, "facing": _FACING,
            "fields": {"type": "object", "description": "field: number or named value"},
            "name": {"type": "string"},
            "on_floor": {"type": "boolean", "description": "drop onto the floor (with [x, y, z]: the floor at or "
@@ -130,21 +155,32 @@ TOOLS = [
           ["from_level", "exit_pos", "to_level", "arrive_pos"]),
     _tool("update_object", "Change an object's fields (merged), position, name or exit target.",
           lambda s, a: s.update_object(a["level"], a["uid"], a.get("fields"), a.get("pos"), a.get("on_floor", False),
-                                       a.get("name"), a.get("target")),
+                                       a.get("name"), a.get("target"), a.get("facing")),
           {"level": _LEVEL, "uid": {"type": "string"}, "fields": {"type": "object"}, "pos": _POS,
-           "on_floor": {"type": "boolean"}, "name": {"type": "string"}, "target": {"type": "string"}},
+           "on_floor": {"type": "boolean"}, "name": {"type": "string"}, "target": {"type": "string"},
+           "facing": _FACING},
           ["level", "uid"]),
     _tool("delete_objects", "Delete objects by uid.", lambda s, a: s.delete_objects(a["level"], a["uids"]),
           {"level": _LEVEL, "uids": {"type": "array", "items": {"type": "string"}}}, ["level", "uids"]),
     _tool("undo", "Undo a level's last change.", lambda s, a: s.undo(a["level"]), {"level": _LEVEL}, ["level"]),
     _tool("redo", "Redo a level's last undone change.", lambda s, a: s.redo(a["level"]), {"level": _LEVEL},
           ["level"]),
-    _tool("set_planet", "Write a planet (planets/<name>.json: displayName, galaxy, disc, routes, unlock, "
-          "entryLevel ...).", lambda s, a: s.set_planet(a["name"], a["planet"]),
-          {"name": {"type": "string"}, "planet": {"type": "object"}}, ["name", "planet"]),
+    _tool("set_planet", "Write a planet (planets/<name>.json). On a galaxy of the pack's own, leave unlock out (or "
+          "\"start\") so it shows from the start: the player reaches the galaxy with L / R on the planet map. "
+          "The guide's \"Planets and galaxies\" explains disc, routes and unlock.",
+          lambda s, a: s.set_planet(a["name"], a["planet"]),
+          {"name": {"type": "string"}, "planet": _doc_schema("planet")}, ["name", "planet"]),
     _tool("set_galaxy", "Write a galaxy of the pack's own (galaxies/<name>.json).",
           lambda s, a: s.set_galaxy(a["name"], a["galaxy"]),
-          {"name": {"type": "string"}, "galaxy": {"type": "object"}}, ["name", "galaxy"]),
+          {"name": {"type": "string"}, "galaxy": _doc_schema("galaxy")}, ["name", "galaxy"]),
+    _tool("edit_stock_level", "A project level that adds objects to one of the game's own levels (e.g. a portal exit "
+          "into the pack): what it holds joins that level when the pack loads.",
+          lambda s, a: s.edit_stock_level(a["name"], a["level_id"]),
+          {"name": {"type": "string", "description": "the project's name for it"},
+           "level_id": {"type": "integer", "description": "the stock level (stock_levels)"}}, ["name", "level_id"]),
+    _tool("stock_levels", "The game's own levels (id, name, world, track), for exits and entry levels "
+          "(stock:level/<id>); search filters by name. Marks where a new game starts.",
+          lambda s, a: s.stock_levels(a.get("search")), {"search": {"type": "string"}}),
     _tool("get_triggers", "The project's triggers (\"when ... then ...\" rules).", lambda s, a: s.get_triggers()),
     _tool("set_triggers", "Replace the project's triggers; returns script problems.",
           lambda s, a: s.set_triggers(a["triggers"]), {"triggers": {"type": "array", "items": {"type": "object"}}},
@@ -191,6 +227,10 @@ def call(session: agent.Session, name: str, args: dict) -> dict:
     except Exception as e:  # noqa: BLE001 (the agent gets the error; the server keeps running)
         traceback.print_exc(file=sys.stderr)
         return {"content": [{"type": "text", "text": f"internal error: {type(e).__name__}: {e}"}], "isError": True}
+    if isinstance(value, dict) and isinstance(value.get("png"), bytes):  # a picture, with the rest as text
+        rest = {k: v for k, v in value.items() if k != "png"}
+        return {"content": [{"type": "image", "data": base64.b64encode(value["png"]).decode("ascii"),
+                             "mimeType": "image/png"}, {"type": "text", "text": agent.dumps(rest)}], "isError": False}
     text = value if isinstance(value, str) else agent.dumps(value)
     return {"content": [{"type": "text", "text": text}], "isError": False}
 
