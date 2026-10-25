@@ -1,0 +1,608 @@
+{
+ "format": 1,
+ "objects": [
+  {
+   "fields": {
+    "player": 0,
+    "startPoint": 0,
+    "yaw": 32
+   },
+   "name": "start0",
+   "pos": [
+    0,
+    0,
+    -1150
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xD",
+   "uid": "start1"
+  },
+  {
+   "fields": {
+    "player": 0,
+    "startPoint": 1,
+    "yaw": 0
+   },
+   "name": "start1",
+   "pos": [
+    0,
+    0,
+    1250
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xD",
+   "uid": "start2"
+  },
+  {
+   "fields": {
+    "animGroup": -1,
+    "condition": -1,
+    "levelHigh": 255,
+    "radius": 50,
+    "startPoint": 1,
+    "unlockWorld": -1
+   },
+   "name": "back to Ember Caverns",
+   "pos": [
+    0,
+    0,
+    -1270
+   ],
+   "size": 28,
+   "target": "pack:level/caverns",
+   "type": "stock:objtype/0xB",
+   "uid": "back_to_ember_caverns1"
+  },
+  {
+   "fields": {
+    "animGroup": -1,
+    "condition": -1,
+    "levelHigh": 255,
+    "radius": 70,
+    "startPoint": 0,
+    "unlockWorld": -1
+   },
+   "name": "victory: home to Goldwood",
+   "pos": [
+    0,
+    0,
+    1380
+   ],
+   "size": 28,
+   "target": "stock:level/21",
+   "type": "stock:objtype/0xB",
+   "uid": "victory__home_to_goldwood1"
+  },
+  {
+   "fields": {
+    "corner": 0,
+    "region": 1
+   },
+   "name": "region1_0",
+   "pos": [
+    -620,
+    0,
+    -620
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region1"
+  },
+  {
+   "fields": {
+    "corner": 1,
+    "region": 1
+   },
+   "name": "region1_1",
+   "pos": [
+    620,
+    0,
+    -620
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region2"
+  },
+  {
+   "fields": {
+    "corner": 2,
+    "region": 1
+   },
+   "name": "region1_2",
+   "pos": [
+    620,
+    0,
+    620
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region3"
+  },
+  {
+   "fields": {
+    "corner": 3,
+    "region": 1
+   },
+   "name": "region1_3",
+   "pos": [
+    -620,
+    0,
+    620
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region4"
+  },
+  {
+   "fields": {
+    "baddyType": 156,
+    "count": 3,
+    "doorId": 1,
+    "region": 1,
+    "squadronId": 1
+   },
+   "name": "BigShieldAnt squad",
+   "pos": [
+    -350,
+    0,
+    200
+   ],
+   "stock": {
+    "entry": 60,
+    "list": 409
+   },
+   "type": "stock:objtype/0x4F",
+   "uid": "bigshieldant_squad1"
+  },
+  {
+   "fields": {
+    "squadron": 1
+   },
+   "name": "BigShieldAnt",
+   "pos": [
+    -350,
+    0,
+    350
+   ],
+   "schema": "squadmember",
+   "stock": {
+    "entry": 22,
+    "list": 413
+   },
+   "type": "stock:objtype/0x9C",
+   "uid": "bigshieldant1"
+  },
+  {
+   "fields": {
+    "squadron": 1
+   },
+   "name": "BigShieldAnt",
+   "pos": [
+    -220,
+    0,
+    125
+   ],
+   "schema": "squadmember",
+   "stock": {
+    "entry": 22,
+    "list": 413
+   },
+   "type": "stock:objtype/0x9C",
+   "uid": "bigshieldant2"
+  },
+  {
+   "fields": {
+    "squadron": 1
+   },
+   "name": "BigShieldAnt",
+   "pos": [
+    -480,
+    0,
+    125
+   ],
+   "schema": "squadmember",
+   "stock": {
+    "entry": 22,
+    "list": 413
+   },
+   "type": "stock:objtype/0x9C",
+   "uid": "bigshieldant3"
+  },
+  {
+   "fields": {
+    "corner": 0,
+    "region": 2
+   },
+   "name": "region2_0",
+   "pos": [
+    -620,
+    0,
+    -620
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region5"
+  },
+  {
+   "fields": {
+    "corner": 1,
+    "region": 2
+   },
+   "name": "region2_1",
+   "pos": [
+    620,
+    0,
+    -620
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region6"
+  },
+  {
+   "fields": {
+    "corner": 2,
+    "region": 2
+   },
+   "name": "region2_2",
+   "pos": [
+    620,
+    0,
+    620
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region7"
+  },
+  {
+   "fields": {
+    "corner": 3,
+    "region": 2
+   },
+   "name": "region2_3",
+   "pos": [
+    -620,
+    0,
+    620
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region8"
+  },
+  {
+   "fields": {
+    "baddyType": 323,
+    "count": 2,
+    "doorId": 1,
+    "region": 2,
+    "squadronId": 2
+   },
+   "name": "Cyborg squad",
+   "pos": [
+    350,
+    0,
+    200
+   ],
+   "stock": {
+    "entry": 1,
+    "list": 431
+   },
+   "type": "stock:objtype/0x4F",
+   "uid": "cyborg_squad1"
+  },
+  {
+   "fields": {
+    "squadron": 2
+   },
+   "name": "Cyborg",
+   "pos": [
+    350,
+    0,
+    350
+   ],
+   "schema": "squadmember",
+   "stock": {
+    "entry": 146,
+    "list": 431
+   },
+   "type": "stock:objtype/0x143",
+   "uid": "cyborg1"
+  },
+  {
+   "fields": {
+    "squadron": 2
+   },
+   "name": "Cyborg",
+   "pos": [
+    350,
+    0,
+    50
+   ],
+   "schema": "squadmember",
+   "stock": {
+    "entry": 146,
+    "list": 431
+   },
+   "type": "stock:objtype/0x143",
+   "uid": "cyborg2"
+  },
+  {
+   "fields": {
+    "doorId": 1,
+    "yaw": 0
+   },
+   "name": "final gate (opens when both squads are down)",
+   "pos": [
+    0,
+    0,
+    950
+   ],
+   "schema": "door",
+   "stock": {
+    "entry": 274,
+    "list": 424
+   },
+   "type": "stock:objtype/0x1AD",
+   "uid": "final_gate__opens_when_both_squads_are_down1"
+  },
+  {
+   "fields": {},
+   "name": "health",
+   "pos": [
+    600,
+    0,
+    0
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "health1"
+  },
+  {
+   "fields": {},
+   "name": "health",
+   "pos": [
+    -600,
+    0,
+    0
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "health2"
+  },
+  {
+   "fields": {},
+   "name": "health",
+   "pos": [
+    0,
+    0,
+    -600
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "health3"
+  },
+  {
+   "fields": {},
+   "name": "health",
+   "pos": [
+    0,
+    0,
+    700
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "health4"
+  },
+  {
+   "fields": {},
+   "name": "ammo",
+   "pos": [
+    300,
+    0,
+    -500
+   ],
+   "size": 16,
+   "type": "stock:objtype/0xE8",
+   "uid": "ammo1"
+  },
+  {
+   "fields": {},
+   "name": "ammo",
+   "pos": [
+    -300,
+    0,
+    -500
+   ],
+   "size": 16,
+   "type": "stock:objtype/0xE8",
+   "uid": "ammo2"
+  },
+  {
+   "fields": {
+    "blue": 255,
+    "colourCycle": 8,
+    "flags": 64,
+    "green": 140,
+    "halfHeight": 8,
+    "intensity": 255,
+    "kind": 19,
+    "radius": 450,
+    "red": 120
+   },
+   "name": "light",
+   "pos": [
+    450,
+    620,
+    450
+   ],
+   "size": 32,
+   "type": "stock:objtype/0x10",
+   "uid": "light1"
+  },
+  {
+   "fields": {
+    "alpha": 140,
+    "blue": 255,
+    "distance": 900,
+    "glare": 100,
+    "green": 120,
+    "red": 160,
+    "size": 70
+   },
+   "name": "glow",
+   "pos": [
+    450,
+    340,
+    450
+   ],
+   "size": 20,
+   "type": "stock:objtype/0xC8",
+   "uid": "glow1"
+  },
+  {
+   "fields": {
+    "blue": 255,
+    "colourCycle": 8,
+    "flags": 64,
+    "green": 140,
+    "halfHeight": 8,
+    "intensity": 255,
+    "kind": 19,
+    "radius": 450,
+    "red": 120
+   },
+   "name": "light",
+   "pos": [
+    450,
+    620,
+    -450
+   ],
+   "size": 32,
+   "type": "stock:objtype/0x10",
+   "uid": "light2"
+  },
+  {
+   "fields": {
+    "alpha": 140,
+    "blue": 255,
+    "distance": 900,
+    "glare": 100,
+    "green": 120,
+    "red": 160,
+    "size": 70
+   },
+   "name": "glow",
+   "pos": [
+    450,
+    340,
+    -450
+   ],
+   "size": 20,
+   "type": "stock:objtype/0xC8",
+   "uid": "glow2"
+  },
+  {
+   "fields": {
+    "blue": 255,
+    "colourCycle": 8,
+    "flags": 64,
+    "green": 140,
+    "halfHeight": 8,
+    "intensity": 255,
+    "kind": 19,
+    "radius": 450,
+    "red": 120
+   },
+   "name": "light",
+   "pos": [
+    -450,
+    620,
+    450
+   ],
+   "size": 32,
+   "type": "stock:objtype/0x10",
+   "uid": "light3"
+  },
+  {
+   "fields": {
+    "alpha": 140,
+    "blue": 255,
+    "distance": 900,
+    "glare": 100,
+    "green": 120,
+    "red": 160,
+    "size": 70
+   },
+   "name": "glow",
+   "pos": [
+    -450,
+    340,
+    450
+   ],
+   "size": 20,
+   "type": "stock:objtype/0xC8",
+   "uid": "glow3"
+  },
+  {
+   "fields": {
+    "blue": 255,
+    "colourCycle": 8,
+    "flags": 64,
+    "green": 140,
+    "halfHeight": 8,
+    "intensity": 255,
+    "kind": 19,
+    "radius": 450,
+    "red": 120
+   },
+   "name": "light",
+   "pos": [
+    -450,
+    620,
+    -450
+   ],
+   "size": 32,
+   "type": "stock:objtype/0x10",
+   "uid": "light4"
+  },
+  {
+   "fields": {
+    "alpha": 140,
+    "blue": 255,
+    "distance": 900,
+    "glare": 100,
+    "green": 120,
+    "red": 160,
+    "size": 70
+   },
+   "name": "glow",
+   "pos": [
+    -450,
+    340,
+    -450
+   ],
+   "size": 20,
+   "type": "stock:objtype/0xC8",
+   "uid": "glow4"
+  },
+  {
+   "fields": {
+    "alpha": 140,
+    "blue": 160,
+    "distance": 900,
+    "glare": 100,
+    "green": 240,
+    "red": 255,
+    "size": 70
+   },
+   "name": "glow",
+   "pos": [
+    0,
+    60,
+    1380
+   ],
+   "size": 20,
+   "type": "stock:objtype/0xC8",
+   "uid": "glow5"
+  }
+ ]
+}

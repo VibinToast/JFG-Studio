@@ -1,0 +1,24 @@
+{
+ "format": 1,
+ "header": {
+  "clearB": 210,
+  "clearG": 170,
+  "clearR": 120,
+  "cutsceneData": 3,
+  "fog3": 990,
+  "fogB": 230,
+  "fogFar": 1022,
+  "fogG": 205,
+  "fogNear": 990,
+  "fogR": 170,
+  "region": 0,
+  "regionIndex": 0,
+  "tune": 4,
+  "tuneChannelMask": 65535,
+  "world": 15
+ },
+ "music": "pack:music/zephyra_landing",
+ "name": "Zephyra Landing",
+ "sky": 180,
+ "track": "pack:track/landing"
+}

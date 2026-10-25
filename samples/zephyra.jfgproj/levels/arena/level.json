@@ -1,0 +1,25 @@
+{
+ "format": 1,
+ "header": {
+  "clearB": 40,
+  "clearG": 10,
+  "clearR": 20,
+  "cutsceneData": 3,
+  "fog3": 990,
+  "fogB": 110,
+  "fogFar": 1022,
+  "fogG": 40,
+  "fogNear": 990,
+  "fogR": 60,
+  "lights": 32,
+  "region": 0,
+  "regionIndex": 0,
+  "tune": 4,
+  "tuneChannelMask": 65535,
+  "world": 15
+ },
+ "music": "pack:music/zephyra_arena",
+ "name": "Sky Arena",
+ "sky": 205,
+ "track": "pack:track/arena"
+}

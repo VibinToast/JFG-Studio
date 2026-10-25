@@ -1,0 +1,67 @@
+{
+ "format": 1,
+ "objects": [
+  {
+   "fields": {
+    "animGroup": -1,
+    "condition": -1,
+    "levelHigh": 255,
+    "radius": 70,
+    "startPoint": 0,
+    "unlockWorld": -1
+   },
+   "name": "portal to Zephyra",
+   "pos": [
+    40,
+    19,
+    541
+   ],
+   "size": 28,
+   "target": "pack:level/landing",
+   "type": "stock:objtype/0xB",
+   "uid": "portal_to_zephyra1"
+  },
+  {
+   "fields": {
+    "alpha": 70,
+    "blue": 255,
+    "distance": 900,
+    "glare": 100,
+    "green": 220,
+    "red": 120,
+    "size": 80
+   },
+   "name": "portal glow",
+   "pos": [
+    40,
+    69,
+    541
+   ],
+   "size": 20,
+   "type": "stock:objtype/0xC8",
+   "uid": "portal_glow1"
+  },
+  {
+   "fields": {
+    "blue": 255,
+    "colourCycle": 8,
+    "flags": 64,
+    "green": 220,
+    "halfHeight": 8,
+    "intensity": 255,
+    "kind": 19,
+    "radius": 300,
+    "red": 120
+   },
+   "name": "portal light",
+   "pos": [
+    40,
+    79,
+    541
+   ],
+   "size": 32,
+   "type": "stock:objtype/0x10",
+   "uid": "portal_light1"
+  }
+ ]
+}

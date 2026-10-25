@@ -1,0 +1,25 @@
+{
+ "format": 1,
+ "header": {
+  "clearB": 8,
+  "clearG": 10,
+  "clearR": 40,
+  "cutsceneData": 3,
+  "fog3": 985,
+  "fogB": 20,
+  "fogFar": 1020,
+  "fogG": 30,
+  "fogNear": 985,
+  "fogR": 110,
+  "lights": 32,
+  "region": 0,
+  "regionIndex": 0,
+  "tune": 4,
+  "tuneChannelMask": 65535,
+  "world": 15
+ },
+ "music": "pack:music/zephyra_caverns",
+ "name": "Ember Caverns",
+ "sky": 194,
+ "track": "pack:track/caverns"
+}

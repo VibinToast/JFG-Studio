@@ -1,0 +1,475 @@
+{
+ "format": 1,
+ "objects": [
+  {
+   "fields": {
+    "player": 0,
+    "startPoint": 0,
+    "yaw": 32
+   },
+   "name": "start0",
+   "pos": [
+    0,
+    8,
+    -1400
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xD",
+   "uid": "start1"
+  },
+  {
+   "fields": {
+    "player": 0,
+    "startPoint": 1,
+    "yaw": 0
+   },
+   "name": "start1",
+   "pos": [
+    0,
+    0,
+    1500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xD",
+   "uid": "start2"
+  },
+  {
+   "fields": {
+    "animGroup": -1,
+    "condition": -1,
+    "levelHigh": 255,
+    "radius": 70,
+    "startPoint": 0,
+    "unlockWorld": -1
+   },
+   "name": "to Ember Caverns",
+   "pos": [
+    0,
+    0,
+    1660
+   ],
+   "size": 28,
+   "target": "pack:level/caverns",
+   "type": "stock:objtype/0xB",
+   "uid": "to_ember_caverns1"
+  },
+  {
+   "fields": {
+    "animGroup": -1,
+    "condition": -1,
+    "levelHigh": 255,
+    "radius": 60,
+    "startPoint": 0,
+    "unlockWorld": -1
+   },
+   "name": "portal home to Goldwood",
+   "pos": [
+    380,
+    -14,
+    -1640
+   ],
+   "size": 28,
+   "target": "stock:level/21",
+   "type": "stock:objtype/0xB",
+   "uid": "portal_home_to_goldwood1"
+  },
+  {
+   "fields": {
+    "alpha": 140,
+    "blue": 255,
+    "distance": 900,
+    "glare": 100,
+    "green": 220,
+    "red": 120,
+    "size": 70
+   },
+   "name": "glow",
+   "pos": [
+    380,
+    36,
+    -1640
+   ],
+   "size": 20,
+   "type": "stock:objtype/0xC8",
+   "uid": "glow1"
+  },
+  {
+   "fields": {
+    "corner": 0,
+    "region": 1
+   },
+   "name": "region1_0",
+   "pos": [
+    -700,
+    4,
+    850
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region1"
+  },
+  {
+   "fields": {
+    "corner": 1,
+    "region": 1
+   },
+   "name": "region1_1",
+   "pos": [
+    700,
+    -4,
+    850
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region2"
+  },
+  {
+   "fields": {
+    "corner": 2,
+    "region": 1
+   },
+   "name": "region1_2",
+   "pos": [
+    700,
+    -16,
+    1300
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region3"
+  },
+  {
+   "fields": {
+    "corner": 3,
+    "region": 1
+   },
+   "name": "region1_3",
+   "pos": [
+    -700,
+    16,
+    1300
+   ],
+   "size": 12,
+   "type": "stock:objtype/0x5",
+   "uid": "region4"
+  },
+  {
+   "fields": {
+    "baddyType": 120,
+    "count": 3,
+    "doorId": 1,
+    "region": 1,
+    "squadronId": 1
+   },
+   "name": "BlueAnt squad",
+   "pos": [
+    0,
+    0,
+    1050
+   ],
+   "stock": {
+    "entry": 260,
+    "list": 424
+   },
+   "type": "stock:objtype/0x4F",
+   "uid": "blueant_squad1"
+  },
+  {
+   "fields": {
+    "squadron": 1
+   },
+   "name": "BlueAnt",
+   "pos": [
+    0,
+    0,
+    1200
+   ],
+   "schema": "squadmember",
+   "stock": {
+    "entry": 261,
+    "list": 424
+   },
+   "type": "stock:objtype/0x78",
+   "uid": "blueant1"
+  },
+  {
+   "fields": {
+    "squadron": 1
+   },
+   "name": "BlueAnt",
+   "pos": [
+    130,
+    -3,
+    975
+   ],
+   "schema": "squadmember",
+   "stock": {
+    "entry": 261,
+    "list": 424
+   },
+   "type": "stock:objtype/0x78",
+   "uid": "blueant2"
+  },
+  {
+   "fields": {
+    "squadron": 1
+   },
+   "name": "BlueAnt",
+   "pos": [
+    -130,
+    3,
+    975
+   ],
+   "schema": "squadmember",
+   "stock": {
+    "entry": 261,
+    "list": 424
+   },
+   "type": "stock:objtype/0x78",
+   "uid": "blueant3"
+  },
+  {
+   "fields": {
+    "doorId": 1,
+    "yaw": 0
+   },
+   "name": "north gate (the ants keep it shut)",
+   "pos": [
+    0,
+    0,
+    1350
+   ],
+   "schema": "door",
+   "stock": {
+    "entry": 274,
+    "list": 424
+   },
+   "type": "stock:objtype/0x1AD",
+   "uid": "north_gate__the_ants_keep_it_shut1"
+  },
+  {
+   "fields": {
+    "cameraAngle": 4096,
+    "cameraDistance": 200,
+    "cameraHeight": 75,
+    "contents": 2,
+    "size": 100
+   },
+   "name": "pickup",
+   "pos": [
+    1150,
+    140,
+    -550
+   ],
+   "size": 20,
+   "type": "stock:objtype/0x1AA",
+   "uid": "pickup1"
+  },
+  {
+   "fields": {
+    "size": 64
+   },
+   "name": "yellow key",
+   "pos": [
+    -1360,
+    220,
+    -150
+   ],
+   "size": 14,
+   "type": "stock:objtype/0x258",
+   "uid": "yellow_key1"
+  },
+  {
+   "fields": {},
+   "name": "health",
+   "pos": [
+    220,
+    -2,
+    -1250
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "health1"
+  },
+  {
+   "fields": {},
+   "name": "health",
+   "pos": [
+    0,
+    12,
+    500
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "health2"
+  },
+  {
+   "fields": {},
+   "name": "health",
+   "pos": [
+    1350,
+    140,
+    -350
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "health3"
+  },
+  {
+   "fields": {},
+   "name": "health",
+   "pos": [
+    -900,
+    10,
+    1150
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "health4"
+  },
+  {
+   "fields": {},
+   "name": "ammo",
+   "pos": [
+    -220,
+    2,
+    -1250
+   ],
+   "size": 16,
+   "type": "stock:objtype/0xE8",
+   "uid": "ammo1"
+  },
+  {
+   "fields": {},
+   "name": "ammo",
+   "pos": [
+    900,
+    -32,
+    600
+   ],
+   "size": 16,
+   "type": "stock:objtype/0xE8",
+   "uid": "ammo2"
+  },
+  {
+   "fields": {
+    "blue": 170,
+    "colourCycle": 8,
+    "flags": 64,
+    "green": 230,
+    "halfHeight": 8,
+    "intensity": 255,
+    "kind": 19,
+    "radius": 300,
+    "red": 255
+   },
+   "name": "light",
+   "pos": [
+    -180,
+    67,
+    -1580
+   ],
+   "size": 32,
+   "type": "stock:objtype/0x10",
+   "uid": "light1"
+  },
+  {
+   "fields": {
+    "alpha": 140,
+    "blue": 150,
+    "distance": 900,
+    "glare": 100,
+    "green": 220,
+    "red": 255,
+    "size": 70
+   },
+   "name": "glow",
+   "pos": [
+    -180,
+    47,
+    -1580
+   ],
+   "size": 20,
+   "type": "stock:objtype/0xC8",
+   "uid": "glow2"
+  },
+  {
+   "fields": {
+    "blue": 170,
+    "colourCycle": 8,
+    "flags": 64,
+    "green": 230,
+    "halfHeight": 8,
+    "intensity": 255,
+    "kind": 19,
+    "radius": 300,
+    "red": 255
+   },
+   "name": "light",
+   "pos": [
+    180,
+    54,
+    -1580
+   ],
+   "size": 32,
+   "type": "stock:objtype/0x10",
+   "uid": "light2"
+  },
+  {
+   "fields": {
+    "alpha": 140,
+    "blue": 150,
+    "distance": 900,
+    "glare": 100,
+    "green": 220,
+    "red": 255,
+    "size": 70
+   },
+   "name": "glow",
+   "pos": [
+    180,
+    34,
+    -1580
+   ],
+   "size": 20,
+   "type": "stock:objtype/0xC8",
+   "uid": "glow3"
+  },
+  {
+   "fields": {
+    "blue": 90,
+    "colourCycle": 8,
+    "flags": 64,
+    "green": 120,
+    "halfHeight": 8,
+    "intensity": 255,
+    "kind": 19,
+    "radius": 420,
+    "red": 255
+   },
+   "name": "light",
+   "pos": [
+    0,
+    60,
+    1250
+   ],
+   "size": 32,
+   "type": "stock:objtype/0x10",
+   "uid": "light3"
+  },
+  {
+   "name": "river sound",
+   "pos": [
+    -400,
+    -40,
+    500
+   ],
+   "stock": {
+    "entry": 0,
+    "list": 16
+   },
+   "type": "stock:objtype/0x20",
+   "uid": "river_sound1"
+  }
+ ]
+}

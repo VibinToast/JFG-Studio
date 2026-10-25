@@ -114,7 +114,7 @@ class Markers(unittest.TestCase):
         o = found[0]
         self.assertEqual(o["pos"], [10, 5, -20])
         self.assertEqual(o["fields"]["startPoint"], 2)
-        self.assertEqual(o["fields"]["yaw"], 16)  # facing +x: a quarter turn
+        self.assertEqual(o["fields"]["yaw"], 48)  # facing +x: three quarters (yaw 0 faces -z in the game)
         self.assertEqual(o["size"], 0x0E)
 
 

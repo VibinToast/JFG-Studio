@@ -101,7 +101,8 @@ def markers(path: str | Path) -> list[dict]:
             if yaw_f is not None:
                 d = m[:3, :3] @ np.array([0.0, 1.0, 0.0])
                 if abs(d[0]) + abs(d[2]) > 1e-6:
-                    o["fields"][yaw_f.name] = obj.value_of_angle(yaw_f, math.atan2(d[0], d[2]))
+                    # a start point at yaw 0 faces -z in the game, so the marker's arrow gives yaw + half a turn
+                    o["fields"][yaw_f.name] = obj.value_of_angle(yaw_f, math.atan2(-d[0], -d[2]))
             if schema and schema.status == "decoded":
                 o["size"] = schema.min_size + (schema.min_size & 1)
                 o["fields"] = {**schema.defaults(), **o["fields"]}

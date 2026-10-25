@@ -511,8 +511,9 @@ def marker_lines(objects: list, keys: dict, selection: set, links: list, boxes: 
         for dx, dz in ((12, 0), (0, 12)):
             seg((x - dx, top, z - dz), (x + dx, top, z + dz), col)
         if key == "startpoint":
+            # The hero faces -z at yaw 0 (seen in the port, 2026-10-25): the arrow points that way.
             yaw = o.get("fields", {}).get("yaw", 0) * 1024 / 65536 * 2 * math.pi
-            seg((x, y + 5, z), (x + math.sin(yaw) * 40, y + 5, z + math.cos(yaw) * 40), col)
+            seg((x, y + 5, z), (x - math.sin(yaw) * 40, y + 5, z - math.cos(yaw) * 40), col)
         if key == "exit":
             r = o.get("fields", {}).get("radius", 0)
             r = r if r >= 5 else 60

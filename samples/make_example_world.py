@@ -1,0 +1,364 @@
+"""Makes samples/zephyra.jfgproj: JFG-Studio's example world, a three-level planet played from a new game to the end.
+
+    python samples/make_example_world.py           (needs your ROM and the decomp settings: it picks stock entries
+                                                     to copy and checks the geometry with the game's importer)
+    blender --background --factory-startup --python samples/make_example_music.py   (the music, once)
+
+The route: a new game -> Goldwood's first level (Forest First), where a glowing portal now stands just ahead of
+Juno -> 1. Zephyra Landing (a valley, a river and a bridge, a chest on a plateau, the yellow key on a ledge, an ant
+squad locking the north gate) -> 2. Ember Caverns (a lava lake crossed on a causeway, two squads, a chasm with a kill
+floor, a door that needs the yellow key) -> 3. Sky Arena (a floating arena over a deadly drop, two squads that both
+lock the final gate) -> the victory exit back to Forest First. Every level has return exits, its own music, lights and
+pickups.
+
+Everything here is drawn or written by this script; the project only names stock object types and stock entries
+by number (the build copies those from the player's own ROM).
+"""
+
+import math
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import worldkit as wk  # noqa: E402
+
+from jfgstudio import objects as obj  # noqa: E402
+from jfgstudio import prefabs  # noqa: E402
+from jfgstudio import project as proj  # noqa: E402
+from jfgstudio.catalog import Catalog  # noqa: E402
+from jfgstudio.gui.viewport import TrackMesh  # noqa: E402
+
+OUT = Path(__file__).parent / "zephyra.jfgproj"
+GEN = "JFG-Studio samples/make_example_world.py"
+
+# object ids (stock types) and the stock entries copied for the types Studio only knows in part
+START, EXIT, CHEST, HEALTH, AMMO, KEY_YELLOW = 0x0D, 0x0B, 0x1AA, 0xA9, 0xE8, 0x258
+LIGHT, GLOW, AUDIO, TEXSCROLL, CRATE, STATIC_CRATE, DOOR = 0x10, 0xC8, 0x20, 0x0F, 0x135, 0xA8, 0x1AD
+DOOR_EXAMPLE = (424, 274)  # Forest First's Ftechdoor (the one its ants unlock)
+SQUADS = {  # baddy type -> (stock squadron entry, stock member entry); squadrons whose members are list entries too
+    "BlueAnt": (0x78, (424, 260), (424, 261)),
+    "YellowAnt": (0x5F, (442, 139), (706, 30)),
+    "ZombieAnt": (0x121, (518, 57), (518, 58)),
+    "BigShieldAnt": (0x9C, (409, 60), (413, 22)),
+    "Cyborg": (0x143, (431, 1), (431, 146)),
+}
+FOREST_FIRST, FOREST_FIRST_TRACK = 21, 18
+SKY = {"landing": 180, "caverns": 194, "arena": 205}
+YAW_NORTH, YAW_SOUTH = 32, 0  # start point facing (angle10: 64 = a full turn): the hero faces -z at yaw 0
+
+
+# ---------------------------------------------------------------- geometry
+
+def enclosure(m, mat, x0, z0, x1, z1, height):
+    """Cliff walls round a rectangle, facing in."""
+    m.wall(mat, x1, z0, x0, z0, -200, height, 150)
+    m.wall(mat, x1, z1, x1, z0, -200, height, 150)
+    m.wall(mat, x0, z1, x1, z1, -200, height, 150)
+    m.wall(mat, x0, z0, x0, z1, -200, height, 150)
+
+
+def gate_wall(m, top, side, x0, x1, z, height, gap=45, thick=12):
+    """A wall across x at z with a door gap of 2 * gap in the middle."""
+    m.box(top, side, x0, z - thick, -gap, z + thick, -20, height)
+    m.box(top, side, gap, z - thick, x1, z + thick, -20, height)
+    m.box(top, side, -gap - 10, z - thick, gap + 10, z + thick, 150, height)  # the lintel over the door
+
+
+def landing_mesh() -> wk.Mesh:
+    m = wk.Mesh()
+    for name, img, kind in (("grass", "grass", "opaque"), ("riverbed", "sand", "opaque"), ("rock", "rock", "opaque"),
+                            ("stone", "stone", "opaque"), ("stone_wall", "stone", "opaque"),
+                            ("river_water", "water", "water"), ("crystal", "crystal", "opaque")):
+        m.material(name, img, kind)
+
+    def height(x, z):
+        if 260 < z < 740:  # the river valley: a shallow wade (only Vela swims; deep water drowns the others)
+            return -40 * math.sin(math.pi * (z - 260) / 480)
+        if z > 1300 or (-1600 < z < -1150 and -300 < x < 300):  # flat: the gate corridor, the landing pad
+            return 0.0
+        return 18 * math.sin(x / 380.0) * math.cos(z / 470.0)
+
+    def tint(x, z):
+        return (0.95, 1.0, 0.9) if (x // 200 + z // 200) % 2 else (1, 1, 1)
+
+    m.heightfield("grass", -1800, -1800, 1800, 1800, 100, height, 140, tint)
+    m.floor("river_water", -1800, 300, 1800, 700, -28, 120, alpha=170, step=600)
+    m.box("stone", "stone_wall", -90, 220, 90, 780, -45, 12)                    # the bridge
+    m.disc("stone", "stone_wall", 0, -1400, 230, -20, 8, n=20)                  # the landing pad
+    m.box("grass", "rock", 800, -900, 1500, -200, -30, 140, 140)                # the plateau
+    m.ramp("stone", "rock", 500, -700, 800, -500, 0, 140, axis="x")             # its ramp
+    m.box("stone", "rock", -1520, -320, -1200, 20, -20, 220)                    # the key ledge
+    m.ramp("stone", "rock", -1500, -1100, -1380, -320, 0, 220, axis="z")        # its ramp
+    for x, z, s, h in ((-600, -700, 60, 90), (450, 100, 50, 70), (-1100, 900, 70, 120), (1200, 1000, 60, 100),
+                       (300, -900, 40, 60), (-300, 1100, 45, 80)):
+        m.box("crystal", "crystal", x - s, z - s, x + s, z + s, -20, h)          # crystal outcrops (cover)
+    gate_wall(m, "stone", "stone_wall", -1800, 1800, 1350, 260)
+    enclosure(m, "rock", -1800, -1800, 1800, 1800, 420)
+    return m
+
+
+def caverns_mesh() -> wk.Mesh:
+    m = wk.Mesh(ambient=(0.38, 0.28, 0.26), sun=(0.65, 0.45, 0.35))
+    for name, img, kind in (("rock", "rock", "opaque"), ("rock_wall", "rock", "opaque"), ("stone", "stone", "opaque"),
+                            ("stone_wall", "stone", "opaque"), ("molten_lava", "lava", "lava"),
+                            ("chasm_kill", "rock", "kill"), ("metal", "metal", "opaque")):
+        m.material(name, img, kind)
+    m.floor("rock", -1400, -1800, 1400, -900, 0, 140, step=400)                # the south shore
+    m.floor("molten_lava", -1400, -900, 1400, 400, -30, 90, tint=(1, 0.9, 0.8), step=400)
+    m.wall("rock_wall", -1400, -900, 1400, -900, -30, 0, 60)                   # the lava's banks
+    m.wall("rock_wall", 1400, 400, -1400, 400, -30, 0, 60)
+    m.box("stone", "stone_wall", -110, -900, 110, 400, -60, 0)                  # the causeway
+    m.disc("stone", "stone_wall", 0, -250, 360, -60, 0, n=20)                   # the plaza
+    m.floor("rock", -1400, 400, 1400, 700, 0, 140, step=400)                   # the middle shore
+    m.floor("chasm_kill", -1400, 700, 1400, 950, -500, 200, step=400)          # the chasm's deadly floor
+    m.wall("rock_wall", 1400, 700, -1400, 700, -500, 0, 120)
+    m.wall("rock_wall", -1400, 950, 1400, 950, -500, 0, 120)
+    m.box("stone", "stone_wall", -50, 690, 50, 960, -30, 0)                     # the narrow bridge
+    m.floor("rock", -1400, 950, 1400, 1800, 0, 140, step=400)                  # the north shore
+    for x, z in ((-700, 550), (650, 520), (-900, 1150), (900, 1180)):
+        m.box("rock", "rock_wall", x - 80, z - 80, x + 80, z + 80, -10, 100)     # boulders (cover)
+    gate_wall(m, "metal", "metal", -1400, 1400, 1300, 280)
+    enclosure(m, "rock_wall", -1400, -1800, 1400, 1800, 520)
+    return m
+
+
+def arena_mesh() -> wk.Mesh:
+    m = wk.Mesh(ambient=(0.4, 0.4, 0.55), sun=(0.6, 0.6, 0.75))
+    for name, img, kind in (("stone", "stone", "opaque"), ("stone_wall", "stone", "opaque"),
+                            ("metal", "metal", "opaque"), ("crystal", "crystal", "opaque"),
+                            ("void_kill", "rock", "kill")):
+        m.material(name, img, kind)
+    m.disc("stone", "stone_wall", 0, 0, 900, -120, 0, n=32)                     # the arena
+    m.box("stone", "stone_wall", -150, -1300, 150, -860, -120, 0)               # the entry platform
+    m.box("stone", "stone_wall", -320, 860, 320, 1500, -120, 0)                 # the finale platform
+    for sx, sz in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+        x, z = 450 * sx, 450 * sz
+        m.box("metal", "metal", x - 70, z - 70, x + 70, z + 70, -10, 240)        # pillars (cover)
+        m.box("crystal", "crystal", x - 40, z - 40, x + 40, z + 40, 240, 300)
+    for k in range(12):  # a broken rim: low walls with gaps
+        if k % 3 == 2:
+            continue
+        a0, a1 = 2 * math.pi * k / 12, 2 * math.pi * (k + 0.7) / 12
+        ax, az, bx, bz = 860 * math.sin(a0), 860 * math.cos(a0), 860 * math.sin(a1), 860 * math.cos(a1)
+        if az < -700 and abs(ax) < 400 or az > 700 and abs(ax) < 400:
+            continue  # keep the ways to the platforms open
+        m.wall("stone_wall", bx, bz, ax, az, 0, 40, 60)
+        m.wall("stone_wall", ax, az, bx, bz, 0, 40, 60)
+    gate_wall(m, "metal", "metal", -320, 320, 950, 260)
+    m.floor("void_kill", -3000, -3000, 3000, 3000, -900, 400, step=1000)        # falling off is the end
+    return m
+
+
+IMAGES = {"grass": ("grass", 16, 11), "sand": ("sand", 16, 12), "rock": ("rock", 32, 13), "stone": ("stone", 32, 14),
+          "water": ("water", 16, 15), "crystal": ("crystal", 16, 16), "lava": ("lava", 16, 17),
+          "metal": ("metal", 32, 18)}
+
+
+# ---------------------------------------------------------------- objects
+
+class World:
+    def __init__(self, project, catalog):
+        self.p, self.cat = project, catalog
+        self.schemas = obj.load_schemas()
+        types = catalog.objtypes()
+        self.behaviours = {k: v["behaviour"] for k, v in types.items()}
+        self.types = types
+
+    def placer(self, level):
+        return prefabs.Placer(level, self.schemas, self.behaviours)
+
+    def drop(self, mesh: TrackMesh, x, z, below=None, lift=0):
+        y = mesh.floor_height(x, z, below)
+        return [round(x), round((y if y is not None else 0) + lift), round(z)]
+
+    def example(self, oid):
+        return tuple(self.types[oid]["examples"][0])
+
+    def start(self, pl, mesh, x, z, number, yaw, below=None):
+        return pl.single(START, self.drop(mesh, x, z, below), name=f"start{number}",
+                         fields={"player": 0, "startPoint": number, "yaw": yaw})
+
+    def exit(self, pl, mesh, x, z, target, start_point, name, radius=70):
+        o = pl.single(EXIT, self.drop(mesh, x, z), name=name, fields={"radius": radius, "startPoint": start_point})
+        o["target"] = target
+        return o
+
+    def squad(self, pl, mesh, kind, centre, members, corners, door_id=0, spread=150):
+        baddy, squad_ex, member_ex = SQUADS[kind]
+        n = pl.free("squadron", "squadronId")
+        region = pl.polygon([self.drop(mesh, x, z) for x, z in corners])
+        cx, cz = centre
+        pl.single(0x4F, self.drop(mesh, cx, cz), squad_ex, name=f"{kind} squad",
+                  fields={"squadronId": n, "doorId": door_id, "region": region, "count": members,
+                          "baddyType": baddy})
+        for k in range(members):
+            a = 2 * math.pi * k / members
+            m = pl.single(baddy, self.drop(mesh, cx + spread * math.sin(a), cz + spread * math.cos(a)), member_ex,
+                          name=kind, fields={"squadron": n})
+            m["schema"] = "squadmember"
+        return n
+
+    def door(self, pl, mesh, x, z, name, fields):
+        d = pl.single(DOOR, self.drop(mesh, x, z, below=60), DOOR_EXAMPLE, name=name, fields=fields)  # under the lintel
+        d["schema"] = "door"
+        return d
+
+    def light(self, pl, mesh, x, z, rgb, radius=350, lift=60, track=True):
+        return pl.single(LIGHT, self.drop(mesh, x, z, lift=lift), name="light",
+                         fields={"red": rgb[0], "green": rgb[1], "blue": rgb[2], "radius": radius,
+                                 "flags": 0x40 if track else 0})
+
+    def glow(self, pl, mesh, x, z, rgb, lift=80, below=None):
+        return pl.single(GLOW, self.drop(mesh, x, z, below, lift=lift), name="glow",
+                         fields={"red": rgb[0], "green": rgb[1], "blue": rgb[2], "alpha": 140, "distance": 900,
+                                 "size": 70})
+
+    def pickup(self, pl, mesh, oid, x, z, below=None, **fields):
+        name = {HEALTH: "health", AMMO: "ammo", KEY_YELLOW: "yellow key"}.get(oid, "pickup")
+        return pl.single(oid, self.drop(mesh, x, z, below), name=name, fields=fields or None)
+
+
+def level_header(level, fog, clear, extra=None):
+    hd = level.level["header"]
+    hd.update({"fogNear": fog[3], "fogFar": fog[4], "fog3": fog[3], "fogR": fog[0], "fogG": fog[1], "fogB": fog[2],
+               "clearR": clear[0], "clearG": clear[1], "clearB": clear[2]})
+    hd.update(extra or {})
+
+
+def texture_index(catalog, glb: Path, image_name: str) -> int:
+    """The index of an image in the track's own texture list (a texture scroll names it), from the game's importer."""
+    from jfgformats import models, png, tracks  # importable once the catalog has loaded jfgformats
+    result = tracks.import_track(models.ModelData(catalog.assets), str(glb), track_id=catalog.track_count(),
+                                 log=lambda *a: None)
+    kind, size, seed = IMAGES[image_name]
+    want = png.read_png(wk.image(png, kind, size, seed))[2]
+    for key, data in result.get("newTextures", {}).items():
+        if png.read_png(data)[2] == want:
+            return int(key)
+    raise SystemExit(f"{glb.name}: no texture made from {image_name}")
+
+
+def main() -> int:
+    cat = Catalog.open()
+    if OUT.exists():
+        import shutil
+        keep = {f.name: f.read_bytes() for f in (OUT / "music").glob("*.ogg")} if (OUT / "music").exists() else {}
+        shutil.rmtree(OUT)
+    else:
+        keep = {}
+    p = proj.create(OUT, "jfgstudio_example_zephyra", "Zephyra (JFG-Studio example world)", "VibinToast")
+    p.meta["description"] = ("JFG-Studio's example world: three levels reached through a portal in Goldwood's first "
+                             "level, with squads, locked doors, a key, lava, water and its own music.")
+    for name, data in keep.items():
+        (OUT / "music" / name).write_bytes(data)
+    w = World(p, cat)
+
+    meshes = {"landing": landing_mesh(), "caverns": caverns_mesh(), "arena": arena_mesh()}
+    for name, m in meshes.items():
+        wk.write_glb(m, p.geometry_path(name), IMAGES, GEN)
+        print(f"geometry/{name}.glb: {m.triangles()} triangles")
+    views = {name: TrackMesh(str(p.geometry_path(name))) for name in meshes}
+
+    # 1. Zephyra Landing
+    a = proj.new_level(p, "landing", "Zephyra Landing", "pack:track/landing")
+    level_header(a, (170, 205, 230, 990, 1022), (120, 170, 210))
+    a.level["sky"], a.level["music"] = SKY["landing"], "pack:music/zephyra_landing"
+    mv, pl = views["landing"], w.placer(a)
+    w.start(pl, mv, 0, -1400, 0, YAW_NORTH)
+    w.start(pl, mv, 0, 1500, 1, YAW_SOUTH)
+    w.exit(pl, mv, 0, 1660, "pack:level/caverns", 0, "to Ember Caverns")
+    w.exit(pl, mv, 380, -1640, f"stock:level/{FOREST_FIRST}", 0, "portal home to Goldwood", radius=60)
+    w.glow(pl, mv, 380, -1640, (120, 220, 255), lift=50)
+    door_a = pl.free("door", "doorId")
+    w.squad(pl, mv, "BlueAnt", (0, 1050), 3, [(-700, 850), (700, 850), (700, 1300), (-700, 1300)], door_id=door_a)
+    w.door(pl, mv, 0, 1350, "north gate (the ants keep it shut)", {"doorId": door_a, "yaw": 0})
+    w.pickup(pl, mv, CHEST, 1150, -550, contents=2)
+    w.pickup(pl, mv, KEY_YELLOW, -1360, -150, below=300)
+    for x, z in ((220, -1250), (0, 500), (1350, -350), (-900, 1150)):
+        w.pickup(pl, mv, HEALTH, x, z, below=300)
+    for x, z in ((-220, -1250), (900, 600)):
+        w.pickup(pl, mv, AMMO, x, z)
+    for x, z in ((-180, -1580), (180, -1580)):
+        w.light(pl, mv, x, z, (255, 230, 170), radius=300)
+        w.glow(pl, mv, x, z, (255, 220, 150), lift=40)
+    w.light(pl, mv, 0, 1250, (255, 120, 90), radius=420)
+    pl.single(AUDIO, w.drop(mv, -400, 500), w.example(AUDIO), name="river sound")
+    a.objects["objects"] = pl.made
+
+    # 2. Ember Caverns
+    b = proj.new_level(p, "caverns", "Ember Caverns", "pack:track/caverns")
+    level_header(b, (110, 30, 20, 985, 1020), (40, 10, 8), {"lights": 32})
+    b.level["sky"], b.level["music"] = SKY["caverns"], "pack:music/zephyra_caverns"
+    mv, pl = views["caverns"], w.placer(b)
+    w.start(pl, mv, 0, -1600, 0, YAW_NORTH)
+    w.start(pl, mv, 0, 1450, 1, YAW_SOUTH)
+    w.exit(pl, mv, 0, -1760, "pack:level/landing", 1, "back to Zephyra Landing", radius=50)
+    w.exit(pl, mv, 0, 1660, "pack:level/arena", 0, "to Sky Arena")
+    plaza = [(-240, -490), (240, -490), (240, -10), (-240, -10)]  # 4-corner regions: the tested kind
+    w.squad(pl, mv, "YellowAnt", (0, -250), 3, plaza)
+    w.squad(pl, mv, "ZombieAnt", (0, 1120), 3, [(-1200, 980), (1200, 980), (1200, 1270), (-1200, 1270)], spread=220)
+    w.door(pl, mv, 0, 1300, "yellow-key door", {"doorId": 0, "keyLock": 2, "yaw": 0})
+    for x, z in ((300, -1500), (-500, 560), (500, 1100)):
+        w.pickup(pl, mv, HEALTH, x, z)
+    for x, z in ((-300, -1500), (0, 600)):
+        w.pickup(pl, mv, AMMO, x, z)
+    for x, z in ((-300, 480), (-220, 620), (260, 470)):
+        pl.single(CRATE, w.drop(mv, x, z), w.example(CRATE), name="crate", fields={"size": 64})
+    for x, z in ((-500, -1300), (500, -1300), (-600, 80), (600, -600)):
+        w.light(pl, mv, x, z, (255, 110, 30), radius=500, lift=40)
+    for x, z in ((-250, -250), (250, -250)):
+        w.glow(pl, mv, x, z, (255, 140, 40), lift=60)
+    pl.single(TEXSCROLL, w.drop(mv, 0, -1700), name="lava flow",
+              fields={"texture": texture_index(cat, p.geometry_path("caverns"), "lava"), "uSpeed": 6, "vSpeed": 10})
+    b.objects["objects"] = pl.made
+
+    # 3. Sky Arena
+    c = proj.new_level(p, "arena", "Sky Arena", "pack:track/arena")
+    level_header(c, (60, 40, 110, 990, 1022), (20, 10, 40), {"lights": 32})
+    c.level["sky"], c.level["music"] = SKY["arena"], "pack:music/zephyra_arena"
+    mv, pl = views["arena"], w.placer(c)
+    w.start(pl, mv, 0, -1150, 0, YAW_NORTH)
+    w.start(pl, mv, 0, 1250, 1, YAW_SOUTH)
+    w.exit(pl, mv, 0, -1270, "pack:level/caverns", 1, "back to Ember Caverns", radius=50)
+    w.exit(pl, mv, 0, 1380, f"stock:level/{FOREST_FIRST}", 0, "victory: home to Goldwood")
+    door_c = pl.free("door", "doorId")
+    ring = [(-620, -620), (620, -620), (620, 620), (-620, 620)]  # inside the arena disc
+    w.squad(pl, mv, "BigShieldAnt", (-350, 200), 3, ring, door_id=door_c)
+    w.squad(pl, mv, "Cyborg", (350, 200), 2, ring, door_id=door_c)
+    w.door(pl, mv, 0, 950, "final gate (opens when both squads are down)", {"doorId": door_c, "yaw": 0})
+    for x, z in ((600, 0), (-600, 0), (0, -600), (0, 700)):
+        w.pickup(pl, mv, HEALTH, x, z, below=50)
+    for x, z in ((300, -500), (-300, -500)):
+        w.pickup(pl, mv, AMMO, x, z, below=50)
+    for sx, sz in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+        w.light(pl, mv, 450 * sx, 450 * sz, (120, 140, 255), radius=450, lift=320, track=True)
+        w.glow(pl, mv, 450 * sx, 450 * sz, (160, 120, 255), lift=40, below=400)
+    w.glow(pl, mv, 0, 1380, (255, 240, 160), lift=60)
+    c.objects["objects"] = pl.made
+
+    # Goldwood's first level: the portal, just ahead of where a new game puts Juno
+    f = proj.edit_stock_level(p, "forest_portal", FOREST_FIRST, "Forest First", FOREST_FIRST_TRACK)
+    pl = w.placer(f)
+    import struct
+    start0 = next(e for e in cat.objlist(cat.levels()[FOREST_FIRST]["objectList1"]) if e[0] == START
+                  and e[1][0x0B] == 0)
+    sx, sy, sz = struct.unpack_from(">hhh", start0[1], 4)
+    facing = (start0[1][0x0C] << 10) / 65536 * 2 * math.pi  # the hero faces -z at yaw 0
+    px, pz = round(sx - math.sin(facing) * 300), round(sz - math.cos(facing) * 300)
+    portal = pl.single(EXIT, (px, sy, pz), name="portal to Zephyra", fields={"radius": 70, "startPoint": 0})
+    portal["target"] = "pack:level/landing"
+    pl.single(GLOW, (px, sy + 50, pz), name="portal glow",
+              fields={"red": 120, "green": 220, "blue": 255, "alpha": 70, "distance": 900, "size": 80})
+    pl.single(LIGHT, (px, sy + 60, pz), name="portal light",
+              fields={"red": 120, "green": 220, "blue": 255, "radius": 300, "flags": 0x40})
+    f.objects["objects"] = pl.made
+
+    p.save()
+    print(f"wrote {OUT}: {len(p.levels)} levels, "
+          f"{sum(len(lv.objects['objects']) for lv in p.levels.values())} objects")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
