@@ -18,7 +18,7 @@
   {"name": "condition", "offset": "0x15", "type": "s8", "default": -1, "description": "-1 (or anything outside 0-24) = always open; 0-24: game-flag tests (0 tests game flag 0; 3 = not in the power suit, 4 = power suit only)"},
   {"name": "animGroup", "offset": "0x16", "type": "s8", "default": -1, "description": "animation group for the next level, -1 none"},
   {"name": "usePlane", "offset": "0x18", "type": "s8", "description": "non-zero: use the crossing plane"},
-  {"name": "arg1A", "offset": "0x1A", "type": "s8", "description": "passed on to mainChangeLevel"},
+  {"name": "arg1A", "offset": "0x1A", "type": "s8", "default": 1, "description": "mainChangeLevel's flags: bit 0 shows the region's stats screen when the exit leads into another region (most of the game's exits have 1)"},
   {"name": "pitch", "offset": "0x1B", "type": "u8", "unit": "angle10", "description": "crossing plane pitch"}
  ]
 }

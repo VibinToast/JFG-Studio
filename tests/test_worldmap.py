@@ -101,6 +101,22 @@ class Galaxies(unittest.TestCase):
             rules = sorted(x.rule for x in val.validate(p) if x.severity == val.ERROR)
             self.assertEqual(rules, ["route", "route", "unlock"])
 
+    def test_planet_regions(self):
+        from jfgstudio import build
+        from jfgstudio import validate as val
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self.project(tmp)
+            home = next(iter(p.levels))
+            p.levels[home].level["planet"] = "two"
+            b = object.__new__(build._Builder)  # regions() needs only the project
+            b.p, b.log = p, lambda *_: None
+            self.assertEqual(b.regions(), [{"append": "region_two", "name": "Two", "world": "Far Away"}])
+            self.assertEqual(b.region_levels("two"), [home])
+            self.assertEqual(b.region_levels("one"), [])
+            self.assertEqual([x.rule for x in val.validate(p) if x.severity == val.ERROR], [])
+            p.levels[home].level["planet"] = "nowhere"
+            self.assertIn("planet", [x.rule for x in val.validate(p) if x.severity == val.ERROR])
+
     def test_trigger_actions(self):
         from jfgstudio import scripts as scr
         with tempfile.TemporaryDirectory() as tmp:

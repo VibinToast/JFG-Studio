@@ -13,7 +13,9 @@ the planet map: R to the Zephyra Expanse) -> 1. Zephyra Landing (a valley, a riv
 the yellow key on a ledge, an ant squad locking the north gate) -> 2. Ember Caverns (a lava lake crossed on a causeway,
 two squads, a chasm with a kill floor, a door that needs the yellow key) -> 3. Sky Arena (a floating arena over a deadly
 drop, two squads that both lock the final gate) -> the victory exit on to Glacia, whose finish leads on to Nimbus, whose
-finish leads home to Forest First. Every level has return exits, its own music, lights and pickups.
+finish leads home to Forest First. Every level has return exits, its own music, lights and pickups. Each planet is a
+region of its own (the levels' Planet), so an exit that leaves a planet shows the game's stats screen, as at the end of
+the game's own regions, and entering one shows its name, its galaxy and the continues.
 
 Everything here is drawn or written by this script; the project only names stock object types and stock entries
 by number (the build copies those from the player's own ROM).
@@ -428,6 +430,7 @@ def main() -> int:
     # 1. Zephyra Landing
     a = proj.new_level(p, "landing", "Zephyra Landing", "pack:track/landing")
     level_header(a, (170, 205, 230, 990, 1022), (120, 170, 210))
+    a.level["planet"] = "zephyra"  # its region: the stats screen shows when an exit leaves the planet
     a.level["sky"], a.level["music"] = SKY["landing"], "pack:music/zephyra_landing"
     mv, pl = views["landing"], w.placer(a)
     w.start(pl, mv, 0, -1400, 0, YAW_NORTH)
@@ -454,6 +457,7 @@ def main() -> int:
     # 2. Ember Caverns
     b = proj.new_level(p, "caverns", "Ember Caverns", "pack:track/caverns")
     level_header(b, (110, 30, 20, 985, 1020), (40, 10, 8), {"lights": 32})
+    b.level["planet"] = "zephyra"
     b.level["sky"], b.level["music"] = SKY["caverns"], "pack:music/zephyra_caverns"
     mv, pl = views["caverns"], w.placer(b)
     w.start(pl, mv, 0, -1600, 0, YAW_NORTH)
@@ -481,6 +485,7 @@ def main() -> int:
     # 3. Sky Arena
     c = proj.new_level(p, "arena", "Sky Arena", "pack:track/arena")
     level_header(c, (60, 40, 110, 990, 1022), (20, 10, 40), {"lights": 32})
+    c.level["planet"] = "zephyra"
     c.level["sky"], c.level["music"] = SKY["arena"], "pack:music/zephyra_arena"
     mv, pl = views["arena"], w.placer(c)
     w.start(pl, mv, 0, -1150, 0, YAW_NORTH)
@@ -507,6 +512,7 @@ def main() -> int:
     # 4. Glacia (the Expanse's second planet, opened by completing Zephyra)
     d = proj.new_level(p, "glacia", "Glacia", "pack:track/glacia")
     level_header(d, (200, 215, 235, 985, 1022), (170, 190, 220))
+    d.level["planet"] = "glacia"
     d.level["sky"], d.level["music"] = SKY["glacia"], "pack:music/zephyra_landing"
     mv, pl = views["glacia"], w.placer(d)
     w.start(pl, mv, 0, -1350, 0, YAW_NORTH)
@@ -526,6 +532,7 @@ def main() -> int:
     # 5. Nimbus (the Expanse's third planet, opened by completing Glacia)
     e = proj.new_level(p, "nimbus", "Nimbus", "pack:track/nimbus")
     level_header(e, (150, 120, 190, 990, 1022), (90, 70, 140), {"lights": 32})
+    e.level["planet"] = "nimbus"
     e.level["sky"], e.level["music"] = SKY["nimbus"], "pack:music/zephyra_arena"
     mv, pl = views["nimbus"], w.placer(e)
     w.start(pl, mv, 0, -1250, 0, YAW_NORTH)

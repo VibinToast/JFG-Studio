@@ -82,6 +82,15 @@ def level_window() -> None:
         set_header("world", int(min(max(world, 0), 15)))
     if imgui.is_item_hovered():
         imgui.set_tooltip("The planet this level belongs to (0-15); a new planet is 15")
+    if h.level.base is None:
+        planets = [(n, p["displayName"]["en"]) for n, p in sorted(S.project.planets.items())]
+        picked = _combo("Planet", lv.get("planet"), planets, "none (no region)")
+        if picked is not _UNCHANGED:
+            h.set_value(edit.LEVEL, ("planet",), None if picked == -1 else picked, "level planet")
+            S.validate()
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("The planet's region: leaving the planet by an exit shows the game's stats screen, and "
+                              "entering it shows its name and the continues. None: no stats, no continues")
     tracks = [(f"pack:track/{f.stem}", f"{f.stem}  (geometry/{f.name})")
               for f in sorted((S.project.path / "geometry").glob("*.glb"))]
     if lv["track"] not in dict(tracks):

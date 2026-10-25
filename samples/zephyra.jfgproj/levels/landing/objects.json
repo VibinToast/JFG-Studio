@@ -36,6 +36,7 @@
   {
    "fields": {
     "animGroup": -1,
+    "arg1A": 1,
     "condition": -1,
     "levelHigh": 255,
     "radius": 70,
@@ -56,6 +57,7 @@
   {
    "fields": {
     "animGroup": -1,
+    "arg1A": 1,
     "condition": -1,
     "levelHigh": 255,
     "radius": 60,

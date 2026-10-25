@@ -19,6 +19,7 @@
  },
  "music": "pack:music/zephyra_landing",
  "name": "Zephyra Landing",
+ "planet": "zephyra",
  "sky": 180,
  "track": "pack:track/landing"
 }

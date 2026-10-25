@@ -270,6 +270,9 @@ class _Builder:
                 out.append(e)
             track = refs.parse(level.level["track"])
             fields = dict(level.level["header"])
+            planet = level.level.get("planet")
+            if planet:  # the planet's region: the port numbers it (a fixup below), its levels are 0, 1, 2... in it
+                fields["regionIndex"] = self.region_levels(planet).index(name)
             fields.update({"track": track.number() if track.is_stock else track_ids[track.name],
                            "track2": level.level.get("sky", -1),
                            "objectList0": slots["slot0"], "objectList1": slots["slot1"]})
@@ -290,6 +293,8 @@ class _Builder:
             fixups = []
             if not track.is_stock:
                 fixups.append({"at": 0x54, "type": "s16", "ref": f"track_{track.name}"})  # header +0x54: the track
+            if planet:  # header +0x102: the region
+                fixups.append({"at": 0x102, "type": "u8", "ref": f"region_{planet}"})
             if "fixedObjectLists" not in level.level:  # header +0xCA slot 0, +0x56 slot 1: the appended lists
                 fixups += [{"at": 0x56, "type": "s16", "ref": f"objlist_{name}"},
                            {"at": 0xCA, "type": "s16", "ref": "objlist_empty"}]
@@ -305,6 +310,23 @@ class _Builder:
             if new and new != list(range(counts[what], counts[what] + len(new))):
                 raise BuildError([f"{what}: new entries {new} must follow the last stock one ({counts[what] - 1}) "
                                   "with no gap"])
+        return out
+
+    def region_levels(self, planet: str) -> list[str]:
+        """The new levels in a planet's region, in the order of their regionIndex."""
+        return sorted(n for n, lv in self.p.levels.items() if lv.base is None and lv.level.get("planet") == planet)
+
+    def regions(self) -> list[dict]:
+        """The port's regions (jfg_assets.json "regions"): one per planet that levels name, called by the planet's
+        name, with its galaxy's name as the world line of the area title."""
+        out = []
+        for planet in sorted({lv.level["planet"] for lv in self.p.levels.values()
+                              if lv.base is None and lv.level.get("planet")}):
+            p = self.p.planets[planet]
+            galaxy = self.p.galaxies.get(p.get("galaxy", ""), {})
+            out.append({"append": f"region_{planet}", "name": p["displayName"]["en"],
+                        "world": galaxy.get("name", p["displayName"]["en"])})
+            self.log(f"planet {planet}: region with levels {', '.join(self.region_levels(planet))}")
         return out
 
     @staticmethod
@@ -445,6 +467,7 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
         changes = b.assets()
         kind_entries, objtypes, animrows = b.kinds()
         level_patches = b.patches()
+        regions = b.regions()
         patched = b.map_image()
         world = b.world()
     except b.jf.FormatError as e:
@@ -508,6 +531,8 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
                 doc["patches"] = level_patches
             if objtypes:
                 doc["objtypes"], doc["animRows"] = objtypes, animrows
+            if regions:
+                doc["regions"] = regions
             z.writestr("jfg_assets.json", json.dumps(doc, indent=1))
         if music["tracks"]:
             z.writestr("jfg_music.json", json.dumps(music, indent=1, sort_keys=True))

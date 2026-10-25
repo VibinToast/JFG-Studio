@@ -20,6 +20,7 @@
  },
  "music": "pack:music/zephyra_caverns",
  "name": "Ember Caverns",
+ "planet": "zephyra",
  "sky": 194,
  "track": "pack:track/caverns"
 }

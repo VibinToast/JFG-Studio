@@ -19,6 +19,7 @@
  },
  "music": "pack:music/zephyra_landing",
  "name": "Glacia",
+ "planet": "glacia",
  "sky": 180,
  "track": "pack:track/glacia"
 }

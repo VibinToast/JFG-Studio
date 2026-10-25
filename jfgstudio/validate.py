@@ -16,6 +16,7 @@ ERROR, WARNING, INFO = "error", "warning", "info"
 CUTSCENE_DATA_COUNT = 406  # asset 0x41 entries; 3 = the empty list
 FREE_WORLD = 15
 REGION_BLOCKS = 32  # per-level saved-flag blocks
+MOD_REGIONS = 9  # the port numbers mods' regions 31-39 (the save keeps 40)
 # Header fields a new level must set (jfgformats levels.NEW_LEVEL_TEMPLATE "mustSet"); Studio itself fills track,
 # track2 (sky) and the two object lists.
 MUST_SET = ("world", "region", "regionIndex", "fogNear", "fogFar", "fog3", "fogR", "fogG", "fogB", "tune")
@@ -68,6 +69,8 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
     header = level.level["header"]
     if level.level.get("base"):
         _ref(level.level["base"], "level", lf, None, out)
+        if level.level.get("planet"):
+            out.append(Problem(ERROR, "planet", lf, "a stock level's edit keeps the stock level's region: no planet"))
         return out + _check_objects(project, level, schemas, of, stock_base=True)
 
     cut = header.get("cutsceneData")
@@ -90,6 +93,13 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
     if missing:
         out.append(Problem(ERROR, "header", lf, f"header needs {', '.join(missing)} (a new level's header has no "
                                                 f"stock level to take them from)"))
+    planet = level.level.get("planet")
+    if planet is not None:
+        if planet not in project.planets:
+            out.append(Problem(ERROR, "planet", lf, f"planet {planet!r}: the project has no planets/{planet}.json"))
+        elif sum(lv.level.get("planet") == planet for lv in project.levels.values()) > REGION_BLOCKS:
+            out.append(Problem(ERROR, "planet", lf, f"planet {planet} has more than {REGION_BLOCKS} levels (the game's "
+                                                    "saved-flag blocks of a region)"))
     for f in ("region", "regionIndex"):
         if header.get(f, 0) >= REGION_BLOCKS:
             out.append(Problem(ERROR, "header", lf, f"{f} {header[f]}: the game has {REGION_BLOCKS} (0-31)"))
@@ -396,6 +406,10 @@ def _check_galaxies(project: Project) -> list[Problem]:
 
 def _check_planets_together(project: Project) -> list[Problem]:
     out: list[Problem] = []
+    regions = {lv.level["planet"] for lv in project.levels.values() if lv.level.get("planet")}
+    if len(regions) > MOD_REGIONS:
+        out.append(Problem(WARNING, "planet", "levels", f"{len(regions)} planets have levels: the port has room for "
+                                                         f"{MOD_REGIONS} regions of mods' planets, all mods together"))
     used = Counter((r["from"], r["dir"]) for p in project.planets.values() for r in p.get("routes", []))
     for (src, d), n in used.items():
         if n > 1:

@@ -20,6 +20,7 @@
  },
  "music": "pack:music/zephyra_arena",
  "name": "Sky Arena",
+ "planet": "zephyra",
  "sky": 205,
  "track": "pack:track/arena"
 }
