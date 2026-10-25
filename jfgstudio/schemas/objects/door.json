@@ -1,0 +1,11 @@
+{
+ "key": "door",
+ "name": "Door",
+ "ids": [],
+ "behaviour": 7,
+ "status": "partial",
+ "description": "A door that opens for the player inside a level (the level change is an exit behind it). Applies to every behaviour-7 type: set \"schema\": \"door\" on the object. Lock bits other than the squadron lock are not decoded yet.",
+ "fields": [
+  {"name": "doorId", "offset": "0x14", "type": "u8", "link": "doorId", "description": "squadrons with this door id lock it"}
+ ]
+}

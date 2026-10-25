@@ -1,0 +1,13 @@
+{
+ "key": "startpoint",
+ "name": "Start point",
+ "ids": ["0x0D"],
+ "behaviour": 6,
+ "status": "decoded",
+ "description": "Where a player appears when a level is entered at this start point number. MSR mod #6, 'How levels link'.",
+ "fields": [
+  {"name": "player", "offset": "0x0A", "type": "u8", "description": "player number 0-3"},
+  {"name": "startPoint", "offset": "0x0B", "type": "u8", "description": "start point number (exits name it)"},
+  {"name": "yaw", "offset": "0x0C", "type": "u8", "unit": "angle10", "description": "facing"}
+ ]
+}

@@ -1,0 +1,13 @@
+{
+ "key": "squadron",
+ "name": "Squadron",
+ "ids": ["0x4F"],
+ "behaviour": 23,
+ "status": "partial",
+ "description": "Spawns and runs its members (entries naming it with +0x11). With a door id it keeps those doors locked until every member is dead. MSR mod #6, 'Doors that open when a squadron is dead'. Other fields (baddy type, count, formation) are not decoded yet: copy them from a stock squadron.",
+ "fields": [
+  {"name": "squadronId", "offset": "0x2D", "type": "u8", "link": "squadronId", "description": "members name it with their +0x11"},
+  {"name": "doorId", "offset": "0x31", "type": "u8", "link": "doorId", "description": "doors with this id stay locked until the squadron is dead (whether 0 means none is not confirmed)"},
+  {"name": "region", "offset": "0x3F", "type": "u8", "link": "region", "description": "navigation region; the list must have RegionPoints for it"}
+ ]
+}

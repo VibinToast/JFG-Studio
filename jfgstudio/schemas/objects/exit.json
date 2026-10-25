@@ -1,0 +1,21 @@
+{
+ "key": "exit",
+ "name": "Exit (loading zone)",
+ "ids": ["0x0B"],
+ "behaviour": 8,
+ "status": "decoded",
+ "description": "Taken when the player enters its radius (or crosses its plane): loads the target level at a start point. MSR mod #6, 'How levels link'.",
+ "fields": [
+  {"name": "levelLow", "offset": "0x0A", "type": "u8", "link": "level", "description": "target level, low byte"},
+  {"name": "levelHigh", "offset": "0x0B", "type": "u8", "default": 255, "link": "level", "description": "target level, high byte; 0xFF = the low byte alone"},
+  {"name": "startPoint", "offset": "0x0C", "type": "s8", "link": "startPoint", "description": "start point in the target level"},
+  {"name": "radius", "offset": "0x12", "type": "u8", "description": "below 5 = the default radius"},
+  {"name": "yaw", "offset": "0x13", "type": "u8", "unit": "angle10", "description": "crossing plane yaw (used with usePlane)"},
+  {"name": "unlockWorld", "offset": "0x14", "type": "s8", "default": -1, "link": "world", "description": "world to unlock, -1 none"},
+  {"name": "condition", "offset": "0x15", "type": "s8", "description": "0-24: game-flag tests; 3 = not in the power suit, 4 = power suit only"},
+  {"name": "animGroup", "offset": "0x16", "type": "s8", "default": -1, "description": "animation group for the next level, -1 none"},
+  {"name": "usePlane", "offset": "0x18", "type": "s8", "description": "non-zero: use the crossing plane"},
+  {"name": "arg1A", "offset": "0x1A", "type": "s8", "description": "passed on to mainChangeLevel"},
+  {"name": "pitch", "offset": "0x1B", "type": "u8", "unit": "angle10", "description": "crossing plane pitch"}
+ ]
+}

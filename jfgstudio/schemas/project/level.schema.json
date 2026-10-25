@@ -1,0 +1,27 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "JFG-Studio levels/<name>/level.json",
+ "type": "object",
+ "required": ["format", "name", "track", "header"],
+ "additionalProperties": false,
+ "properties": {
+  "format": {"const": 1},
+  "name": {"type": "string", "minLength": 1, "maxLength": 31, "description": "the level's name in the game (header +0x00)"},
+  "fixedId": {"type": "integer", "minimum": 0, "maximum": 2047, "description": "phase 0 only: the level id to use until the port's content linker exists"},
+  "track": {"type": "string", "description": "pack:track/<name> (geometry/<name>.glb) or stock:track/<n>"},
+  "sky": {"type": "integer", "minimum": -1, "description": "sky object id (header +0x58), -1 = none (black)"},
+  "header": {
+   "type": "object",
+   "description": "header fields by name (decomp levels.py names); unnamed fields come from the neutral template",
+   "additionalProperties": {"type": "integer"},
+   "properties": {
+    "cutsceneData": {"type": "integer"},
+    "world": {"type": "integer"},
+    "region": {"type": "integer"},
+    "regionIndex": {"type": "integer"}
+   }
+  },
+  "ambient": {"type": "array", "maxItems": 3, "items": {"type": "integer", "minimum": -1}, "description": "looping ambient sounds (header +0x108), -1 = none"},
+  "music": {"type": "string", "description": "pack:music/<name> (OGG) or stock:music/<sequence>"}
+ }
+}
