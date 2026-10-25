@@ -1,0 +1,30 @@
+# Never commit game data or anything made from it
+*.z64
+*.n64
+*.v64
+*.rom
+*.nrm
+*.rtz
+catalog/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Builds and project outputs
+build/
+dist/
+*.jfgproj/build/
+imgui.ini
+*.log
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
