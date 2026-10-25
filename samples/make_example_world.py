@@ -452,6 +452,12 @@ def main() -> int:
               fields={"red": 120, "green": 220, "blue": 255, "radius": 300, "flags": 0x40})
     f.objects["objects"] = pl.made
 
+    # Zephyra's own point on the planet map (the port's planet registry): above map point 0, the world a new game
+    # starts in, one stick push up from it. It wears disc 2's textures with a pale blue top.
+    p.planets["zephyra"] = {"format": 1, "displayName": {"en": "Zephyra"},
+                            "disc": {"index": 2, "x": 160, "y": 25, "radius": 14, "colour": [150, 210, 255]},
+                            "routes": [{"from": "stock:mappoint/0", "dir": "up", "back": "down"}],
+                            "entryLevel": dict.fromkeys(("vela", "juno", "lupus"), "pack:level/landing")}
     arena_door = p.meta.pop("x-arena-door")
     p.save()
     world_scripts(p, arena_door)

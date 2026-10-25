@@ -7,14 +7,15 @@
  "properties": {
   "format": {"const": 1},
   "displayName": {"type": "object", "required": ["en"], "additionalProperties": {"type": "string", "minLength": 1}},
-  "replaces": {"type": "string", "description": "phase 0 only: stock:mappoint/<n>, the map point this planet takes over (in-place edit; extra points need the planet registry)"},
+  "replaces": {"type": "string", "description": "stock:mappoint/<n>: the map point this planet takes over (an in-place edit). Without it the planet gets a point of its own (the port's planet registry: disc and routes)"},
   "fixedWorld": {"type": "integer", "minimum": 0, "maximum": 15, "description": "phase 0 only: the world number until the port's planet registry exists"},
   "disc": {
    "type": "object",
    "required": ["index", "x", "y", "radius"],
    "additionalProperties": false,
    "properties": {
-    "index": {"type": "integer", "minimum": 0, "maximum": 10, "description": "map disc (8-10 are moons in the stock map)"},
+    "index": {"type": "integer", "minimum": 0, "maximum": 10, "description": "take-over: the map disc to edit (8-10 are moons in the stock map); a point of its own: the stock disc whose textures it wears"},
+    "colour": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer", "minimum": 0, "maximum": 255}, "description": "a point of its own: the colour of its top layer"},
     "x": {"type": "integer"}, "y": {"type": "integer"},
     "radius": {"type": "integer", "minimum": 1},
     "orbitParent": {"type": "integer", "minimum": -1, "description": "-1 = a planet"},

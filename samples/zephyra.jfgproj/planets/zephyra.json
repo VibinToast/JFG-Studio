@@ -1,0 +1,29 @@
+{
+ "disc": {
+  "colour": [
+   150,
+   210,
+   255
+  ],
+  "index": 2,
+  "radius": 14,
+  "x": 160,
+  "y": 25
+ },
+ "displayName": {
+  "en": "Zephyra"
+ },
+ "entryLevel": {
+  "juno": "pack:level/landing",
+  "lupus": "pack:level/landing",
+  "vela": "pack:level/landing"
+ },
+ "format": 1,
+ "routes": [
+  {
+   "back": "down",
+   "dir": "up",
+   "from": "stock:mappoint/0"
+  }
+ ]
+}

@@ -316,7 +316,16 @@ def _check_planet(project: Project, name: str, p: dict) -> list[Problem]:
         out.append(Problem(ERROR, "planet", pf, "a planet needs \"replaces\" (a stock map point to take over) or a "
                                                 "disc and at least one route"))
     disc = p.get("disc", {"index": -1})
-    if disc["index"] in (8, 9, 10) and disc.get("orbitParent", 0) != -1:
+    if "replaces" not in p:  # a map point of its own (the planet registry): the disc index is only its look
+        for route in p.get("routes", []):
+            r = _ref(route["from"], None, pf, None, out)
+            if r and not (r.is_stock and r.category == "mappoint"):
+                out.append(Problem(ERROR, "route", pf, f"{route['from']}: the port reaches a new planet from a "
+                                                       "stock map point only"))
+            if route.get("corners") and len(route["corners"]) < 2:
+                out.append(Problem(ERROR, "route", pf, "a route line needs at least 2 corners (or none: the build "
+                                                       "draws it)"))
+    elif disc["index"] in (8, 9, 10) and disc.get("orbitParent", 0) != -1:
         out.append(Problem(ERROR, "moon-disc", pf, f"disc {disc['index']} is a moon in the stock map: set "
                                                    "orbitParent -1 to make it a planet, or it circles its parent and "
                                                    "can't be selected"))
@@ -326,14 +335,13 @@ def _check_planet(project: Project, name: str, p: dict) -> list[Problem]:
             out.append(Problem(ERROR, "entry-level", pf, f"{hero}: {ref} is not a level of this project"))
     for route in p.get("routes", []):
         r = _ref(route["from"], None, pf, None, out)
-        if r and r.category not in ("mappoint", "world"):
+        if r and "replaces" in p and r.category not in ("mappoint", "world"):
             out.append(Problem(ERROR, "route", pf, f"{route['from']}: routes start at a map point or a planet"))
         if route["back"] != OPPOSITE[route["dir"]]:
             out.append(Problem(WARNING, "route", pf, f"route from {route['from']}: back direction {route['back']} "
                                                      f"is not the opposite of {route['dir']}"))
-    if "fixedWorld" not in p:
-        out.append(Problem(INFO, "world", pf, "no fixedWorld: needs the port's planet registry (phase 2); phase 0 "
-                                              "packs use world 15"))
+    if "fixedWorld" not in p and "replaces" in p:
+        out.append(Problem(INFO, "world", pf, "no fixedWorld: a planet that takes over a map point uses world 15"))
     return out
 
 
@@ -348,7 +356,7 @@ def _check_planets_together(project: Project) -> list[Problem]:
     for w, n in worlds.items():
         if n > 1:
             out.append(Problem(ERROR, "world", "planets", f"fixedWorld {w} is used by {n} planets"))
-    discs = Counter(p["disc"]["index"] for p in project.planets.values() if "disc" in p)
+    discs = Counter(p["disc"]["index"] for p in project.planets.values() if "disc" in p and "replaces" in p)
     taken = Counter(p["replaces"] for p in project.planets.values() if "replaces" in p)
     for point, n in taken.items():
         if n > 1:

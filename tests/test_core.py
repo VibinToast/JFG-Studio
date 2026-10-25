@@ -185,6 +185,7 @@ class Validator(unittest.TestCase):
     def test_moon_disc_and_world(self):
         p = clone(self.base)
         del p.planets["gemini"]["disc"]["orbitParent"]
+        p.planets["gemini"]["replaces"] = "stock:mappoint/6"  # the rule is for take-overs
         p.levels["gemini"].level["header"]["world"] = 16
         rules = self.rules(p)
         self.assertIn((val.ERROR, "moon-disc"), rules)

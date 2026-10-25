@@ -341,6 +341,24 @@ class _Builder:
         return out
 
     # the patch side
+    def world(self) -> dict | None:
+        """jfg_world.json: the planets with a map point of their own (the port's planet registry, worldmap.py)."""
+        from jfgstudio import worldmap
+        if not any(worldmap.is_registry(p) for p in self.p.planets.values()):
+            return None
+        doc, problems = None, []
+        try:
+            doc = self.mapdata.decode_map(bytearray(self.image))
+        except self.jf.FormatError as e:
+            problems.append(f"planet map: {e}")
+        world, more = worldmap.manifest(self.p, doc)
+        if problems or more:
+            raise BuildError(problems + more)
+        for p in world["planets"]:
+            self.log(f"planet {p['id']}: a map point of its own at ({p['disc']['x']}, {p['disc']['y']}), reached from "
+                     + ", ".join(f"map point {r['from']} ({worldmap.DIRS[r['dir']]})" for r in p["routes"]))
+        return world
+
     def map_image(self) -> bytes | None:
         """The planet map, edited in place in a copy of the ROM.
 
@@ -350,11 +368,12 @@ class _Builder:
         Patches to recompiled code (the new-game unlock) do nothing there either. So a phase 0 planet takes over an
         existing map point ("replaces"); extra points and unlocks come with the port's planet registry (P4).
         """
-        if not self.p.planets:
+        takeovers = {n: p for n, p in self.p.planets.items() if "replaces" in p}  # the rest: jfg_world.json
+        if not takeovers:
             return None
         img = bytearray(self.image)
         doc = self.mapdata.decode_map(img)
-        for name, p in sorted(self.p.planets.items()):
+        for name, p in sorted(takeovers.items()):
             world = p.get("fixedWorld")
             if world is None:
                 raise BuildError([f"planets/{name}: phase 0 needs \"fixedWorld\" (15)"])
@@ -414,6 +433,7 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
         kind_entries, objtypes, animrows = b.kinds()
         level_patches = b.patches()
         patched = b.map_image()
+        world = b.world()
     except b.jf.FormatError as e:
         raise BuildError([str(e)]) from e
 
@@ -480,6 +500,8 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
             z.writestr("jfg_music.json", json.dumps(music, indent=1, sort_keys=True))
         if script_files:
             z.writestr("jfg_scripts.json", json.dumps({"scripts": sorted(script_files)}, indent=1))
+        if world:
+            z.writestr("jfg_world.json", json.dumps(world, indent=1))
         for name, raw in sorted(files.items()):
             z.writestr(name, raw)
         if patch:
