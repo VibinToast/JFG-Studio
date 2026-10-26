@@ -1100,7 +1100,10 @@ class Session:
                 raise AgentError("the pack has used every game flag a health upgrade can take (103-127)")
             checked["upgrade"] = flag - val.UPGRADE_FLAG
         at = self._pos(lv, pos, schema, on_floor, lift)
-        if facing is not None:
+        notes = []
+        if facing is not None and (schema is None or schema.role("yaw") is None):
+            notes.append("facing left out: this type's entry has no facing field")
+        elif facing is not None:
             checked.update([self._facing(schema, facing, (at[0], at[2]))])
         from jfgstudio import packtypes
         plain = False
@@ -1137,7 +1140,21 @@ class Session:
             if schema is None or schema.key != "exit":
                 raise AgentError("only exits have a target")
             o["target"] = target
-        return self._add(lv, placer.made, f"place {name or o['uid']}")
+        drawn = None
+        if kind and packtypes.is_pack_type(kind):
+            info = packtypes.resolve(self.p, kind)
+            if not info["copyModel"]:
+                drawn = info["model"] if info["model"] is not None else ((self._types or {}).get(oid, {}).get(
+                    "assets") or [None])[0]
+        elif not kind and (self._types or {}).get(oid, {}).get("kind") == "models":
+            drawn = self._types[oid]["assets"][0]
+        if self._crashing_model(drawn) is not None:
+            notes.append(f"model 0x{drawn:X} lists animations but has no joints: the game crashes drawing this "
+                         "object. Use an object type of the pack's own with copy_model (make_object_type)")
+        out = self._add(lv, placer.made, f"place {name or o['uid']}")
+        if notes:
+            out[0]["notes"] = notes
+        return out
 
     @staticmethod
     def _facing(schema, degrees, at=None) -> tuple[str, int]:
@@ -2104,7 +2121,7 @@ class Session:
         return {"dependencies": deps}
 
     def make_object_type(self, name: str, base, display_name: str | None = None, behaviour: int | None = None,
-                         model: int | None = None, scale: float | None = None) -> dict:
+                         model: int | None = None, scale: float | None = None, copy_model: bool = False) -> dict:
         """An object type of the pack's own (objtypes/<name>.json): the stock type `base`'s definition with its
         behaviour, model (every model slot) and scale changed. Placed as pack:objtype/<name>, and by packs that
         depend on this one as <mod id>:objtype/<name>."""
@@ -2127,6 +2144,10 @@ class Session:
                 raise AgentError(f"model 0x{doc['model']:X} doesn't read: {e}") from None
         if scale is not None:
             doc["scale"] = float(scale)
+        if copy_model:
+            if t["kind"] != "models":
+                raise AgentError(f"0x{oid:X} is drawn as {t['kind']}: it has no model to copy")
+            doc["copyModel"] = True
         errors = list(jsonschema.Draft202012Validator(proj._SCHEMAS["objtype"]).iter_errors(doc))
         if errors:
             raise AgentError("; ".join(e.message for e in errors))
@@ -2136,8 +2157,25 @@ class Session:
         from jfgstudio import packtypes
         out = {"type": f"pack:objtype/{name}", **doc, "dependents": f"{self.p.id}:objtype/{name}"}
         if packtypes.example(self._types, oid, beh) is None:
-            out["warning"] = f"no stock object has behaviour {beh}: there is no entry to place one from"
+            out["note"] = f"no stock list places behaviour {beh}: an object of it gets the plain 10-byte entry"
+        crashing = self._crashing_model(doc.get("model", t["assets"][0] if t["assets"] else None))
+        if crashing is not None and not copy_model:
+            out["warning"] = (f"model 0x{crashing:X} lists animations but has no joints: the game crashes animating "
+                              "it, and the build refuses the type. Make it again with copy_model")
         return out
+
+    def _crashing_model(self, model_id) -> int | None:
+        """`model_id` when the game would crash animating it (packtypes.crashes_animating), else None."""
+        from jfgstudio import packtypes
+        if model_id is None or self.catalog() is None:
+            return None
+        if getattr(self, "_model_data", None) is None:
+            from jfgformats import models
+            self._model_data = models.ModelData(self._catalog.assets)
+        try:
+            return model_id if packtypes.crashes_animating(self._model_data, model_id) else None
+        except Exception:  # noqa: BLE001 (a model jfgformats can't read: not checked)
+            return None
 
     def remove_dependency(self, id: str) -> dict:
         deps = [d for d in self.p.meta.get("dependencies", []) if d["id"] != id]

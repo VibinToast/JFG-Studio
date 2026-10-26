@@ -21,6 +21,21 @@ from jfgstudio import refs
 PLAIN_ENTRY = 0x0A  # an entry of its header alone: for a type with no code (behaviour 0) or one no list places
 
 
+def animation_count(models, model_id: int) -> int:
+    """The animations asset 0x28 lists for a model: the count the game gives it at load (model +0x4E), joints or
+    not (jfgformats ModelData.animations lists them only for a model with joints)."""
+    import struct
+    table, _ = models.anim_lists
+    start, end = (v >> 1 for v in struct.unpack(">HH", table[model_id * 2:model_id * 2 + 4]))
+    return max(0, end - start)
+
+
+def crashes_animating(models, model_id: int) -> bool:
+    """A model with animations listed but no joints (+0x4F): the game animates any model with an animation count, and
+    gen_anim_data crashes on it (decomp: the AntTank's model 0x73, the only one in the US ROM)."""
+    return animation_count(models, model_id) > 0 and not models.model(model_id).num_joints
+
+
 class PackTypeError(ValueError):
     pass
 
@@ -73,6 +88,7 @@ def resolve(project, type_ref: str) -> dict:
         raise PackTypeError(f"{where} has no object type {r.name!r} (objtypes: {', '.join(owner.objtypes) or 'none'})")
     return {"name": doc["name"], "base": refs.parse(doc["base"], "objtype").number(),
             "behaviour": doc.get("behaviour"), "model": doc.get("model"), "scale": doc.get("scale", 1.0),
+            "copyModel": doc.get("copyModel", False),
             "fixup": f"objtype_{r.name}" if r.is_pack else f"{r.namespace}:objtype_{r.name}"}
 
 

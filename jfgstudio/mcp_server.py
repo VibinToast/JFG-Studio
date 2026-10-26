@@ -323,12 +323,14 @@ TOOLS = [
           "Place it as pack:objtype/<name>; packs that depend on this "
           "one place it as <mod id>:objtype/<name>.",
           lambda s, a: s.make_object_type(a["name"], a["base"], a.get("display_name"), a.get("behaviour"),
-                                          a.get("model"), a.get("scale")),
+                                          a.get("model"), a.get("scale"), a.get("copy_model", False)),
           {"name": {"type": "string", "description": "lower case file name"},
            "base": {"description": "the stock type it copies (\"0x171\" or a schema key)"},
            "display_name": {"type": "string"}, "behaviour": {"type": "integer", "description": "none = the base's"},
            "model": {"type": "integer", "description": "a model id every model slot shows; none = the base's"},
-           "scale": {"type": "number", "description": "times the base's size"}}, ["name", "base"]),
+           "scale": {"type": "number", "description": "times the base's size"},
+           "copy_model": {"type": "boolean", "description": "its own copy of the model, drawn without animations "
+                          "(needed for a model with animations but no joints: the AntTank's)"}}, ["name", "base"]),
     _tool("remove_dependency", "Drop a dependency.", lambda s, a: s.remove_dependency(a["id"]),
           {"id": {"type": "string"}}, ["id"]),
     _tool("undo", "Undo a level's last change.", lambda s, a: s.undo(a["level"]), {"level": _LEVEL}, ["level"]),

@@ -382,8 +382,8 @@ class TrialFindings(AgentTest):
         start = self.s.place("home", "startpoint", [0, 0], fields={"startPoint": 5}, facing=180)[0]
         self.assertEqual(start["fields"]["yaw"], 32)
         self.assertEqual(self.s.update_object("home", start["uid"], facing=90)["fields"]["yaw"], 16)
-        with self.assertRaises(agent.AgentError):
-            self.s.place("home", "health", [0, 0], facing=90)  # no yaw field
+        no_yaw = self.s.place("home", "health", [0, 0], facing=90)[0]  # no yaw field: left out, with a note
+        self.assertIn("facing", no_yaw["notes"][0])
         toward = self.s.place("home", "startpoint", [0, 0], fields={"startPoint": 6}, facing=[0, 1000])[0]
         self.assertEqual(toward["fields"]["yaw"], 32)  # facing the point at +z: half a turn
         self.assertEqual(self.s.update_object("home", toward["uid"], facing=[-1000, 0])["fields"]["yaw"], 16)

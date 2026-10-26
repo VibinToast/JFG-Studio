@@ -183,6 +183,7 @@ class _Builder:
         types = self.catalog.objtypes()
         defs_table, _ = self.jf.read_table(self.catalog.assets.section(OBJDEF_TABLE))
         defs_data = self.catalog.assets.section(OBJDEF_DATA)
+        model_data = self.models.ModelData(self.catalog.assets)
         for name, doc in sorted(self.p.objtypes.items()):
             base = refs.parse(doc["base"], "objtype").number()
             t = types.get(base)
@@ -196,20 +197,42 @@ class _Builder:
                                                          * float(doc["scale"])).hex()})
             if doc.get("behaviour") is not None:
                 sets.append({"at": 0x1C, "hex": struct.pack(">h", doc["behaviour"]).hex()})
-            if doc.get("model") is not None:
+            fixups = []
+            if doc.get("model") is not None or doc.get("copyModel"):
                 if raw[0x1E] != 0 or raw[0x1F] == 0:
                     raise BuildError([f"objtypes/{name}.json: {doc['base']} has no models to replace (it is drawn "
                                       f"as {t['kind']})"])
                 arr = struct.unpack_from(">i", raw, 0x30)[0]
+                model = doc["model"] if doc.get("model") is not None else t["assets"][0]
+                if doc.get("copyModel"):  # its own copy: an appended model gets no animations (no animRows row)
+                    entries.append({"table": MODEL_TABLE, "data": MODEL_DATA, "what": "model", "index": None,
+                                    "raw": None, "append": f"model_{name}", "copyOf": model, "packed": True})
                 for i in range(raw[0x1F]):  # every slot (LODs) shows the model; each keeps its flag bits
                     old = struct.unpack_from(">I", raw, arr + 4 * i)[0]
-                    sets.append({"at": arr + 4 * i, "hex": struct.pack(">I", (old & ~0x7FFF) | doc["model"]).hex()})
-            entries.append({"table": OBJDEF_TABLE, "data": OBJDEF_DATA, "what": "objdef", "index": None, "raw": None,
-                            "append": f"objdef_{name}", "copyOf": d, "set": sets})
+                    if doc.get("copyModel"):
+                        fix = {"at": arr + 4 * i, "type": "u32", "ref": f"model_{name}"}
+                        if old & ~0x7FFF:
+                            fix["add"] = old & ~0x7FFF
+                        fixups.append(fix)
+                    else:
+                        sets.append({"at": arr + 4 * i, "hex": struct.pack(">I", (old & ~0x7FFF) | model).hex()})
+            drawn = [doc["model"] if doc.get("model") is not None else m for m in t["assets"]] \
+                if t["kind"] == "models" else []
+            crashing = [m for m in sorted(set(drawn)) if packtypes.crashes_animating(model_data, m)]
+            if crashing and not doc.get("copyModel"):
+                raise BuildError([f"objtypes/{name}.json: model 0x{crashing[0]:X} lists animations but has no joints: "
+                                  "the game crashes animating it. Give the type \"copyModel\": true (its own copy, "
+                                  "drawn without animations)"])
+            e = {"table": OBJDEF_TABLE, "data": OBJDEF_DATA, "what": "objdef", "index": None, "raw": None,
+                 "append": f"objdef_{name}", "copyOf": d, "set": sets}
+            if fixups:
+                e["fixups"] = fixups
+            entries.append(e)
             objtypes.append({"append": f"objtype_{name}", "def": f"objdef_{name}", "like": base})
             self.log(f"object type {name}: {doc['name']}, made from {t['name']} (0x{base:X})"
                      + (f", behaviour {doc['behaviour']}" if doc.get("behaviour") is not None else "")
-                     + (f", model 0x{doc['model']:X}" if doc.get("model") is not None else ""))
+                     + (f", model 0x{doc['model']:X}" if doc.get("model") is not None else "")
+                     + (", its own copy of the model" if doc.get("copyModel") else ""))
         return entries, objtypes
 
     def kinds(self) -> tuple[list[dict], list[dict], list[dict]]:
