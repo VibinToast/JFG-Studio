@@ -139,6 +139,10 @@ Play-tested lessons (a test valley got all of these wrong):
   doesn't close its opening.
 - **Crates and drums keep off walls** and stay the game's size (crates 39, drums 24: the defaults). A crate against
   a level's outer wall clipped into it (play-tested); `check_placement` says "clipping into geometry".
+- **Water lies in a hollow**, its edge meeting the bank: a sheet raised over flat ground hovers (play-tested).
+- **What the player must reach is reachable**: a key on a 210-high block was out of reach (play-tested). Give
+  climbs steps of about 70; `check_placement` says when a key is out of reach.
+- **One cover per enemy**: with fewer obstacles than members, two ran to the same rock and overlapped.
 - **Rocks for cover are big** (radius 90+, about 100 tall) and modelled: crate objects aren't cover. Radius-60
   rocks are landmarks. Keep squad regions to 4
   corners.

@@ -38,6 +38,9 @@ SIZED = 12  # describe_type of a shared schema (doors) measures this many of its
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = squads.PATROL_NEAR  # place_patrol moves a squadron farther than this from its route to its first node
 EXPLOSIVE_DRUM, DRUM_SIZE = 0x168, 24
+CLIMB, CLIMB_STEP = 100, 70  # a key higher than this over every floor round it is out of reach; steps to give
+REACH_RING = (100, 160, 220, 300)  # how far round a key to look for a floor to climb from
+WATER_BANK, WATER_HOVER = 12, 8  # past a water edge by this much, a floor lower than this under it: hovering water
 DOOR_SLACK = 40  # a passage more than this much wider than its door: the player walks round it
 DOOR_OVERLAP = 10  # a door covers its opening's edges by at least this much (both sides together), or gaps show  # most of the game's explosive drums are size 24 (its crates 39)
 FLYER_CRUISE = 150  # flying squads cruise this far over the floor (the game's: about 150)
@@ -584,6 +587,11 @@ class Session:
             out["shrunk"] = shrunk  # the game stores them smaller: draw them at 64 x 32, 32 x 64 ...
         if far > 32767:
             out["problem"] = "a vertex is farther than 32767 units from the origin: the game can't hold it"
+        hovering = self._hovering_water(mesh)
+        if hovering:
+            out["water"] = {"hovering": len(hovering), "at": hovering[:3],
+                            "problem": "water hovers over the floor at its edge: sink it into a hollow so its edge "
+                                       "meets the bank (or lay it on the floor)"}
         return out
 
     def _glb_images(self, name: str) -> dict[str, tuple[int, int]]:
@@ -691,7 +699,70 @@ class Session:
         lv = self._level(level)
         mesh = self._mesh(level)
         found = placement.check(mesh, lv.objects["objects"], self.schemas, self._behaviours())
-        return found + self._door_gaps(lv, mesh)
+        return found + self._door_gaps(lv, mesh) + self._out_of_reach(lv, mesh)
+
+    def _out_of_reach(self, lv: proj.Level, mesh) -> list[dict]:
+        """Keys on a top the player can't climb to: every floor round it (out to REACH_RING) more than CLIMB below
+        it. A key on a 210-high block, with a 40-high rock beside it, was out of reach and the level unbeatable
+        (play-tested)."""
+        out = []
+        for o in lv.objects["objects"]:
+            if obj.stock_id(o) not in val.KEY_IDS:
+                continue
+            x, y, z = (float(v) for v in o["pos"])
+            top = mesh.floor_height(x, z, y + 5)
+            if top is None:
+                continue
+            drops, level_with = [], False
+            for r in REACH_RING:
+                for dx, dz in placement.RING:
+                    h = mesh.floor_height(x + dx * r, z + dz * r, top + 5)
+                    if h is None:
+                        continue
+                    if abs(h - top) <= 5:
+                        level_with = level_with or r == REACH_RING[-1]
+                    else:
+                        drops.append(top - h)
+            if not level_with and drops and min(drops) > CLIMB:
+                finding = {"uid": o["uid"], "pos": list(o["pos"]), "by": round(min(drops)),
+                           "problem": f"out of reach: the nearest floor round it is {min(drops):.0f} below it. Give "
+                                      f"the climb steps of about {CLIMB_STEP} (a 210-high block was out of reach, "
+                                      "play-tested)"}
+                if o.get("name"):
+                    finding["name"] = o["name"]
+                out.append(finding)
+        return out
+
+    def _hovering_water(self, mesh) -> list[list[float]]:
+        """Points on the edges of water that hovers: past the edge, the floor is lower than the water and no wall
+        holds it (a pool must lie in a hollow, its edge on the bank; a pool sheet 22 above the floor hovered,
+        play-tested)."""
+        from jfgstudio.gui.viewport import raycast
+        tris = mesh.kind_triangles("water")
+        edges: dict = {}
+        for tri in tris:
+            pts = [tuple(round(float(c), 1) for c in v) for v in tri]
+            for i in range(3):
+                a, b = pts[i], pts[(i + 1) % 3]
+                key = (min(a, b), max(a, b))
+                edges[key] = None if key in edges else pts[(i + 2) % 3]
+        out = []
+        for (a, b), third in edges.items():
+            if third is None:
+                continue  # shared by two water triangles: inside the water
+            mx, my, mz = ((a[k] + b[k]) / 2 for k in range(3))
+            ex, ez = b[0] - a[0], b[2] - a[2]
+            n = math.hypot(ex, ez) or 1.0
+            nx, nz = -ez / n, ex / n
+            if nx * (third[0] - mx) + nz * (third[2] - mz) > 0:
+                nx, nz = -nx, -nz  # away from the water
+            h = mesh.floor_height(mx + nx * WATER_BANK, mz + nz * WATER_BANK, my + 30)
+            if h is not None and h >= my - WATER_HOVER:
+                continue  # it meets the bank
+            wall = raycast(mesh.collision, (mx - nx, my + 2, mz - nz), (nx, 0.0, nz))
+            if wall is None or wall > 2 * WATER_BANK:
+                out.append([round(mx), round(my), round(mz)])
+        return out
 
     def _door_gaps(self, lv: proj.Level, mesh) -> list[dict]:
         """Doors that don't close their opening: the walls either side (along the door's own width, at waist height)
@@ -1824,6 +1895,15 @@ class Session:
                                          + ("; one side hovers: move it to level ground (find_flat, or a flat "
                                             "clearing in the geometry)" if f["problem"] == "on a slope" else ""),
                                          f["uid"]) for f in findings]
+            for name, lv in self.p.levels.items():
+                try:
+                    hovering = self._hovering_water(self._mesh(name))
+                except AgentError:
+                    hovering = []
+                if hovering:
+                    problems.append(val.Problem(val.WARNING, "water", f"levels/{name}/level.json",
+                                                f"water hovers over the floor at {len(hovering)} edge(s) (one at "
+                                                f"{hovering[0]}): sink it into a hollow so its edge meets the bank"))
             for name, lv in self.p.levels.items():  # nothing above: black where the sky should be
                 if lv.base is None and lv.level.get("sky", -1) == -1 and self._open_to_sky(name):
                     problems.append(val.Problem(val.WARNING, "sky", f"levels/{name}/level.json",

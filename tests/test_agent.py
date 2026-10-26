@@ -239,6 +239,27 @@ class Upgrades(AgentTest):
         self.assertIn("game-flag", [p["rule"] for p in self.s.validate()["problems"]])
 
 
+class Reach(AgentTest):
+    def test_key_out_of_reach_until_steps(self):
+        block = _block(-110, -110, 110, 110, 0, 210)
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + block, (), KILL)
+        key = self.s.place("home", "0x25C", [0, 0])[0]["uid"]  # onto the block's top, 210 up
+        found = {f["uid"]: f for f in self.s.check_placement("home")}
+        self.assertEqual(found[key]["by"], 210)
+        steps = _block(-230, -60, -110, 60, 0, 140) + _block(-350, -60, -230, 60, 0, 70)
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + block + steps, (), KILL)
+        self.assertNotIn(key, [f["uid"] for f in self.s.check_placement("home")])
+
+    def test_water_must_meet_its_bank(self):
+        bank = (_quad(-1000, -1000, 1000, -200, 0) + _quad(-1000, 200, 1000, 1000, 0) + _quad(-1000, -200, -200, 200, 0)
+                + _quad(200, -200, 1000, 200, 0) + _quad(-200, -200, 200, 200, -30))  # a hollow 30 deep
+        self.mesh = QuadMesh(bank, _quad(-200, -200, 200, 200, -5), KILL)
+        self.assertNotIn("water", self.s.geometry_info("home"))  # in the hollow: its edge meets the bank
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0), _quad(-200, -200, 200, 200, 22), KILL)
+        self.assertEqual(self.s.geometry_info("home")["water"]["hovering"], 4)
+        self.assertIn("water", [p["rule"] for p in self.s.validate()["problems"]])
+
+
 class Doors(AgentTest):
     def test_door_narrower_than_its_passage(self):
         self.with_catalog()

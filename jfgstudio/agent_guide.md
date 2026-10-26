@@ -215,6 +215,9 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   isn't there, so lava over nothing is a hole he falls through (play-tested). Model lava as a surface over a solid
   floor a little below it (30 under: he wades in it). `validate` warns about lava with no floor under it, and
   `surface_at` gives `underLava`. Water works the same way for everyone: the floor under it is what they walk on.
+  Water lies in a hollow: model the hollow in the ground and the water's surface a little under the bank, so its
+  edge meets the bank (or a wall). A water sheet raised over flat ground hovers (play-tested); `geometry_info` and
+  `validate` say where an edge hovers.
 - A walkway that rises out of the ground must start a little below it: a lip of a few units stops the hero. A raised
   deck with no ramp onto it is walked under, not onto.
 - Objects that walk (enemies, start points) stand a few units above the floor (`place` does this): a spawn even a
@@ -223,12 +226,15 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   - The heroes' models are about 55 (Vela) to 60 (Juno) tall, Lupus about 33 tall and 40 long.
   - Doors are big: the game's most used ones are about 120-200 wide and 130-220 tall. `describe_type door` measures
     each door type's model (`modelSizes`), and `describe_type <id>` any type's (`modelSize`, at facing 0: x across,
-    y up, z along the facing). Make an opening the door's width: wider leaves a gap to walk around, which breaks the
-    lock.
+    y up, z along the facing). Make the opening a little smaller than the door (about 40 under, both ways), as the
+    game does: wider leaves a gap to walk round, and as wide shows gaps round it.
   - Falls of more than 240 hurt, more than 400 hurt more (Vela). Juno swims once the water is deeper than about 48.
   - Measured in play (Studio's `samples/scale_course.jfgproj`, as Juno, 2026-10-25): ramps up to 45 degrees can be
     walked up, 55 can't. Everything else on the course was within reach: blocks up to 250 high, a tunnel with a
-    40-high roof, a passage 20 wide, and a 300 gap. Those are lower bounds, not limits.
+    40-high roof, a passage 20 wide, and a 300 gap. Those are lower bounds, not limits. But in a later level a key
+    on a 210-high block, with a 40-high rock beside it, was out of reach and the level unbeatable (play-tested): for
+    anything the player must reach, give the climb steps of about 70. `check_placement` says when a key is out of
+    reach.
   - So, to keep the player out (a locked gate, the edge of the level): seal it completely, as even a 20 gap beside
     a door lets the hero through; walls must be well over 250 high and gaps well over 300 across, or end in a kill
     floor. Slopes over 45 degrees (55 tested) can't be walked up: use them for walls the player shouldn't climb.
@@ -267,7 +273,8 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   of holes (obstacles cut out of the region) and inward corners of the region, where the hero can't see them. In a
   rectangle over open floor they stand and fire. `place_squad` makes every block, rock or pillar of the level's
   geometry inside the region a hole (crate objects don't count: model the cover) (`add_cover` does it for a squad made before; `validate` warns: `squad-cover`); members also keep out of
-  holes. So give a squad's area things to hide behind (about 100 tall and 80 across: smaller ones get no hole), and
+  holes. Give each member its own cover: with fewer obstacles than members, two captains ran to the same rock
+  and stood inside each other (play-tested). So give a squad's area things to hide behind (about 100 tall and 80 across: smaller ones get no hole), and
   keep obstacles off the region's edge. Keep a region to **4 corners**: only those are play-tested (`validate`
   notes others), so move an edge clear of an obstacle rather than cutting round it. Each obstacle gets one hole, and
   squads sharing a region share its holes. Play-tested: ants in a counter-clockwise region with two crates made holes run between cover,
