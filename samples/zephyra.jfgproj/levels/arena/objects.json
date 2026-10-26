@@ -143,7 +143,7 @@
     "region": 1,
     "squadronId": 1
    },
-   "name": "BigShieldAnt squad",
+   "name": "shield ant squad",
    "pos": [
     -350,
     8,
@@ -154,13 +154,13 @@
     "list": 409
    },
    "type": "stock:objtype/0x4F",
-   "uid": "bigshieldant_squad1"
+   "uid": "shield_ant_squad1"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "BigShieldAnt",
+   "name": "shield ant",
    "pos": [
     -350,
     8,
@@ -172,13 +172,13 @@
     "list": 413
    },
    "type": "stock:objtype/0x9C",
-   "uid": "bigshieldant1"
+   "uid": "shield_ant1"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "BigShieldAnt",
+   "name": "shield ant",
    "pos": [
     -350,
     8,
@@ -190,7 +190,7 @@
     "list": 413
    },
    "type": "stock:objtype/0x9C",
-   "uid": "bigshieldant2"
+   "uid": "shield_ant2"
   },
   {
    "fields": {
@@ -260,7 +260,7 @@
     "region": 2,
     "squadronId": 2
    },
-   "name": "Cyborg squad",
+   "name": "gunner squad",
    "pos": [
     350,
     8,
@@ -271,13 +271,13 @@
     "list": 431
    },
    "type": "stock:objtype/0x4F",
-   "uid": "cyborg_squad1"
+   "uid": "gunner_squad1"
   },
   {
    "fields": {
     "squadron": 2
    },
-   "name": "Cyborg",
+   "name": "gunner",
    "pos": [
     350,
     8,
@@ -289,13 +289,13 @@
     "list": 431
    },
    "type": "stock:objtype/0x143",
-   "uid": "cyborg1"
+   "uid": "gunner1"
   },
   {
    "fields": {
     "squadron": 2
    },
-   "name": "Cyborg",
+   "name": "gunner",
    "pos": [
     350,
     8,
@@ -307,7 +307,7 @@
     "list": 431
    },
    "type": "stock:objtype/0x143",
-   "uid": "cyborg2"
+   "uid": "gunner2"
   },
   {
    "fields": {

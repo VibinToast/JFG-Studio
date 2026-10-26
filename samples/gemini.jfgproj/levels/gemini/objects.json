@@ -2,7 +2,7 @@
  "format": 1,
  "objects": [
   {"fields": {"player": 0, "startPoint": 0, "yaw": 0}, "name": "Start", "pos": [0, 10, 0], "stock": {"entry": 0, "list": 424}, "type": "stock:objtype/0xD", "uid": "start0"},
-  {"fields": {"condition": -1, "radius": 110, "startPoint": 0, "unlockWorld": -1, "usePlane": 0}, "name": "Exit to Goldwood", "pos": [-600, 0, 0], "stock": {"entry": 7, "list": 424}, "target": "stock:level/21", "type": "stock:objtype/0xB", "uid": "exit_home"},
+  {"fields": {"condition": -1, "radius": 110, "startPoint": 0, "unlockWorld": -1, "usePlane": 0}, "name": "Exit home", "pos": [-600, 0, 0], "stock": {"entry": 7, "list": 424}, "target": "stock:level/21", "type": "stock:objtype/0xB", "uid": "exit_home"},
   {"name": "Health (platform 1)", "pos": [0, 25, 400], "stock": {"entry": 271, "list": 424}, "type": "stock:objtype/0xA9", "uid": "health1"},
   {"name": "Health (platform 2)", "pos": [0, 50, 650], "stock": {"entry": 271, "list": 424}, "type": "stock:objtype/0xA9", "uid": "health2"},
   {"name": "Health (platform 3)", "pos": [0, 75, 900], "stock": {"entry": 271, "list": 424}, "type": "stock:objtype/0xA9", "uid": "health3"},

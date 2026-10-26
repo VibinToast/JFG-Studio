@@ -227,7 +227,7 @@
     {
      "do": "message",
      "seconds": 8,
-     "text": "NIMBUS COMPLETE - The Zephyra Expanse is free! The exit leads home to Goldwood."
+     "text": "NIMBUS COMPLETE - The Zephyra Expanse is free! The exit leads home."
     },
     {
      "do": "complete planet",

@@ -27,7 +27,7 @@
     "startPoint": 0,
     "unlockWorld": -1
    },
-   "name": "the way home to Goldwood",
+   "name": "the way home",
    "pos": [
     0,
     0,
@@ -36,7 +36,7 @@
    "size": 28,
    "target": "stock:level/21",
    "type": "stock:objtype/0xB",
-   "uid": "the_way_home_to_goldwood1"
+   "uid": "the_way_home1"
   },
   {
    "fields": {
@@ -106,7 +106,7 @@
     "region": 1,
     "squadronId": 1
    },
-   "name": "ZombieAnt squad",
+   "name": "undead ant squad",
    "pos": [
     0,
     8,
@@ -117,13 +117,13 @@
     "list": 518
    },
    "type": "stock:objtype/0x4F",
-   "uid": "zombieant_squad1"
+   "uid": "undead_ant_squad1"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "ZombieAnt",
+   "name": "undead ant",
    "pos": [
     0,
     8,
@@ -135,13 +135,13 @@
     "list": 518
    },
    "type": "stock:objtype/0x121",
-   "uid": "zombieant1"
+   "uid": "undead_ant1"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "ZombieAnt",
+   "name": "undead ant",
    "pos": [
     173,
     8,
@@ -153,13 +153,13 @@
     "list": 518
    },
    "type": "stock:objtype/0x121",
-   "uid": "zombieant2"
+   "uid": "undead_ant2"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "ZombieAnt",
+   "name": "undead ant",
    "pos": [
     -173,
     8,
@@ -171,7 +171,7 @@
     "list": 518
    },
    "type": "stock:objtype/0x121",
-   "uid": "zombieant3"
+   "uid": "undead_ant3"
   },
   {
    "fields": {
@@ -241,7 +241,7 @@
     "region": 2,
     "squadronId": 2
    },
-   "name": "BigShieldAnt squad",
+   "name": "shield ant squad",
    "pos": [
     0,
     8,
@@ -252,13 +252,13 @@
     "list": 409
    },
    "type": "stock:objtype/0x4F",
-   "uid": "bigshieldant_squad1"
+   "uid": "shield_ant_squad1"
   },
   {
    "fields": {
     "squadron": 2
    },
-   "name": "BigShieldAnt",
+   "name": "shield ant",
    "pos": [
     0,
     8,
@@ -270,13 +270,13 @@
     "list": 413
    },
    "type": "stock:objtype/0x9C",
-   "uid": "bigshieldant1"
+   "uid": "shield_ant1"
   },
   {
    "fields": {
     "squadron": 2
    },
-   "name": "BigShieldAnt",
+   "name": "shield ant",
    "pos": [
     0,
     8,
@@ -288,7 +288,7 @@
     "list": 413
    },
    "type": "stock:objtype/0x9C",
-   "uid": "bigshieldant2"
+   "uid": "shield_ant2"
   },
   {
    "fields": {},

@@ -3,7 +3,7 @@
   "VibinToast"
  ],
  "dependencies": [],
- "description": "JFG-Studio's example world: three levels reached through a portal in Goldwood's first level, with squads, locked doors, a key, lava, water and its own music.",
+ "description": "JFG-Studio's example world: three levels reached through a portal in the game's first level, with squads, locked doors, a key, lava, water and its own music.",
  "format": 1,
  "id": "jfgstudio_example_zephyra",
  "name": "Zephyra (JFG-Studio example world)",

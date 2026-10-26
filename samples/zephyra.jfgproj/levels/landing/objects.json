@@ -64,7 +64,7 @@
     "startPoint": 0,
     "unlockWorld": -1
    },
-   "name": "portal home to Goldwood",
+   "name": "portal home",
    "pos": [
     380,
     -14,
@@ -73,7 +73,7 @@
    "size": 28,
    "target": "stock:level/21",
    "type": "stock:objtype/0xB",
-   "uid": "portal_home_to_goldwood1"
+   "uid": "portal_home1"
   },
   {
    "fields": {
@@ -163,7 +163,7 @@
     "region": 1,
     "squadronId": 1
    },
-   "name": "BlueAnt squad",
+   "name": "ant squad",
    "pos": [
     0,
     8,
@@ -174,13 +174,13 @@
     "list": 424
    },
    "type": "stock:objtype/0x4F",
-   "uid": "blueant_squad1"
+   "uid": "ant_squad1"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "BlueAnt",
+   "name": "ant",
    "pos": [
     0,
     8,
@@ -192,13 +192,13 @@
     "list": 424
    },
    "type": "stock:objtype/0x78",
-   "uid": "blueant1"
+   "uid": "ant1"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "BlueAnt",
+   "name": "ant",
    "pos": [
     130,
     6,
@@ -210,13 +210,13 @@
     "list": 424
    },
    "type": "stock:objtype/0x78",
-   "uid": "blueant2"
+   "uid": "ant2"
   },
   {
    "fields": {
     "squadron": 1
    },
-   "name": "BlueAnt",
+   "name": "ant",
    "pos": [
     -130,
     11,
@@ -228,7 +228,7 @@
     "list": 424
    },
    "type": "stock:objtype/0x78",
-   "uid": "blueant3"
+   "uid": "ant3"
   },
   {
    "fields": {

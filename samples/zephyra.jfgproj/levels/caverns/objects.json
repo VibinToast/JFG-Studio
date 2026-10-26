@@ -281,7 +281,7 @@
     "region": 2,
     "squadronId": 2
    },
-   "name": "ZombieAnt squad",
+   "name": "undead ant squad",
    "pos": [
     0,
     8,
@@ -292,13 +292,13 @@
     "list": 518
    },
    "type": "stock:objtype/0x4F",
-   "uid": "zombieant_squad1"
+   "uid": "undead_ant_squad1"
   },
   {
    "fields": {
     "squadron": 2
    },
-   "name": "ZombieAnt",
+   "name": "undead ant",
    "pos": [
     0,
     8,
@@ -310,13 +310,13 @@
     "list": 518
    },
    "type": "stock:objtype/0x121",
-   "uid": "zombieant1"
+   "uid": "undead_ant1"
   },
   {
    "fields": {
     "squadron": 2
    },
-   "name": "ZombieAnt",
+   "name": "undead ant",
    "pos": [
     191,
     8,
@@ -328,13 +328,13 @@
     "list": 518
    },
    "type": "stock:objtype/0x121",
-   "uid": "zombieant2"
+   "uid": "undead_ant2"
   },
   {
    "fields": {
     "squadron": 2
    },
-   "name": "ZombieAnt",
+   "name": "undead ant",
    "pos": [
     -191,
     8,
@@ -346,7 +346,7 @@
     "list": 518
    },
    "type": "stock:objtype/0x121",
-   "uid": "zombieant3"
+   "uid": "undead_ant3"
   },
   {
    "fields": {

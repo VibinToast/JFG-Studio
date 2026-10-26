@@ -1654,6 +1654,12 @@ def run(project_path: str | None = None, screenshot: str | None = None, frames: 
     crashlog.install()
     if project_path:
         S.open(project_path)
+        pick = os.environ.get("JFGSTUDIO_SELECT")  # screenshots: "level:uid" opens that level with the object selected
+        if pick and S.project and ":" in pick:
+            level, uid = pick.split(":", 1)
+            if level in S.project.levels:
+                S.level = level
+                S.selection = {uid}
     params = hello_imgui.RunnerParams()
     params.app_window_params.window_title = f"JFG-Studio {__version__}"
     params.app_window_params.window_geometry.size = (1600, 960)

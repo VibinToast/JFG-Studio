@@ -8,14 +8,14 @@ The galaxy: Zephyra is a planet of the pack's own galaxy, the Zephyra Expanse (L
 planets wait there, hidden like the game's own until the world before them is completed: Glacia (an ice field, after
 Zephyra's Sky Arena victory) and Nimbus (sky islands, after Glacia).
 
-The route: a new game -> Goldwood's first level (Forest First), where a glowing portal now stands just ahead of Juno (or
+The route: a new game -> the game's first level, where a glowing portal now stands just ahead of Juno (or
 the planet map: R to the Zephyra Expanse) -> 1. Zephyra Landing (a valley, a river and a bridge, a chest on a plateau,
 the yellow key on a ledge, an ant squad locking the north gate) -> 2. Ember Caverns (a lava lake crossed on a causeway,
 two squads, a chasm with a kill floor, a door that needs the yellow key) -> 3. Sky Arena (a floating arena over a deadly
 drop, two squads that both lock the final gate) -> the victory exit on to Glacia, whose finish leads on to Nimbus, whose
-finish leads home to Forest First. Every level has return exits, its own music, lights and pickups. Each planet is a
-region of its own (the levels' Planet), so an exit that leaves a planet shows the game's stats screen, as at the end of
-the game's own regions, and entering one shows its name, its galaxy and the continues.
+finish leads home to the game's first level. Every level has return exits, its own music, lights and pickups. Each
+planet is a region of its own (the levels' Planet), so an exit that leaves a planet shows the game's stats screen, as at
+the end of the game's own regions, and entering one shows its name, its galaxy and the continues.
 
 Everything here is drawn or written by this script; the project only names stock object types and stock entries
 by number (the build copies those from the player's own ROM).
@@ -41,15 +41,15 @@ GEN = "JFG-Studio samples/make_example_world.py"
 # object ids (stock types) and the stock entries copied for the types Studio only knows in part
 START, EXIT, CHEST, HEALTH, AMMO, KEY_YELLOW = 0x0D, 0x0B, 0x1AA, 0xA9, 0xE8, 0x258
 LIGHT, GLOW, AUDIO, TEXSCROLL, CRATE, STATIC_CRATE, DOOR = 0x10, 0xC8, 0x20, 0x0F, 0x135, 0xA8, 0x1AD
-DOOR_EXAMPLE = (424, 274)  # Forest First's Ftechdoor (the one its ants unlock)
+DOOR_EXAMPLE = (424, 274)  # the game's first level's tech door (the one its ants unlock)
 SQUADS = {  # baddy type -> (stock squadron entry, stock member entry); squadrons whose members are list entries too
-    "BlueAnt": (0x78, (424, 260), (424, 261)),
-    "YellowAnt": (0x5F, (442, 139), (706, 30)),
-    "ZombieAnt": (0x121, (518, 57), (518, 58)),
-    "BigShieldAnt": (0x9C, (409, 60), (413, 22)),
-    "Cyborg": (0x143, (431, 1), (431, 146)),
+    "ant": (0x78, (424, 260), (424, 261)),
+    "small ant": (0x5F, (442, 139), (706, 30)),
+    "undead ant": (0x121, (518, 57), (518, 58)),
+    "shield ant": (0x9C, (409, 60), (413, 22)),
+    "gunner": (0x143, (431, 1), (431, 146)),
 }
-FOREST_FIRST = 21
+FIRST_LEVEL = 21
 SKY = {"landing": 180, "caverns": 194, "arena": 205, "glacia": 180, "nimbus": 205}
 YAW_NORTH, YAW_SOUTH = 32, 0  # start point facing (angle10: 64 = a full turn): the hero faces -z at yaw 0
 
@@ -291,7 +291,7 @@ class World:
 
 
 def fire_ant(p, cat) -> None:
-    """kinds/fire_ant: the BlueAnt reskinned with fiery textures drawn here, one per texture slot of its model, at the
+    """kinds/fire_ant: the ant reskinned with fiery textures drawn here, one per texture slot of its model, at the
     slot's own size (the textures are this script's; the model, animations and behaviour stay the player's own)."""
     from jfgformats import models, png
     base = cat.objtypes()[0x78]
@@ -324,7 +324,7 @@ def world_scripts(p, arena_door: int) -> None:
         return {"do": "message", "text": text, "seconds": seconds}
 
     scripts.save_triggers(p, [
-        {"name": "the portal", "level": f"stock:level/{FOREST_FIRST}", "when": {"kind": "level start"},
+        {"name": "the portal", "level": f"stock:level/{FIRST_LEVEL}", "when": {"kind": "level start"},
          "then": [say("A strange blue portal has opened just ahead...")]},
         {"name": "landing intro", "level": "pack:level/landing", "when": {"kind": "level start"},
          "then": [say("ZEPHYRA - Ants hold the north gate. The yellow key waits on the west ledge.", 6)]},
@@ -358,7 +358,7 @@ def world_scripts(p, arena_door: int) -> None:
          "then": [say("NIMBUS - Mind the edges. The last island is the way out.", 6)]},
         {"name": "nimbus complete", "level": "pack:level/nimbus",
          "when": {"kind": "enter", "box": [-360, 900, 360, 1500]},
-         "then": [say("NIMBUS COMPLETE - The Zephyra Expanse is free! The exit leads home to Goldwood.", 8),
+         "then": [say("NIMBUS COMPLETE - The Zephyra Expanse is free! The exit leads home.", 8),
                   {"do": "complete planet", "planet": "nimbus"}]},
     ])
     (p.path / "scripts").mkdir(exist_ok=True)
@@ -416,7 +416,7 @@ def main() -> int:
     else:
         keep = {}
     p = proj.create(OUT, "jfgstudio_example_zephyra", "Zephyra (JFG-Studio example world)", "VibinToast")
-    p.meta["description"] = ("JFG-Studio's example world: three levels reached through a portal in Goldwood's first "
+    p.meta["description"] = ("JFG-Studio's example world: three levels reached through a portal in the game's first "
                              "level, with squads, locked doors, a key, lava, water and its own music.")
     for name, data in keep.items():
         (OUT / "music" / name).write_bytes(data)
@@ -439,10 +439,10 @@ def main() -> int:
     w.start(pl, mv, 0, -1400, 0, YAW_NORTH)
     w.start(pl, mv, 0, 1500, 1, YAW_SOUTH)
     w.exit(pl, mv, 0, 1660, "pack:level/caverns", 0, "to Ember Caverns")
-    w.exit(pl, mv, 380, -1640, f"stock:level/{FOREST_FIRST}", 0, "portal home to Goldwood", radius=60)
+    w.exit(pl, mv, 380, -1640, f"stock:level/{FIRST_LEVEL}", 0, "portal home", radius=60)
     w.glow(pl, mv, 380, -1640, (120, 220, 255), lift=50)
     door_a = pl.free("door", "doorId")
-    w.squad(pl, mv, "BlueAnt", (0, 1050), 3, [(-700, 850), (700, 850), (700, 1300), (-700, 1300)], door_id=door_a)
+    w.squad(pl, mv, "ant", (0, 1050), 3, [(-700, 850), (700, 850), (700, 1300), (-700, 1300)], door_id=door_a)
     w.door(pl, mv, 0, 1350, "north gate (the ants keep it shut)", {"doorId": door_a, "yaw": 0})
     w.pickup(pl, mv, CHEST, 1150, -550, contents=2)
     w.pickup(pl, mv, KEY_YELLOW, -1360, -150, below=300)
@@ -468,8 +468,8 @@ def main() -> int:
     w.exit(pl, mv, 0, -1760, "pack:level/landing", 1, "back to Zephyra Landing", radius=50)
     w.exit(pl, mv, 0, 1660, "pack:level/arena", 0, "to Sky Arena")
     plaza = [(-240, -490), (240, -490), (240, -10), (-240, -10)]  # 4-corner regions: the tested kind
-    w.squad(pl, mv, "BlueAnt", (0, -250), 3, plaza, reskin="pack:kind/fire_ant")
-    w.squad(pl, mv, "ZombieAnt", (0, 1120), 3, [(-1200, 980), (1200, 980), (1200, 1270), (-1200, 1270)], spread=220)
+    w.squad(pl, mv, "ant", (0, -250), 3, plaza, reskin="pack:kind/fire_ant")
+    w.squad(pl, mv, "undead ant", (0, 1120), 3, [(-1200, 980), (1200, 980), (1200, 1270), (-1200, 1270)], spread=220)
     w.door(pl, mv, 0, 1300, "yellow-key door", {"doorId": 0, "keyLock": 2, "yaw": 0})
     for x, z in ((300, -1500), (-500, 560), (500, 1100)):
         w.pickup(pl, mv, HEALTH, x, z)
@@ -498,8 +498,8 @@ def main() -> int:
     door_c = pl.free("door", "doorId")
     p.meta.setdefault("x-arena-door", door_c)  # the finale trigger watches this door (removed before saving)
     ring = [(-620, 0), (620, 0), (620, 620), (-620, 620)]  # the arena's north half: they hold the gate
-    w.squad(pl, mv, "BigShieldAnt", (-350, 350), 2, ring, door_id=door_c)
-    w.squad(pl, mv, "Cyborg", (350, 350), 2, ring, door_id=door_c)
+    w.squad(pl, mv, "shield ant", (-350, 350), 2, ring, door_id=door_c)
+    w.squad(pl, mv, "gunner", (350, 350), 2, ring, door_id=door_c)
     w.door(pl, mv, 0, 950, "final gate (opens when both squads are down)", {"doorId": door_c, "yaw": 0})
     for x, z in ((600, 0), (-600, 0), (0, -600), (0, 700)):
         w.pickup(pl, mv, HEALTH, x, z, below=50)
@@ -520,8 +520,8 @@ def main() -> int:
     mv, pl = views["glacia"], w.placer(d)
     w.start(pl, mv, 0, -1350, 0, YAW_NORTH)
     w.exit(pl, mv, 0, 1480, "pack:level/nimbus", 0, "on to Nimbus")
-    w.squad(pl, mv, "BlueAnt", (0, 250), 3, [(-600, 0), (600, 0), (600, 450), (-600, 450)])
-    w.squad(pl, mv, "Cyborg", (0, 850), 2, [(-1100, 650), (1100, 650), (1100, 1050), (-1100, 1050)], spread=250)
+    w.squad(pl, mv, "ant", (0, 250), 3, [(-600, 0), (600, 0), (600, 450), (-600, 450)])
+    w.squad(pl, mv, "gunner", (0, 850), 2, [(-1100, 650), (1100, 650), (1100, 1050), (-1100, 1050)], spread=250)
     w.pickup(pl, mv, HEALTH, 0, -1250, amount=2)  # full health behind the entry screen
     for x, z in ((300, -1200), (-1000, 300), (1000, 300), (0, 1100)):
         w.pickup(pl, mv, HEALTH, x, z)
@@ -539,9 +539,9 @@ def main() -> int:
     e.level["sky"], e.level["music"] = SKY["nimbus"], "pack:music/zephyra_arena"
     mv, pl = views["nimbus"], w.placer(e)
     w.start(pl, mv, 0, -1250, 0, YAW_NORTH)
-    w.exit(pl, mv, 0, 1330, f"stock:level/{FOREST_FIRST}", 0, "the way home to Goldwood")
-    w.squad(pl, mv, "ZombieAnt", (0, 150), 3, [(-380, -300), (380, -300), (380, 300), (-380, 300)], spread=200)
-    w.squad(pl, mv, "BigShieldAnt", (0, 1150), 2, [(-250, 950), (250, 950), (250, 1300), (-250, 1300)])
+    w.exit(pl, mv, 0, 1330, f"stock:level/{FIRST_LEVEL}", 0, "the way home")
+    w.squad(pl, mv, "undead ant", (0, 150), 3, [(-380, -300), (380, -300), (380, 300), (-380, 300)], spread=200)
+    w.squad(pl, mv, "shield ant", (0, 1150), 2, [(-250, 950), (250, 950), (250, 1300), (-250, 1300)])
     for x, z in ((200, -1050), (-350, -50), (350, -50)):
         w.pickup(pl, mv, HEALTH, x, z)
     w.pickup(pl, mv, HEALTH, -150, -1050, amount=2)
@@ -551,12 +551,12 @@ def main() -> int:
     w.glow(pl, mv, 0, 1300, (255, 230, 180), lift=60)
     e.objects["objects"] = pl.made
 
-    # Goldwood's first level: the portal, just ahead of where a new game puts Juno
-    f = proj.edit_stock_level(p, "forest_portal", FOREST_FIRST, "Forest First",
-                             cat.levels()[FOREST_FIRST]["track"])  # its track from the header (+0x54)
+    # the game's first level: the portal, just ahead of where a new game puts Juno
+    f = proj.edit_stock_level(p, "forest_portal", FIRST_LEVEL, "First level (edited)",
+                             cat.levels()[FIRST_LEVEL]["track"])  # its track from the header (+0x54)
     pl = w.placer(f)
     import struct
-    start0 = next(e for e in cat.objlist(cat.levels()[FOREST_FIRST]["objectList1"]) if e[0] == START
+    start0 = next(e for e in cat.objlist(cat.levels()[FIRST_LEVEL]["objectList1"]) if e[0] == START
                   and e[1][0x0B] == 0)
     sx, sy, sz = struct.unpack_from(">hhh", start0[1], 4)
     facing = (start0[1][0x0C] << 10) / 65536 * 2 * math.pi  # the hero faces -z at yaw 0
@@ -578,7 +578,7 @@ def main() -> int:
                            "unlock": unlock, "routes": [route] if route else [],
                            "entryLevel": dict.fromkeys(("vela", "juno", "lupus"), f"pack:level/{level}")}
 
-    # Zephyra is discovered through the portal in Forest First: it opens once its level was entered.
+    # Zephyra is discovered through the portal in the game's first level: it opens once its level was entered.
     planet("zephyra", "Zephyra", "landing", {"index": 2, "x": 110, "y": 420, "radius": 16, "colour": [150, 210, 255]},
            {"entered": "zephyra"})
     planet("glacia", "Glacia", "glacia", {"index": 4, "x": 290, "y": 420, "radius": 13, "colour": [220, 240, 255]},
