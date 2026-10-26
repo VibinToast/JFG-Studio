@@ -97,9 +97,41 @@ Every side room, dead end, ledge and glass-sealed chamber should hold something 
 - **Face rewards to the player**: a chest opens towards the way the player walks in (`place` `facing` [x, z] of
   the doorway), not towards the room's back wall.
 
+## Make each level its own
+
+Three trial levels built the same way (blob rooms on flat floors, joined by winding tunnels, in a chain with a loop)
+felt the same to the player, whatever their textures and enemies. So every level must have:
+
+- **A signature**: one set piece the level is built round and remembered by, chosen before the rooms. Pick one the
+  pack's other levels don't have:
+
+  | Signature | Built with |
+  |---|---|
+  | A chasm crossing: a bridge over a pit, enemies on the far side | `layout` room `"pit"`, `jfg64.bridge` |
+  | A tower or shaft to climb: ramps and balconies round its walls | `platform`, `ramp`, links with `from_floor` |
+  | A multi-floor building: a gallery with a balcony, rooms over rooms | `building`, `platform`, `ramp`, `from_floor` |
+  | A corridor maze: square rooms off right-angled corridors, a key at its heart | `building` |
+  | A river or lake to follow: water in a hollow, banks, a crossing | `terrain` paths with `path_depth`, Water surface |
+  | Jetpack islands over a kill floor | `platform`s, `layout` room `"pit"` or `terrain`, refuel pads |
+  | A terraced valley: open ground in steps, ledges between them | `terrain` style `terraces`, Ledge tops |
+  | An arena: a ring walkway round a pit, enemies in waves | `layout` room `"pit"`, squads on triggers |
+
+- **Its own template** (below): a different one from the pack's other levels, and a different height range (one flat
+  and sprawling, one tall and vertical).
+- **Its own shapes**: mix room shapes (`box` for built places, `cave` for natural ones), sizes (a cramped tunnel
+  then a huge hall) and floor heights (the game's outdoor levels spread over about 300).
+
+**Be creative.** The helpers are a start, not the limit. Through the Blender MCP you can model anything with
+Python (`bmesh`, modifiers, your own meshes): arches, stairs, a crashed ship, a statue, a waterfall, a spiral ramp
+round a tower. Whatever you make only has to keep to the rules: the game's limits (`budgets`, `import_geometry`),
+walkable slopes (45 degrees at most), floors facing up, steps of about 70 to anything the player must reach, a
+closed level (boundary colliders or kill floors), and a clean `validate` and `check_placement`. Say in your report
+what you made by hand, so the player knows to look at it.
+
 ## Room-graph templates
 
-Write the plan as a list of rooms (purpose, size, shape, floor height) and links (kind, width) before building:
+Write the plan as a list of rooms (purpose, size, shape, floor height) and links (kind, width) before building.
+Each level of a pack takes a different one:
 
 | Template | Rooms and links | Suits |
 |---|---|---|
@@ -109,6 +141,24 @@ Write the plan as a list of rooms (purpose, size, shape, floor height) and links
 | Arena | One round room with a ring walkway round a pit, 2–4 doors | boss or set-piece fights |
 | Tiered basin | Open ground falling to a centre, paths round its sides, ledges between tiers | outdoor climbing levels |
 | Islands | 3–6 platforms at different heights, refuel pads, a safe floor or kill floor below | jetpack levels |
+| Building | Square rooms off right-angled corridors, a floor over a floor | bases, temples, ships (`building`) |
+| Vertical | A tall room or shaft, balconies and ramps up its walls, exits at several heights | towers, mines |
+
+## Worlds of several levels
+
+A planet's levels join into a route, the way the game's do:
+
+- **The way on**: each level ends at a door with an exit behind it (`connect` from it to the next level's start
+  point), at the far end from where the player came in. The last level's exit leaves the world (the game's way
+  back, or another planet).
+- **Branches**: a level may end at two doors. One takes the main path on; the other leads to an alternative path,
+  a side level or two with Tribals to rescue and other rewards, that comes back to the main path (an exit into a
+  later level) or leaves the world. Make the side path worth it, and lock the main door behind a key, switch or
+  squad so that choosing is a real choice.
+- **Mark the doors**: a light or glow over each exit door, and a different feel for each way (the side path's door
+  in a side room, the main one at the end of the main hall).
+- Every level has a way back to where the player came in (an exit, or the route itself), and no exit leads into
+  its own level (Studio refuses that).
 
 ## Any level
 
@@ -160,9 +210,10 @@ Play-tested lessons (a test valley got all of these wrong):
 
 1. **Study:** `stock_levels`, then `stock_level_layout(level)` and `stock_level_textures(level)` for two or three of
    the game's levels of the kind and theme.
-2. **Plan:** outdoor or indoor, the template, the room list, where the fights, keys and exits go.
-3. **Build** in Blender with jfg64 (`layout`, `terrain`, `rock`, `scatter_points`), paint with game textures or your
-   own, bake light, export, then `import_geometry`.
+2. **Plan:** outdoor or indoor, the signature, the template (both unlike the pack's other levels), the room list,
+   where the fights, keys, rewards and exits go, and for a world, the route between its levels.
+3. **Build** in Blender with jfg64 (`layout`, `building`, `platform`, `ramp`, `bridge`, `terrain`, `rock`,
+   `scatter_points`) and your own modelling, paint with game textures, bake light, export, then `import_geometry`.
 4. **Compare:** `level_layout(level)` against the table above. Change what is out of range.
 5. **Dress:** objects, squads (`place_squad`, `add_cover`), pickups, lights, sounds, doors.
 6. **Validate**, then `play` (or `play` with `launch` false, and give the player the `command` it returns, word for

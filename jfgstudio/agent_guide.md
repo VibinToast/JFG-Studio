@@ -25,7 +25,7 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender, **version 0.5.5 or newer** (`jfg64.__version__`): it knows the game's
+The jfg64 add-on is **required** in Blender, **version 0.6.0 or newer** (`jfg64.__version__`): it knows the game's
 surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
 Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
 Through a Blender MCP server, run Python in Blender and use it rather than writing your own. With no Blender
@@ -46,6 +46,15 @@ level = jfg64.layout("caves", [                            # rooms joined by pas
     [{"from": "hall", "to": "cave", "kind": "tunnel", "wiggle": 0.7, "via": [(900, 150)]}],
     floor=jfg64.game_texture_material(0x160C), wall=..., ceiling=...)
 jfg64.layout_report(level)                                 # slopes, triangles, walkable share
+rooms, links = jfg64.building(                             # a built place: square rooms, right-angled corridors
+    [{"name": "gate", "at": (0, 0), "size": (800, 600)},
+     {"name": "gallery", "at": (1400, 0), "size": (1000, 800), "height": 600},
+     {"name": "loft", "at": (1400, 950), "size": (600, 400), "floor": 180}],
+    [{"from": "gate", "to": "gallery"}, {"from": "gallery", "to": "loft", "from_floor": 180}])  # up off a balcony
+rooms.append({"name": "chasm", "at": (3000, 300), "radius": 600, "pit": {"radius": 330}})  # a hole to a kill floor
+jfg64.platform("balcony", (900, 250, 1900, 400), base=0, height=180, material=wall, top_material=floor)
+jfg64.ramp("stair", (1000, 200), (1500, 200), 100, 0, 180, material=floor)  # 45 degrees at most
+jfg64.bridge("span", (2620, 300), (3380, 300), 0, material=floor)            # across the pit, railed
 ground = jfg64.terrain("valley", size=(2400, 2400), height=110, seed=7, style="hills",   # or ridges, terraces
                        flat=[(0, -900, 220)], paths=[[(0, -900), (150, 300)]], rim=380,
                        material=jfg64.game_texture_material(0x160C))   # a game texture (see Themes)
