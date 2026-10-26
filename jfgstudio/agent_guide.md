@@ -180,8 +180,8 @@ Describe things by what they do; the catalog's names are the player's (never wri
 | Breakable glass | `place_glass(level, a, b, bottom)` (0x12B) | a square pane: fits a square window opening in a wall; never in the open |
 | Drops | squadron `drop` | 20-22 health, 23 health upgrade, 1-16 a weapon's pickup (weapon n is drop n + 1) |
 
-Weapon numbers (ammo's `weapon`, drops, chests; the decomp's weapon table): 0 pistol, 1 homing missiles, 2 machine
-gun, 3 shotgun, 4 shrink beam, 5 rockets, 6 flamethrower, 7 sniper pistol, 8 grenades, 9 shuriken, 10 fish food,
+Weapon numbers (ammo's `weapon`, drops, chests; names as the chests give them): 0 pistol, 1 homing missiles,
+2 machine gun, 3 shotgun, 4 electricity, 5 rockets, 6 flamethrower, 7 sniper pistol, 8 grenades, 9 shuriken, 10 fish food,
 11 timed mines, 12 remote mines, 13 flares, 14 cluster bombs. Each ammo pickup fills one weapon: full ammo fills it,
 extra ammo and a clip add some, a capacity upgrade raises its maximum, and only a hero who has that weapon takes it.
 
