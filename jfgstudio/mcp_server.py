@@ -333,6 +333,21 @@ TOOLS = [
                           "(needed for a model with animations but no joints: the AntTank's)"}}, ["name", "base"]),
     _tool("remove_dependency", "Drop a dependency.", lambda s, a: s.remove_dependency(a["id"]),
           {"id": {"type": "string"}}, ["id"]),
+    _tool("place_path", "An animation path in a level of the pack's own: a stock object (the hoverboard 0x47, a lift "
+          "car) spawned at the first point and moved along the points at speed (units a second); loop runs it back "
+          "and forth. start \"level\" runs it from the start, \"trigger\" while a hero is near (an AnimTrigger "
+          "placed at the first point). The game's lifts run 120-200; keep a ride's points level.",
+          lambda s, a: s.place_path(a["level"], a["object"], a["points"], a.get("speed", 150), a.get("loop", True),
+                                    a.get("start", "level"), a.get("trigger_radius", 200)),
+          {"level": _LEVEL, "object": {"description": "a stock type: \"0x47\""},
+           "points": {"type": "array", "items": {"type": "array", "items": {"type": "number"}},
+                      "description": "[[x, y, z], ...], 2-75"},
+           "speed": {"type": "number"}, "loop": {"type": "boolean"},
+           "start": {"type": "string", "enum": ["level", "trigger"]}, "trigger_radius": {"type": "integer"}},
+          ["level", "object", "points"]),
+    _tool("remove_path", "Remove a level's animation path by index.",
+          lambda s, a: s.remove_path(a["level"], a["index"]),
+          {"level": _LEVEL, "index": {"type": "integer"}}, ["level", "index"]),
     _tool("undo", "Undo a level's last change.", lambda s, a: s.undo(a["level"]), {"level": _LEVEL}, ["level"]),
     _tool("redo", "Redo a level's last undone change.", lambda s, a: s.redo(a["level"]), {"level": _LEVEL},
           ["level"]),

@@ -777,11 +777,12 @@ def scene() -> None:
         stock_inst, stock_boxes = _instances(stock, pickable=False)
         instances = instances + [(p, m, (0.25, 0.3, 0.4, 0.45)) for p, m, _ in stock_inst]
         lines = vp.marker_lines(objs + stock, {**keys, **stock_keys}, S.selection,
-                                vp.region_links(objs + stock, {**keys, **stock_keys}) + _camera_links(objs + stock),
+                                vp.region_links(objs + stock, {**keys, **stock_keys}) + _camera_links(objs + stock)
+                                + _path_links(),
                                 {**boxes, **stock_boxes}, _rings(objs))
     else:
-        lines = vp.marker_lines(objs, keys, S.selection, vp.region_links(objs, keys) + _camera_links(objs), boxes,
-                                _rings(objs))
+        lines = vp.marker_lines(objs, keys, S.selection,
+                                vp.region_links(objs, keys) + _camera_links(objs) + _path_links(), boxes, _rings(objs))
     tex = S.view.render(w, h, S.camera, lines, instances)
     origin = imgui.get_cursor_screen_pos()
     S.scene_rect = (origin.x, origin.y, w, h)
@@ -837,6 +838,24 @@ def scene() -> None:
         mouse = imgui.get_mouse_pos()
         S.box_start = (mouse.x - origin.x, mouse.y - origin.y)
     _box_select(origin, w, h, objs, draw, using)
+
+
+PATH_COLOUR = (1.0, 0.70, 0.20, 1.0)
+
+
+def _path_links() -> list:
+    """The open level's animation paths (level.json "paths"): a line through each one's points (closed when it loops,
+    as the game runs the last node back to the first), and a small cross where its object is spawned."""
+    out = []
+    level = S.project.levels.get(S.level) if S.project else None
+    for p in (level.level.get("paths", []) if level else []):
+        pts = [tuple(float(v) for v in q) for q in p.get("points", [])]
+        for a, b in zip(pts, pts[1:] + (pts[:1] if p.get("loop") and len(pts) > 2 else []), strict=False):
+            out.append((a, b, PATH_COLOUR))
+        if pts:
+            x, y, z = pts[0]
+            out += [((x - 20, y, z), (x + 20, y, z), PATH_COLOUR), ((x, y, z - 20), (x, y, z + 20), PATH_COLOUR)]
+    return out
 
 
 def _camera_links(objs) -> list:

@@ -22,7 +22,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from jfgstudio import bps, formats, packtypes, prefabs, refs, rom, stock_edit
+from jfgstudio import bps, formats, packtypes, paths, prefabs, refs, rom, stock_edit
 from jfgstudio import objects as obj
 from jfgstudio import validate as val
 from jfgstudio.catalog import Catalog
@@ -39,6 +39,7 @@ SETS = (
     (0x1C, 0x1D, "objlist", "raw"),
     (0x24, 0x25, "track", "packed"),
     (0x01, 0x00, "texture", "texture"),
+    (0x41, 0x42, "animseq", "raw"),
 )
 MODEL_TABLE, MODEL_DATA, OBJDEF_TABLE, OBJDEF_DATA = 0x26, 0x27, 0x2E, 0x2F
 
@@ -381,6 +382,15 @@ class _Builder:
                 raise BuildError([f"levels/{name}/level.json: {x}" for x in problems])
             e = self._set_entry(0x1E, 0x1F, "level", self.level_ids[name], raw, counts, f"level_{name}")
             fixups = []
+            if level.level.get("paths"):  # its own animation block: header +0xE8 names it
+                try:
+                    block = paths.block(level.level["paths"])
+                except paths.PathError as err:
+                    raise BuildError([f"levels/{name}/level.json: paths: {err}"]) from err
+                index = counts["animseq"] + sum(1 for x in out if x["what"] == "animseq")
+                out.append(self._set_entry(0x41, 0x42, "animseq", index, block, counts, f"animseq_{name}"))
+                fixups.append({"at": 0xE8, "type": "s16", "ref": f"animseq_{name}"})
+                self.log(f"level {name}: {len(level.level['paths'])} animation paths (block animseq_{name})")
             if not track.is_stock:
                 fixups.append({"at": 0x54, "type": "s16", "ref": f"track_{track.name}"})  # header +0x54: the track
             if planet:  # header +0x102: the region

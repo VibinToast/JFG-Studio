@@ -2185,6 +2185,50 @@ class Session:
         self._save()
         return {"dependencies": deps}
 
+    def place_path(self, level: str, object, points, speed: float = 150, loop: bool = True, start: str = "level",
+                   trigger_radius: int = 200) -> dict:
+        """An animation path in a level of the pack's own (level.json "paths"; paths.py): `object` (a stock type:
+        the hoverboard 0x47, a lift) spawned at the first point and moved along the rest at `speed` units a second,
+        back and forth with `loop`. `start` "level" runs it from the start; "trigger" puts an AnimTrigger at the
+        first point that runs it while a hero is within `trigger_radius`."""
+        from jfgstudio import paths
+        lv = self._level(level)
+        if lv.base is not None:
+            raise AgentError(f"{level} edits a game level, which keeps the game's animation block: paths need a "
+                             "level of the pack's own")
+        oid = self._type(object)[0]
+        path = {"object": f"stock:objtype/0x{oid:X}", "points": [[float(v) for v in p] for p in points],
+                "speed": float(speed), "loop": bool(loop), "start": start}
+        bad = paths.check(path)
+        if bad:
+            raise AgentError("; ".join(bad))
+        n = len(lv.level.setdefault("paths", []))
+        lv.level["paths"].append(path)
+        out = {"level": level, "path": n, **path}
+        if start == "trigger":
+            out["trigger"] = self.place(level, "animtrigger", [path["points"][0][0], path["points"][0][2]],
+                                        fields={"index": n, "flags": 0x80, "pauseOnExit": 1,
+                                                "radius": int(trigger_radius),
+                                                "exitRadius": int(trigger_radius * 1.5)},
+                                        name=f"path{n}_trigger")[0]["uid"]
+        self._save()
+        t = (self._types or {}).get(oid)
+        if t and t.get("uses"):
+            out["note"] = ("the object is spawned by the path, not placed: it isn't in the level's object list and "
+                           "takes no fields")
+        return out
+
+    def remove_path(self, level: str, index: int) -> dict:
+        lv = self._level(level)
+        ps = lv.level.get("paths", [])
+        if not 0 <= index < len(ps):
+            raise AgentError(f"{level} has {len(ps)} paths")
+        ps.pop(index)
+        if not ps:
+            lv.level.pop("paths", None)
+        self._save()
+        return {"paths": lv.level.get("paths", []), "note": "a path's AnimTrigger (index) is left as it is"}
+
     def undo(self, level: str) -> dict:
         lv = self._level(level)
         label = self._history(lv).undo()

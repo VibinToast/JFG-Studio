@@ -44,6 +44,7 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     out: list[Problem] = []
     for level in project.levels.values():
         out += _check_level(project, level, schemas)
+        out += _check_paths(level, f"levels/{level.name}/level.json")
     for name, planet in project.planets.items():
         out += _check_planet(project, name, planet)
     out += _check_planets_together(project)
@@ -289,6 +290,19 @@ def _ref(text, category, file, uid, out) -> refs.Ref | None:
 def _check_scripts(project: Project) -> list[Problem]:
     from jfgstudio import scripts as scr
     return [Problem(ERROR, "triggers", "triggers.json", p) for p in scr.check(project)]
+
+
+def _check_paths(level, of: str) -> list[Problem]:
+    """Animation paths (paths.py): only a level of the pack's own has a block of its own; each path's points."""
+    from jfgstudio import paths
+    out = []
+    if level.level.get("paths") and level.base is not None:
+        out.append(Problem(ERROR, "paths", of, "animation paths need a level of the pack's own (a stock-level edit "
+                           "keeps the game's block)"))
+    for n, p in enumerate(level.level.get("paths", [])):
+        for bad in paths.check(p):
+            out.append(Problem(ERROR, "paths", of, f"path {n}: {bad}"))
+    return out
 
 
 def _check_level(project: Project, level, schemas) -> list[Problem]:

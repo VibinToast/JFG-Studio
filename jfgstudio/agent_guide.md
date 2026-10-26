@@ -403,6 +403,11 @@ whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `
   gets the plain 10-byte entry and takes no fields.
 - A pack that depends on a library places the library's types as <mod id>:objtype/<name>: `add_dependency` with
   the library's `project` folder, so Studio can read them.
+- `place_path(level, object, points, speed, loop, start)` moves an object along points in a level of the pack's
+  own (level.json "paths", the level's own animation block): the hoverboard 0x47 back and forth is
+  `place_path(level, "0x47", [[-500, 60, 0], [500, 60, 0]], 150)`. Behaviour 0x30 / 0x31 objects (the hoverboard,
+  lift cars) are solid and carry the player. `start` "trigger" runs it only while a hero is near an AnimTrigger
+  placed at the first point. The object is spawned by the path (not in the object list), from stock types only.
 - A pack can be a library: no levels, only patches (or kinds). Another pack names it with
   `add_dependency(id, version)` (mod.json "dependencies"); `remove_dependency(id)` drops it.
 
