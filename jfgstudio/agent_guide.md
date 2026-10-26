@@ -124,7 +124,9 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   rectangle over open floor they stand and fire. `place_squad` makes every block, crate or pillar inside the region
   a hole (`add_cover` does it for a squad made before; `validate` warns: `squad-cover`); members also keep out of
   holes. So give a squad's area things to hide behind, and keep obstacles off the region's edge (cut the outline
-  round those).
+  round those). Play-tested: ants in a counter-clockwise region with two crates made holes run between cover,
+  turn and chase; in the same region without holes they crouched and fired. A patrol's "patrol, then fight" is from
+  the decomp and not play-tested yet.
   `place_squad` makes all of it. With `door`, the squadron keeps that door locked until all its members are dead:
   the door's `doorId` matches the squadron's, and each locked door needs its own id. Members are kept off lava,
   water and pits (moved to the nearest dry floor); the result warns about any it couldn't place dry. A squadron's
