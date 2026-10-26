@@ -31,6 +31,7 @@ _EXAMPLE = {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxIt
                            "picks one when left out)"}
 
 
+_RGB = {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3}
 _FACING = {"type": "number", "description": "facing in degrees, 0 = towards -z (as start points face); written into "
                                             "the type's yaw field in its own angle steps"}
 
@@ -149,6 +150,27 @@ TOOLS = [
            "door": {"type": "string"}, "door_type": _TYPE, "door_pos": _POS, "door_fields": {"type": "object"},
            "spread": {"type": "number"}, "name": {"type": "string"}, "squadron_example": _EXAMPLE,
            "member_example": _EXAMPLE}, ["level", "centre", "member_type"]),
+    _tool("kind_slots", "The texture slots a reskin (kind) of a game type paints: each slot's size and whether the "
+          "base image there has transparency, and the base model's size.",
+          lambda s, a: s.kind_slots(a["base"]), {"base": _TYPE}, ["base"]),
+    _tool("make_kind", "A reskinned type (kind): a game type with a model, under the pack's own name, size and "
+          "textures; its animations and behaviour stay the base's. textures: slot -> a PNG of exactly that slot's "
+          "size, or paint them with paint_kind_texture. Making one that exists updates it. Place it as "
+          "pack:kind/<name>, e.g. as place_squad's member_type.",
+          lambda s, a: s.make_kind(a["name"], a["display_name"], a["base"], a.get("scale", 1.0), a.get("textures")),
+          {"name": {"type": "string"}, "display_name": {"type": "string"}, "base": _TYPE,
+           "scale": {"type": "number", "description": "size against the base (1 = the same, at most 8)"},
+           "textures": {"type": "object", "description": "slot number -> PNG file path"}},
+          ["name", "display_name", "base"]),
+    _tool("paint_kind_texture", "Draw a kind's textures (all its slots, or slots) at each slot's size from colours and "
+          "a pattern: solid, noise, stripes, spots or heat. The textures are the pack's own; nothing of the game's "
+          "images is used.",
+          lambda s, a: s.paint_kind_texture(a["name"], a["colour"], a.get("accent"), a.get("pattern", "noise"),
+                                            a.get("slots"), a.get("seed", 0)),
+          {"name": {"type": "string"}, "colour": _RGB, "accent": _RGB,
+           "pattern": {"type": "string", "enum": ["solid", "noise", "stripes", "spots", "heat"]},
+           "slots": {"type": "array", "items": {"type": "integer"}}, "seed": {"type": "integer"}},
+          ["name", "colour"]),
     _tool("place_key_door", "A door that needs a coloured key, and the key (on the floor at key_pos; in key_level if "
           "given). The colour is the first one the pack's doors don't use yet, unless colour names one.",
           lambda s, a: s.place_key_door(a["level"], a["door_type"], a["door_pos"], a["key_pos"], a.get("colour"),

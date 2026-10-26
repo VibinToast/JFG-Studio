@@ -63,6 +63,8 @@ class Session:
         self._types: dict[int, dict] | None = None
         self._meshes: dict[str, tuple[float, object]] = {}
         self._sizes: dict[int, dict | None] = {}
+        self._slots: dict[int, list] = {}
+        self._model_data = None
         if path is not None:
             self.open(path)
 
@@ -857,6 +859,118 @@ class Session:
                     return (px, pz)
         return None
 
+    # ------------------------------------------------------------------ kinds (reskinned types)
+
+    def _base_slots(self, oid: int) -> list[tuple[int, int, str]]:
+        """(width, height, transparency) of each texture slot of a stock type's model, from the player's catalog."""
+        if oid in self._slots:
+            return self._slots[oid]
+        if self.catalog() is None:
+            raise AgentError(f"the catalog is not available ({self._catalog_error}): it has the base's model")
+        t = self._types.get(oid)
+        if not t or t.get("kind") != "models" or not t.get("assets"):
+            raise AgentError(f"0x{oid:X} has no model to reskin")
+        from jfgformats import models
+        if self._model_data is None:
+            self._model_data = models.ModelData(self._catalog.assets)
+        out = []
+        for w, h, tex_id in self._model_data.model(t["assets"][0]).textures:
+            try:
+                alpha = self._model_data.texture_png(tex_id & 0x7FFF)[1]
+            except Exception:  # noqa: BLE001 (a texture the reader can't take: its transparency is unknown)
+                alpha = "unknown"
+            out.append((w, h, alpha or "none"))
+        self._slots[oid] = out
+        return out
+
+    def _kind_base(self, base) -> int:
+        oid, _, kind = self._type(base)
+        if kind:  # a kind of a kind is a kind of its base
+            oid = refs.parse(self.p.kinds[kind.split("/", 1)[1]]["base"], "objtype").number()
+        return oid
+
+    def kind_slots(self, base) -> dict:
+        """The texture slots a kind of `base` paints: each slot's size and whether the base's image there has
+        transparency (cut-outs a solid texture would fill in), and the base model's size."""
+        oid = self._kind_base(base)
+        slots = [{"slot": i, "width": w, "height": h, "transparency": a}
+                 for i, (w, h, a) in enumerate(self._base_slots(oid))]
+        out = {"base": f"stock:objtype/0x{oid:X}", "slots": slots}
+        size = self.model_size(oid)
+        if size:
+            out["modelSize"] = {k: size[k] for k in "xyz"}
+        return out
+
+    def make_kind(self, name: str, display_name: str, base, scale: float = 1.0,
+                  textures: dict | None = None) -> dict:
+        """A kind: `base` (a stock type with a model) with its own name, size (`scale`, 1 = the base's) and textures
+        (`textures`: slot -> a PNG file of exactly that slot's size; or paint them with paint_kind_texture). Making
+        one that exists updates it. Place it as type pack:kind/<name> (place, place_squad's member_type)."""
+        if not proj.NAME_RE.match(name or ""):
+            raise AgentError(f"{name!r}: kind names use lower case letters, digits, _ and -")
+        oid = self._kind_base(base)
+        slots = self._base_slots(oid)
+        kind = copy.deepcopy(self.p.kinds.get(name) or {})
+        kind.update({"format": proj.FORMAT, "name": display_name, "base": f"stock:objtype/0x{oid:X}",
+                     "scale": float(scale)})
+        kind.setdefault("textures", {})
+        for slot, src in (textures or {}).items():
+            k = _as_int(int(slot) if isinstance(slot, str) and slot.isdigit() else slot, "slot")
+            if not 0 <= k < len(slots):
+                raise AgentError(f"texture slot {k}: the base model has slots 0-{len(slots) - 1}")
+            data = Path(src).read_bytes()
+            from jfgformats import png
+            try:
+                w, h, _ = png.read_png(data)
+            except Exception as e:  # noqa: BLE001
+                raise AgentError(f"{src}: not a PNG the game's texture packer reads ({e})") from e
+            if (w, h) != tuple(slots[k][:2]):
+                raise AgentError(f"{src} is {w} x {h}; slot {k} takes {slots[k][0]} x {slots[k][1]}")
+            dest = self.p.kind_texture(name, k)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+            kind["textures"][str(k)] = dest.name
+        errors = list(jsonschema.Draft202012Validator(proj._SCHEMAS["kind"]).iter_errors(kind))
+        if errors:
+            raise AgentError("not a valid kind: " + "; ".join(e.message for e in errors))
+        self.p.kinds[name] = kind
+        self._save()
+        return {"kind": f"pack:kind/{name}", **kind, "slots": len(slots),
+                "unpainted": [i for i in range(len(slots)) if str(i) not in kind["textures"]]}
+
+    def paint_kind_texture(self, name: str, colour, accent=None, pattern: str = "noise", slots=None,
+                           seed: int = 0) -> dict:
+        """Draws new textures for a kind's slots (all, or `slots`) at each slot's size: `colour` and `accent` are
+        RGB 0-255, `pattern` one of PATTERNS. Nothing of the base's images is used: the textures are the pack's own."""
+        kind = self.p.kinds.get(name)
+        if kind is None:
+            raise AgentError(f"no kind {name!r} (make_kind first)")
+        if pattern not in PATTERNS:
+            raise AgentError(f"pattern is one of {', '.join(PATTERNS)}")
+        main = self._rgb(colour, "colour")
+        second = self._rgb(accent, "accent") if accent is not None else tuple(min(255, c + 60) for c in main)
+        all_slots = self._base_slots(refs.parse(kind["base"], "objtype").number())
+        chosen = range(len(all_slots)) if slots is None else [_as_int(k, "slot") for k in slots]
+        from jfgformats import png
+        painted = []
+        for k in chosen:
+            if not 0 <= k < len(all_slots):
+                raise AgentError(f"texture slot {k}: the base model has slots 0-{len(all_slots) - 1}")
+            w, h, _ = all_slots[k]
+            dest = self.p.kind_texture(name, k)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(png.write_png("RGBA", w, h, _paint(w, h, main, second, pattern, seed + k)))
+            kind.setdefault("textures", {})[str(k)] = dest.name
+            painted.append({"slot": k, "width": w, "height": h})
+        self._save()
+        return {"kind": f"pack:kind/{name}", "painted": painted}
+
+    @staticmethod
+    def _rgb(v, what: str) -> tuple[int, int, int]:
+        if not isinstance(v, list | tuple) or len(v) != 3:
+            raise AgentError(f"{what} is [r, g, b], 0-255")
+        return tuple(max(0, min(255, _as_int(c, what))) for c in v)
+
     def place_key_door(self, level: str, door_type, door_pos, key_pos, colour=None, facing: float | None = None,
                        key_level: str | None = None) -> list[dict]:
         """A door that needs a coloured key, and that key (in `key_level`, this level by default). `colour`: a key's
@@ -1159,6 +1273,32 @@ class Session:
         except (testrun.TestRunError, formats.FormatsUnavailable, rom.RomError, ValueError) as e:
             raise AgentError(str(e)) from e
         return {"installed": str(installed), "log": lines}
+
+
+PATTERNS = ("solid", "noise", "stripes", "spots", "heat")
+
+
+def _paint(w: int, h: int, colour, accent, pattern: str, seed: int) -> bytes:
+    """A w x h RGBA texture: `colour` with `accent` worked in by `pattern` (seeded, so the same call draws the same)."""
+    import random
+    rng = random.Random(seed)
+    spots = [(rng.random() * w, rng.random() * h, 1 + rng.random() * max(1, min(w, h)) / 5) for _ in range(5)]
+    px = bytearray()
+    for y in range(h):
+        for x in range(w):
+            if pattern == "solid":
+                t = 0.0
+            elif pattern == "noise":
+                t = rng.random() * 0.6
+            elif pattern == "stripes":
+                t = 1.0 if (y // 2) % 2 else 0.0
+            elif pattern == "spots":
+                t = 1.0 if any((x - sx) ** 2 + (y - sy) ** 2 < r * r for sx, sy, r in spots) else rng.random() * 0.2
+            else:  # heat: waves of the accent through the colour
+                t = max(0.0, min(1.0, (math.sin(x * 0.9 + seed) + math.sin(y * 0.7 - seed * 2) + rng.random() * 1.5)
+                                 / 3.5))
+            px += bytes(round(c + (a - c) * t) for c, a in zip(colour, accent, strict=True)) + bytes((255,))
+    return bytes(px)
 
 
 def guide() -> str:

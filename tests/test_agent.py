@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from jfgstudio import agent, mcp_server
+from jfgstudio import agent, formats, mcp_server
 from jfgstudio import validate as val
 from jfgstudio.gui.viewport import floor_of
 from tests.fixtures import sample_project
@@ -439,6 +439,49 @@ class Prefabs(AgentTest):
         self.assertEqual(sorted(n["fields"]["node"] for n in chain if n.get("schema") == "patrolpoint"), [4, 5])
         with self.assertRaises(agent.AgentError):
             self.s.place_patrol("home", [[0, 0]])
+
+
+class Kinds(AgentTest):
+    def setUp(self):
+        super().setUp()
+        try:
+            formats.load()
+        except formats.FormatsUnavailable as e:
+            self.skipTest(str(e))
+        self.with_catalog()
+        self.s._base_slots = lambda oid: [(16, 16, "none"), (8, 32, "mask")]  # a made-up model's texture slots
+
+    def test_make_paint_and_place_a_kind(self):
+        from jfgformats import png
+        slots = self.s.kind_slots("0x29")["slots"]
+        self.assertEqual([(x["width"], x["height"], x["transparency"]) for x in slots],
+                         [(16, 16, "none"), (8, 32, "mask")])
+        with self.assertRaises(agent.AgentError):
+            self.s.paint_kind_texture("red_bug", [200, 30, 30])  # not made yet
+        made = self.s.make_kind("red_bug", "Red Bug", "0x29", scale=1.5)
+        self.assertEqual((made["base"], made["scale"], made["unpainted"]), ("stock:objtype/0x29", 1.5, [0, 1]))
+        for pattern in agent.PATTERNS:
+            self.s.paint_kind_texture("red_bug", [200, 30, 30], [255, 200, 0], pattern)
+        for k, size in ((0, (16, 16)), (1, (8, 32))):
+            w, h, _ = png.read_png(self.s.p.kind_texture("red_bug", k).read_bytes())
+            self.assertEqual((w, h), size)
+        self.assertEqual(self.s.make_kind("red_bug", "Red Bug", "0x29")["unpainted"], [])
+        wrong = Path(self.tmp.name) / "wrong.png"
+        wrong.write_bytes(png.write_png("RGBA", 4, 4, bytes(64)))
+        with self.assertRaises(agent.AgentError):
+            self.s.make_kind("red_bug", "Red Bug", "0x29", textures={"0": str(wrong)})  # slot 0 is 16 x 16
+        right = Path(self.tmp.name) / "right.png"
+        right.write_bytes(png.write_png("RGBA", 8, 32, bytes(8 * 32 * 4)))
+        self.s.make_kind("red_bug", "Red Bug", "0x29", textures={"1": str(right)})
+        self.assertEqual(self.s.p.kind_texture("red_bug", 1).read_bytes(), right.read_bytes())
+        squad = self.s.place_squad("home", [0, -300], "pack:kind/red_bug", members=2)
+        members = [o for o in squad if o.get("schema") == "squadmember"]
+        self.assertEqual({m["type"] for m in members}, {"pack:kind/red_bug"})
+        self.assertFalse(any("bug" in (o["uid"] + o.get("name", "")).lower() and "red" not in o["uid"]
+                             for o in squad))  # named after the kind, never the catalog
+        self.assertFalse([p for p in self.s.validate()["problems"] if p["severity"] == "error"])
+        with self.assertRaises(agent.AgentError):
+            self.s.paint_kind_texture("red_bug", [1, 2, 3], pattern="plaid")
 
 
 class Server(AgentTest):

@@ -120,6 +120,13 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   instead arrives at a start point already there. Give every level a way back. An exit's `arg1A` 1 (the default) shows the game's stats screen when it leads into another region.
 - **Planets**: a level's `planet` puts it in that planet's region (at most 32 levels per planet; the port has room
   for 9 mod regions in all). The planet's `entryLevel` is where the map starts it.
+- **Reskinned enemies (kinds)**: a pack's own enemy type is one of the game's with new textures and a new size; its
+  model, animations and behaviour stay the game's. `kind_slots(base)` lists the base model's texture slots (sizes,
+  and whether the game's image there has transparency); `make_kind(name, display_name, base, scale)` makes it;
+  `paint_kind_texture(name, colour, accent, pattern)` draws its textures (solid, noise, stripes, spots, heat) at each
+  slot's size, or `make_kind`'s `textures` takes PNGs of exactly those sizes. Never copy or recolour the game's own
+  images into a pack. Use it as `pack:kind/<name>`: `place_squad`'s `member_type`, or `place`. Health and speed
+  aren't part of a kind: they belong to the squad (`squadron` fields `health`, `maxSpeed`, `minSpeed`).
 - **Mood**: `fogzone`, `light`, `glow`, and the level header's fog colour and distances (see Fog); music per level.
 - **The game's own levels**: `stock_levels` lists them (`stock:level/<id>`; `search` by name, `world`); it says
   where a new game starts, the usual way back to the game and a good place for a portal.
