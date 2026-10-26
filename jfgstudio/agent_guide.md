@@ -59,6 +59,10 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
 - Surfaces come from material names: `water` (swimmable surface; deep water drowns heroes who can't swim), `lava`
   (hurts), `kill` (a pit floor: falling onto it is death), `collider` (invisible but solid), `nocollide` (drawn,
   not solid). Anything else is solid floor and wall.
+- **Don't use `nocollide` for now.** The game collides only the first N triangles of each piece of the level (N =
+  how many collide), so non-colliding triangles must come last, and the importer doesn't order them yet: a trial
+  level with a few non-colliding signs lost the collision of most of its floors (play-tested). Signs and decoration
+  can simply be solid. `import_geometry` and `validate` report it as an error if it happens.
 - **Lava needs solid ground under it.** It burns Vela and Lupus, but Juno passes through lava unhurt: for him it
   isn't there, so lava over nothing is a hole he falls through (play-tested). Model lava as a surface over a solid
   floor a little below it (30 under: he wades in it). `validate` warns about lava with no floor under it, and

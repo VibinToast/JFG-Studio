@@ -46,7 +46,12 @@ def check(path: str | Path, catalog, log=None) -> Report:
            f"({len(result.get('newTextures', {}))} new images)",
            f"buffer: {len(result['data'])} bytes unpacked; fits the game's track buffer"]
     out += [line for line in lines if line.strip()]
-    report = Report(True, out)
+    lost = lost_collision(track)
+    if lost:
+        out.append(f"error: {lost} colliding triangles come after non-colliding (nocollide) ones in their segment: the "
+                   "game gives them no collision (the player falls through). Don't use nocollide surfaces until the "
+                   "importer puts them last")
+    report = Report(not lost, out)
     try:
         from jfgstudio.gui.viewport import TrackMesh  # numpy only; no window needed
         mesh = TrackMesh(str(path))
@@ -56,6 +61,22 @@ def check(path: str | Path, catalog, log=None) -> Report:
     except Exception as e:  # noqa: BLE001 (the preview reader is optional for the report)
         report.lines.append(f"(no preview: {e})")
     return report
+
+
+NO_COLLISION = 0x80  # a triangle flag: drawn, not solid
+
+
+def lost_collision(track: dict) -> int:
+    """Colliding triangles that come after a non-colliding one in their segment. The game collides only a segment's
+    first N triangles, N its count of colliding ones (decomp MSR, "Ledges"): a non-colliding triangle before the end
+    pushes colliding ones past N, and an imported Kestrel level lost its floors that way (play-tested 2026-10-25)."""
+    lost = 0
+    for seg in track.get("segments", []):
+        flags = [t[0] for t in seg.get("triangles", [])]
+        first = next((i for i, f in enumerate(flags) if f & NO_COLLISION), None)
+        if first is not None:
+            lost += sum(1 for f in flags[first:] if not f & NO_COLLISION)
+    return lost
 
 
 def import_geometry(project: proj.Project, src: str | Path, name: str | None = None) -> Path:

@@ -509,6 +509,17 @@ class Kinds(AgentTest):
             self.s.paint_kind_texture("red_bug", [1, 2, 3], pattern="plaid")
 
 
+class Collision(unittest.TestCase):
+    def test_non_colliding_triangles_must_come_last(self):
+        from jfgstudio import importer
+
+        def track(*segments):
+            return {"segments": [{"triangles": [(f, 0, 1, 2) for f in flags]} for flags in segments]}
+        self.assertEqual(importer.lost_collision(track([0, 0, 0x80, 0x80])), 0)  # last: fine
+        self.assertEqual(importer.lost_collision(track([0, 0x80, 0, 2, 0x80])), 2)  # two colliding after a sign
+        self.assertEqual(importer.lost_collision(track([0x80, 0], [0, 0x81, 1])), 2)  # per segment
+
+
 class Server(AgentTest):
     def test_protocol(self):
         init = mcp_server.handle(self.s, {"jsonrpc": "2.0", "id": 1, "method": "initialize",

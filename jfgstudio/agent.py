@@ -64,6 +64,7 @@ class Session:
         self._meshes: dict[str, tuple[float, object]] = {}
         self._sizes: dict[int, dict | None] = {}
         self._slots: dict[int, list] = {}
+        self._lost: dict[tuple, int] = {}
         self._model_data = None
         if path is not None:
             self.open(path)
@@ -365,6 +366,34 @@ class Session:
                 under = max((y for y in (under, hidden) if y is not None), default=None)
                 at["underLava"] = round(under, 1) if under is not None else None
             out.append(at)
+        return out
+
+    def _lost_collision(self) -> dict[str, int]:
+        """Levels whose own geometry would lose collision in the game (importer.lost_collision): needs the catalog to
+        run the game's track importer; checked once per file version."""
+        if self.catalog() is None:
+            return {}
+        from jfgformats import models, tracks
+        out = {}
+        for name, lv in self.p.levels.items():
+            track = lv.level.get("track", "")
+            if not track.startswith("pack:track/"):
+                continue
+            path = self.p.geometry_path(track.split("/", 1)[1])
+            if not path.exists():
+                continue
+            key = (str(path), path.stat().st_mtime)
+            if key not in self._lost:
+                try:
+                    if self._model_data is None:
+                        self._model_data = models.ModelData(self._catalog.assets)
+                    res = tracks.import_track(self._model_data, str(path), track_id=self._catalog.track_count(),
+                                              log=lambda _: None)
+                    self._lost[key] = importer.lost_collision(tracks.read_track(res["data"]))
+                except Exception:  # noqa: BLE001 (the build reports a file the importer refuses)
+                    self._lost[key] = 0
+            if self._lost[key]:
+                out[name] = self._lost[key]
         return out
 
     def lava_holes(self, level: str) -> list[list[int]]:
@@ -1289,6 +1318,11 @@ class Session:
                                          f"{f['problem']}" + (f" by {f['by']:g}" if "by" in f else "")
                                          + (f"; it would stand at {f['standOn']}" if "standOn" in f else ""),
                                          f["uid"]) for f in findings]
+            for name, lost in self._lost_collision().items():
+                problems.append(val.Problem(val.ERROR, "collision", f"levels/{name}/level.json",
+                                            f"{lost} colliding triangles of its geometry come after non-colliding "
+                                            "(nocollide) ones: the game gives them no collision and the player falls "
+                                            "through. Don't use nocollide surfaces for now"))
             for name in self.p.levels:  # lava over nothing: a hole for Juno
                 try:
                     holes = self.lava_holes(name)
