@@ -22,7 +22,7 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender, **version 0.4.1 or newer** (`jfg64.__version__`): it knows the game's
+The jfg64 add-on is **required** in Blender, **version 0.4.2 or newer** (`jfg64.__version__`): it knows the game's
 surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
 Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
 Through a Blender MCP server, run Python in Blender and use it rather than writing your own:
@@ -141,7 +141,7 @@ Describe things by what they do; the catalog's names are the player's (never wri
 | Sound | `audio` | wind, water, machines where they are |
 | Flowing water, lava | `texscroll` | makes a surface's texture move |
 | Chest, keys | `chest`, `place_key_door` | rewards and gates |
-| Breakable glass | `place` 0x12B (or 0x223, 0x1F2) from a stock entry | not decoded: size and facing as the stock one; check in game |
+| Breakable glass | `place_glass(level, a, b, bottom)` (0x12B) | a square pane: fits a square window opening in a wall; never in the open |
 | Drops | squadron `drop` | 20-22 health, 23 health upgrade, 1-16 a weapon's pickup |
 
 Enemies besides ants (`place_squad` with the type's id; `object_types` names them):
@@ -150,8 +150,9 @@ Enemies besides ants (`place_squad` with the type's id; `object_types` names the
   game's squads of them are sentries; `place_squad` takes its one smart squad), 0xEE, 0xBE, 0xBD, 0xEF, 0x122
   (beetles and bugs), 0xE1 (small, fast), 0xF5 (a gun turret: doesn't move). Set `health` and `size` on the
   squadron for tougher or bigger ones.
-- **Flying**: 0x54, 0x2D, 0x29, 0x152, 0x150, 0x2B, 0x151, 0x149. Their squadron spawns its own members round it
-  (`place_squad` places the squadron alone); they rise to their own height. Give them open air.
+- **Flying**: 0x54, 0x2D, 0x29, 0x152, 0x150, 0x2B, 0x151, 0x149. Their squadron spawns its own members and
+  launches them down to a spot below it (`offsetY`): `place_squad` places the squadron high and sets that spot about
+  150 over the floor, under any roof. Give them open air.
 - Mix them: a different enemy for each area, a flying squad over open ground, a tough squad at the end.
 - Not play-tested in a pack's own level yet: flying squads, the non-ant enemies, glass, refuel pads. Ask the player
   to check them in game, and say so in your report.

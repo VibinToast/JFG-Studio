@@ -169,17 +169,27 @@ TOOLS = [
                                                                             "stock:level/<n>"}},
           ["level", "type", "pos"]),
     _tool("place_squad", "A squad: a squadron, its members around centre, the region they keep to and, with door, "
-          "a door it keeps locked until they are all dead (\"new\" with door_type and door_pos, or a door's uid).",
+          "a door it keeps locked until they are all dead (\"new\" with door_type and door_pos, or a door's uid). "
+          "Members face the start point (or face); flying squads are placed to drop in and cruise over the floor.",
           lambda s, a: s.place_squad(a["level"], a["centre"], a["member_type"], a.get("members", 3), a.get("region"),
                                      a.get("door"), a.get("door_type"), a.get("door_pos"), a.get("door_fields"),
                                      a.get("spread", 150), a.get("name"), a.get("squadron_example"),
-                                     a.get("member_example")),
+                                     a.get("member_example"), a.get("face")),
           {"level": _LEVEL, "centre": _XZ, "member_type": _TYPE, "members": {"type": "integer"},
            "region": {"type": "array", "items": _XZ, "description": "corners in order (default: a square 300 "
                                                                    "around the centre)"},
            "door": {"type": "string"}, "door_type": _TYPE, "door_pos": _POS, "door_fields": {"type": "object"},
            "spread": {"type": "number"}, "name": {"type": "string"}, "squadron_example": _EXAMPLE,
-           "member_example": _EXAMPLE}, ["level", "centre", "member_type"]),
+           "member_example": _EXAMPLE,
+           "face": {**_XZ, "description": "the point members face until they see the player (default: the "
+                                          "level's start point 0)"}}, ["level", "centre", "member_type"]),
+    _tool("place_glass", "A breakable glass pane filling a square window opening in a wall: a and b are the "
+          "opening's sides along the wall, bottom its sill height. The game's glass is square and nothing holds it, "
+          "so model the opening square (100-520 across).",
+          lambda s, a: s.place_glass(a["level"], a["a"], a["b"], a["bottom"], a.get("hit_points")),
+          {"level": _LEVEL, "a": _XZ, "b": _XZ, "bottom": {"type": "number"},
+           "hit_points": {"type": "integer", "description": "shots it takes (stock 1-6, default 4)"}},
+          ["level", "a", "b", "bottom"]),
     _tool("kind_slots", "The texture slots a reskin (kind) of a game type paints: each slot's size and whether the "
           "base image there has transparency, and the base model's size.",
           lambda s, a: s.kind_slots(a["base"]), {"base": _TYPE}, ["base"]),

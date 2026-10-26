@@ -292,7 +292,8 @@ class TrialFindings(AgentTest):
         with self.assertRaises(agent.AgentError):
             self.s.place("home", "health", [0, 0], facing=90)  # no yaw field
         levels = self.s.stock_levels()
-        self.assertEqual((levels["newGame"], levels["levels"][2]), (agent.NEW_GAME_LEVEL, "2: Place 2 (world 0)"))
+        self.assertEqual((levels["newGame"], levels["levels"][2]),
+                         (agent.NEW_GAME_LEVEL, "2: Place 2 (world 0, sky -1)"))
         self.assertEqual([int(lv.split(":")[0]) for lv in self.s.stock_levels("place 2")["levels"]],
                          [2] + list(range(20, 25)))
         self.assertEqual(len(self.s.stock_levels(world=1)["levels"]), 10)
@@ -508,6 +509,46 @@ class Prefabs(AgentTest):
         self.assertEqual((sq["stock"], sq["fields"]["count"]), ({"list": 14, "entry": 1}, 4))
         self.assertTrue([o for o in made if "spawns its 4 member" in o.get("note", "")])
         self.assertFalse([p for p in self.s.validate()["problems"] if p["severity"] == "error"])
+
+    def test_squads_face_the_way_the_player_comes(self):
+        self.with_catalog()
+        start = next(o for o in self.s.p.levels["home"].objects["objects"] if o.get("schema") == "startpoint"
+                     or o["type"] == "stock:objtype/0xD")
+        made = self.s.place_squad("home", [0, -300], "0x29", members=2, face=[0, 1000])
+        members = [o for o in made if o.get("schema") == "squadmember"]
+        for m in members:  # facing +z (towards [0, 1000]) is half a turn from 0 (towards -z)
+            self.assertIn(m["fields"]["yaw"] % 256, (127, 128, 129))
+        default = self.s.place_squad("home", [300, -300], "0x29", members=1)
+        m = next(o for o in default if o.get("schema") == "squadmember")
+        self.assertIn("yaw", m["fields"])  # towards the level's start point
+        self.assertTrue(start)
+
+    def test_flyers_drop_in_and_cruise_over_the_floor(self):
+        self.with_catalog()
+        self.s._squads[0x54] = [(2, True, None, (14, 1), 5)]
+        stock = self.s._catalog.stock_entry
+
+        def entry(list_id, index):
+            e = bytearray(stock(list_id, index))
+            if (list_id, index) == (14, 1):
+                e[0x1B] = 0xF0  # the game's: cruise 256 below where it spawns
+            return bytes(e)
+        self.s._catalog.stock_entry = entry
+        made = self.s.place_squad("home", [0, -300], "0x54", members=3)
+        sq = next(o for o in made if o.get("schema") == "squadron")
+        floor = self.s._floor(self.s._mesh("home"), 0, -300)
+        cruise = sq["pos"][1] + 16 * sq["fields"]["offsetY"]
+        self.assertGreater(sq["pos"][1], floor + 300)  # it drops in from up high
+        self.assertLess(abs(cruise - (floor + agent.FLYER_CRUISE)), 20)
+
+    def test_glass_fills_a_square_opening(self):
+        made = self.s.place_glass("home", [100, -500], [300, -500], 40)
+        pane = next(o for o in made if o.get("schema") == "glass" or o["type"] == "stock:objtype/0x12B")
+        self.assertEqual(pane["fields"]["size"], round(200 / 5.12))
+        self.assertEqual(pane["pos"], [200, 140, -500])  # centred, as tall as wide
+        self.assertEqual(pane["fields"]["yaw"], 0)  # a wall along x
+        with self.assertRaises(agent.AgentError):
+            self.s.place_glass("home", [0, 0], [10, 0], 0)
 
     def test_switch_doors(self):
         self.with_catalog()

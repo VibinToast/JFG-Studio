@@ -95,6 +95,23 @@ Write the plan as a list of rooms (purpose, size, shape, floor height) and links
 
 ## Any level
 
+Play-tested lessons (a test valley got all of these wrong):
+
+- **Never let the player out.** Every level is closed. `jfg64.terrain` and `jfg64.layout` add an invisible
+  collider wall at the edge and over open walls (`boundary`; keep it on). A level meant to have drops (cliffs,
+  islands) needs a kill floor below them.
+- **A sky for every level**: `set_level` `sky`, a game level's of the same theme (`stock_levels` lists each one's).
+  Without one the player sees black above. `validate` warns (`sky`).
+- **Flat ground for flat things.** Refuel pads, crates, drums, chests, start points, exits and doors need level
+  floor under their whole base, or one side hovers. Put them in flat clearings or rooms, not on noise ground
+  (`validate`: placement "on a slope"; `find_flat` finds level spots).
+- **Glass goes in a window.** The game's breakable glass is a square pane held by nothing. Model a square opening
+  (100-520 across) in a wall and `place_glass` fills it. Never place it in the open.
+- **Squads face the player** at the start (`place_squad` turns them to the start point; `face` overrides). In a bigger
+  area, give squads a route (`place_patrol`) so they walk until they see the player.
+- **Flying squads** drop in from above and cruise about 150 over the floor; `place_squad` places them so. Give them
+  open air: not a low tunnel.
+
 - **Start:** a quiet start area with no enemy in view, facing the way to go, with a landmark ahead.
 - **Pacing:** fight, reward (health, ammo), quiet stretch, harder fight, gate. A key or switch that sends the player
   back through what they cleared.

@@ -37,6 +37,8 @@ NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way 
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = squads.PATROL_NEAR  # place_patrol moves a squadron farther than this from its route to its first node
+FLYER_CRUISE = 150  # flying squads cruise this far over the floor (the game's: about 150)
+FLYER_ROOM = 60  # and stay this far under a roof
 PATROL_BEHAVIOUR, PATROL_MODE = squads.PATROL_BEHAVIOUR, squads.PATROL_MODE
 SMART, SENTRY = squads.SMART, squads.SENTRY
 IMAGE_PIXELS = 2048  # a new image is stored as one 16-bit texture of at most 4 KB: bigger ones are shrunk
@@ -252,11 +254,13 @@ class Session:
         return d
 
     def stock_levels(self, search: str | None = None, world: int | None = None) -> dict:
-        """The game's own levels (from the catalog) as "id: name (world w)"; `search` filters by name, `world` by
-        world. Exits and entry levels name them stock:level/<id>."""
+        """The game's own levels (from the catalog) as "id: name (world w, sky s)"; `search` filters by name, `world` by
+        world. Exits and entry levels name them stock:level/<id>; set_level's `sky` takes a level's sky number (-1 is
+        none: black above)."""
         if self.catalog() is None:
             raise AgentError(f"the catalog is not available ({self._catalog_error})")
-        out = [f"{lv['id']}: {lv['name']} (world {lv['world']})" for lv in self._catalog.levels()
+        out = [f"{lv['id']}: {lv['name']} (world {lv['world']}, sky {lv.get('sky', -1)})"
+               for lv in self._catalog.levels()
                if (not search or search.lower() in lv["name"].lower()) and (world is None or lv["world"] == world)]
         return {"levels": out[:LIST_LIMIT * 3], "newGame": NEW_GAME_LEVEL,
                 "note": f"stock:level/{NEW_GAME_LEVEL} is where a new game starts (Juno): the usual way back to the "
@@ -942,9 +946,13 @@ class Session:
 
     def place_squad(self, level: str, centre, member_type, members: int = 3, region=None, door=None,
                     door_type=None, door_pos=None, door_fields: dict | None = None, spread: float = 150,
-                    name: str | None = None, squadron_example=None, member_example=None) -> list[dict]:
+                    name: str | None = None, squadron_example=None, member_example=None,
+                    face=None) -> list[dict]:
         """A squadron, its members around `centre` and the region they keep to; with `door` ("new" with door_type
-        and door_pos, or an existing door's uid) a door it keeps locked until all of them are dead."""
+        and door_pos, or an existing door's uid) a door it keeps locked until all of them are dead. Members face
+        `face` ([x, z]; default: the level's start point 0, the way the player comes) until they have a target.
+        A squad whose squadron spawns its own flying members is placed where they drop in from, so they cruise
+        FLYER_CRUISE over the floor (under any roof)."""
         lv = self._level(level)
         members = _as_int(members, "members")
         if not 1 <= members <= 16:
@@ -980,11 +988,17 @@ class Session:
         region_id = placer.polygon(corners)
         # Never the catalog's name: that is the player's game data, and uids and names are written into the project.
         label = name or (m_kind.rsplit("/", 1)[1].replace("_", " ") if m_kind else "enemy")
-        squadron = placer.single(SQUADRON_ID, self._pos(lv, [cx, cz], sq_schema, True), sq_ex,
-                                 name=f"{label} squad",
-                                 fields={"squadronId": squadron_id, "doorId": door_id, "region": region_id,
-                                         "count": members, "baddyType": m_oid,
-                                         "trigger": prefabs.TRIGGER_AT_ONCE})
+        target = self._face_point(lv, face)
+        sq_fields = {"squadronId": squadron_id, "doorId": door_id, "region": region_id, "count": members,
+                     "baddyType": m_oid, "trigger": prefabs.TRIGGER_AT_ONCE}
+        if target is not None:
+            sq_fields["heading"] = self._toward(sq_schema, (cx, cz), target)
+        sq_pos = self._pos(lv, [cx, cz], sq_schema, True)
+        flight = self._flight(lv, sq_ex, sq_pos) if spawns_own else None
+        if flight is not None:
+            sq_pos[1] = flight.pop("y")
+            sq_fields.update(flight)
+        squadron = placer.single(SQUADRON_ID, sq_pos, sq_ex, name=f"{label} squad", fields=sq_fields)
         if m_kind:
             squadron["kindFields"] = {"baddyType": m_kind}
         wet = []
@@ -995,7 +1009,10 @@ class Session:
                 spot = (cx + spread * math.sin(a), cz + spread * math.cos(a))
                 wet.append(k)
             at = self._pos(lv, list(spot), self.schemas["squadmember"], True)
-            m = placer.single(m_oid, at, m_ex, name=label, fields={"squadron": squadron_id})
+            m_fields = {"squadron": squadron_id}
+            if target is not None:
+                m_fields["yaw"] = self._toward(self.schemas["squadmember"], (at[0], at[2]), target)
+            m = placer.single(m_oid, at, m_ex, name=label, fields=m_fields)
             m["schema"] = "squadmember"
             if m_kind:
                 m["type"] = m_kind
@@ -1068,6 +1085,69 @@ class Session:
                                     "in it (then add_cover), or give the region an inward notch"
                                     + (f" ({got['edge']} obstacle(s) touch its edge: cut the outline round them)"
                                        if got["edge"] else "")})
+        return made
+
+    def _face_point(self, lv: proj.Level, face) -> tuple[float, float] | None:
+        """The point squads face: `face` [x, z], else the level's start point 0 (else its first), else None."""
+        if face is not None:
+            return float(face[0]), float(face[-1])
+        starts = [o for o in lv.objects["objects"] if self._key(o) == "startpoint"]
+        start = next((o for o in starts if o.get("fields", {}).get("startPoint") == 0), starts[0] if starts else None)
+        return (float(start["pos"][0]), float(start["pos"][2])) if start else None
+
+    def _toward(self, schema, at, target) -> int:
+        """The yaw field value that faces from `at` to `target` ((x, z) each): the game turns a facer by
+        atan2(at - target) on (x, z) (decomp MSR mod #6), 0 towards -z, as Studio's facing degrees."""
+        f = schema.role("yaw")
+        return obj.value_of_angle(f, math.atan2(at[0] - target[0], at[1] - target[1]))
+
+    def _flight(self, lv: proj.Level, example, pos) -> dict | None:
+        """Where a squadron that launches its own flyers goes (decomp MSR mod #6): the game's flyer squadrons sit
+        high and cruise 16 x offsetY below (one at 409, offset -16: 153 over its floor). Kept: the stock launch
+        (pitch, speed); set: the squadron's height and offsetY so they cruise FLYER_CRUISE over the floor, under any
+        roof there. None for a squad that doesn't fly down to its spot (offsetY not below 0)."""
+        if example is None or self.catalog() is None:
+            return None
+        e = self._catalog.stock_entry(*example)
+        drop = int.from_bytes(e[0x1B:0x1C], "big", signed=True)
+        if drop >= 0:
+            return None
+        from jfgstudio.gui.viewport import raycast
+        floor = pos[1]
+        cruise = floor + FLYER_CRUISE
+        y = cruise - 16 * drop  # where the game's own sit: above the cruise height by the stock drop
+        roof = raycast(self._mesh(lv.name).collision, (pos[0], floor + 5, pos[2]), (0.0, 1.0, 0.0))
+        out = {}
+        if roof is not None:
+            top = floor + 5 + roof - FLYER_ROOM
+            cruise = min(cruise, max(floor + 40, top - 20))
+            y = max(cruise, min(y, top))
+            if y - cruise < 120:
+                out["launchPitch"] = 0  # no room to dive in: launch level
+        out.update({"y": round(y), "offsetY": max(-128, min(127, round((cruise - y) / 16)))})
+        return out
+
+    def place_glass(self, level: str, a, b, bottom: float, hit_points: int | None = None) -> list[dict]:
+        """A breakable glass pane filling a square window opening in a wall: `a` and `b` ([x, z]) are the opening's
+        sides along the wall, `bottom` its sill height. The pane is as tall as it is wide (the game's glass is
+        square: 5.12 x size a side, decomp MSR mod #6), centred in the opening and turned along the wall. Model the
+        opening square (100-520 across) and the pane fills it; nothing else holds it."""
+        lv = self._level(level)
+        ax, az, bx, bz = float(a[0]), float(a[-1]), float(b[0]), float(b[-1])
+        width = math.hypot(bx - ax, bz - az)
+        if not 60 <= width <= 1300:
+            raise AgentError(f"an opening {width:.0f} wide: the game's panes are 5.12 x size (up to 255) a side")
+        schema = self.schemas["glass"]
+        fields = {"size": max(1, min(255, round(width / 5.12))),
+                  "yaw": obj.value_of_angle(schema.field("yaw"), math.atan2(-(bz - az), bx - ax))}
+        if hit_points is not None:
+            fields["hitPoints"] = _as_int(hit_points, "hit_points")
+        centre = ((ax + bx) / 2, float(bottom) + width / 2, (az + bz) / 2)
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours())
+        placer.single(0x12B, centre, None, name="glass", fields=fields)
+        made = self._add(lv, placer.made, "glass")
+        made.append({"note": f"a pane {fields['size'] * 5.12:.0f} a side; check in the game that it fills the opening "
+                             "(diagonal walls are untested)"})
         return made
 
     def _dry(self, level: str, x: float, z: float) -> bool:
@@ -1604,8 +1684,16 @@ class Session:
                     continue  # no geometry to check against (missing file, stock track without a catalog)
                 problems += [val.Problem(val.WARNING, "placement", f"levels/{name}/objects.json",
                                          f"{f['problem']}" + (f" by {f['by']:g}" if "by" in f else "")
-                                         + (f"; it would stand at {f['standOn']}" if "standOn" in f else ""),
+                                         + (f"; it would stand at {f['standOn']}" if "standOn" in f else "")
+                                         + ("; one side hovers: move it to level ground (find_flat, or a flat "
+                                            "clearing in the geometry)" if f["problem"] == "on a slope" else ""),
                                          f["uid"]) for f in findings]
+            for name, lv in self.p.levels.items():  # nothing above: black where the sky should be
+                if lv.base is None and lv.level.get("sky", -1) == -1:
+                    problems.append(val.Problem(val.WARNING, "sky", f"levels/{name}/level.json",
+                                                "the level has no sky (sky -1): the player sees black above, through "
+                                                "any opening. Set one (set_level sky): a game level's of the same "
+                                                "theme, as stock_levels lists them"))
             for name, lost in self._lost_collision().items():
                 problems.append(val.Problem(val.ERROR, "collision", f"levels/{name}/level.json",
                                             f"{lost} colliding triangles of its geometry come after non-colliding "

@@ -16,6 +16,11 @@ RISE = 40  # a floor up to this far above an object is still its own: the ground
 FLOAT = 24  # more than this above where it would stand: floating
 UP = (0.0, 1.0, 0.0)
 SIDES = ((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 0.0, -1.0))
+# Things with a flat base that must sit on level ground (half their width): on a slope one side hovers (a refuel
+# pad on noise terrain, play-tested). The game's own sit on flat floor.
+FLAT_BASE = {"refuel": 45, "damagecrate": 30, "chest": 45, "door": 60, "startpoint": 25, "exit": 40, "key": 15}
+TILT = 10  # the floor under such a base may differ by this much
+RING = ((1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7))
 ENCLOSED = 200  # solid this close above and on all four sides: inside something (a block raised around it)
 
 
@@ -76,6 +81,17 @@ def check(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = No
             out.append(finding)
             continue
         target = obj.on_ground(f, s)
+        half = FLAT_BASE.get(s.key) if s else None
+        if half is not None:
+            if s.key == "refuel":
+                half = max(half, o.get("fields", {}).get("radius", 0))
+            ring = [floor_of(mesh.collision, x + dx * half, z + dz * half, y + RISE)
+                    for dx, dz in RING]
+            ring = [h for h in ring if h is not None]
+            if ring and max(ring) - min(ring) > TILT:
+                finding.update({"problem": "on a slope", "by": round(max(ring) - min(ring), 1)})
+                out.append(finding)  # find_flat finds level ground nearby
+                continue
         if y < f - 1:  # under the floor's surface (resting on it, or the editor's small lift over it, is fine)
             finding.update({"problem": "sunk", "by": round(f - y, 1)})
         elif y - target > FLOAT:
