@@ -199,6 +199,9 @@ class _Builder:
             if doc.get("behaviour") is not None:
                 sets.append({"at": 0x1C, "hex": struct.pack(">h", doc["behaviour"]).hex()})
             fixups = []
+            if doc.get("rotate") and not doc.get("copyModel"):
+                raise BuildError([f"objtypes/{name}.json: rotate turns the type's own copy of its model: give it "
+                                  "\"copyModel\": true too"])
             if doc.get("model") is not None or doc.get("copyModel"):
                 if raw[0x1E] != 0 or raw[0x1F] == 0:
                     raise BuildError([f"objtypes/{name}.json: {doc['base']} has no models to replace (it is drawn "
@@ -206,8 +209,11 @@ class _Builder:
                 arr = struct.unpack_from(">i", raw, 0x30)[0]
                 model = doc["model"] if doc.get("model") is not None else t["assets"][0]
                 if doc.get("copyModel"):  # its own copy: an appended model gets no animations (no animRows row)
-                    entries.append({"table": MODEL_TABLE, "data": MODEL_DATA, "what": "model", "index": None,
-                                    "raw": None, "append": f"model_{name}", "copyOf": model, "packed": True})
+                    copy = {"table": MODEL_TABLE, "data": MODEL_DATA, "what": "model", "index": None, "raw": None,
+                            "append": f"model_{name}", "copyOf": model, "packed": True}
+                    if doc.get("rotate"):  # turned by the port as it makes the copy from the player's ROM
+                        copy["rotateY"] = doc["rotate"]
+                    entries.append(copy)
                 for i in range(raw[0x1F]):  # every slot (LODs) shows the model; each keeps its flag bits
                     old = struct.unpack_from(">I", raw, arr + 4 * i)[0]
                     if doc.get("copyModel"):
@@ -233,7 +239,8 @@ class _Builder:
             self.log(f"object type {name}: {doc['name']}, made from {t['name']} (0x{base:X})"
                      + (f", behaviour {doc['behaviour']}" if doc.get("behaviour") is not None else "")
                      + (f", model 0x{doc['model']:X}" if doc.get("model") is not None else "")
-                     + (", its own copy of the model" if doc.get("copyModel") else ""))
+                     + (", its own copy of the model" if doc.get("copyModel") else "")
+                     + (f" turned {doc['rotate']} degrees" if doc.get("rotate") else ""))
         return entries, objtypes
 
     def kinds(self) -> tuple[list[dict], list[dict], list[dict]]:
@@ -632,7 +639,7 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
             fname = f"assets/{c['append']}.bin"
             files[fname] = c["raw"]
             e["file"] = fname
-        for key in ("copyOf", "packed", "set", "fixups"):
+        for key in ("copyOf", "packed", "set", "fixups", "rotateY"):
             if c.get(key):
                 e[key] = c[key]
         entries.append(e)

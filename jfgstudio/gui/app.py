@@ -725,6 +725,9 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
             m = _matrix(o, schema, None if shape else oid, squad_sizes)  # a shape is its own size, not the type's
             if sprite:
                 m = vp.billboard(m[:3, 3], float(np.linalg.norm(m[:3, 0])), S.camera)
+        turned = kind_tools.pack_rotate(o)
+        if turned:  # its model copy turned by the port: a quarter turn takes (x, z) to (z, -x), as yaw does
+            m = m @ vp.object_matrix([0.0, 0.0, 0.0], yaw=math.radians(turned))
         if o["type"].startswith("pack:kind/") and not (schema and schema.key == "squadmember"):
             kind = S.project.kinds.get(o["type"].split("/", 1)[1], {})
             m = m @ np.diag([kind.get("scale", 1.0)] * 3 + [1.0])

@@ -42,6 +42,19 @@ def base_oid(o: dict) -> int | None:
     return None
 
 
+def pack_rotate(o: dict) -> int:
+    """Degrees an object of the pack's own type (or a dependency's) has its model copy turned by (objtypes rotate)."""
+    from jfgstudio import packtypes
+    S = _app().S
+    if not packtypes.is_pack_type(o.get("type", "")) or not S.project:
+        return 0
+    try:
+        info = packtypes.resolve(S.project, o["type"])
+    except packtypes.PackTypeError:
+        return 0
+    return info["rotate"] if info["copyModel"] else 0
+
+
 def pack_model(o: dict) -> int | None:
     """The model an object of the pack's own type (or a dependency's) shows in place of its base's, if it sets one."""
     from jfgstudio import packtypes

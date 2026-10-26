@@ -398,7 +398,8 @@ whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `
   definition (objtypes/<name>.json): a working refuel pad wearing the bomb pad mesh is base 0xB9 (RefuelPoint) with
   model 0x17B; behaviour 0 makes it a static prop; the AntTank (0x283) made solid is behaviour 48 with
   `copy_model` (its model lists animations but has no joints, which crashes the game unless the type draws its own
-  copy, without animations; the build refuses it otherwise). Place it with
+  copy, without animations; the build refuses it otherwise). `rotate` (90 / 180 / 270, with `copy_model`) turns
+  the copy, for a type whose entry has no facing: the port turns it as it makes the copy. Place it with
   `place` as pack:objtype/<name>. A type no stock list places (behaviour 0, or 49 which comes from animation paths)
   gets the plain 10-byte entry and takes no fields.
 - A pack that depends on a library places the library's types as <mod id>:objtype/<name>: `add_dependency` with

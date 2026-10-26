@@ -46,6 +46,15 @@ class PackTypes(unittest.TestCase):
         self.assertFalse(packtypes.is_pack_type("stock:objtype/0xB9"))
         self.assertFalse(packtypes.is_pack_type("pack:kind/fire_ant"))
 
+    def test_rotate(self):
+        self.hub.objtypes["tank"].update({"copyModel": True, "rotate": 180})
+        self.hub.save()
+        self.assertEqual(packtypes.resolve(proj.load(self.hub.path), "pack:objtype/tank")["rotate"], 180)
+        self.hub.objtypes["tank"]["rotate"] = 45  # quarter turns only
+        self.hub.save()
+        with self.assertRaises(proj.ProjectError):
+            proj.load(self.hub.path)
+
     def test_example(self):
         self.assertEqual(packtypes.example(TYPES, 0xB9, None), [406, 31])  # its base's own
         self.assertEqual(packtypes.example(TYPES, 0x283, 49), [5, 6])  # the most placed type of its behaviour

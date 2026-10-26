@@ -88,7 +88,7 @@ def resolve(project, type_ref: str) -> dict:
         raise PackTypeError(f"{where} has no object type {r.name!r} (objtypes: {', '.join(owner.objtypes) or 'none'})")
     return {"name": doc["name"], "base": refs.parse(doc["base"], "objtype").number(),
             "behaviour": doc.get("behaviour"), "model": doc.get("model"), "scale": doc.get("scale", 1.0),
-            "copyModel": doc.get("copyModel", False),
+            "copyModel": doc.get("copyModel", False), "rotate": doc.get("rotate", 0),
             "fixup": f"objtype_{r.name}" if r.is_pack else f"{r.namespace}:objtype_{r.name}"}
 
 
