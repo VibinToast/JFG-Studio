@@ -25,7 +25,7 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender, **version 0.5.2 or newer** (`jfg64.__version__`): it knows the game's
+The jfg64 add-on is **required** in Blender, **version 0.5.3 or newer** (`jfg64.__version__`): it knows the game's
 surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
 Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
 Through a Blender MCP server, run Python in Blender and use it rather than writing your own. With no Blender
@@ -61,9 +61,12 @@ cover = jfg64.rock("cover", radius=95, squash=1.2, location=(x, y, jfg64.ground_
 - **Cover** a squad can hide behind must hide it: about 100 tall and 80 across or more (rock radius 90+, squash
   1.0-1.4). The guide's radius-60 rocks come out about 40 tall: landmarks and steps, not cover (`add_cover` warns
   and makes no hole for them).
-- **A door in a passage** needs level floor: give that link a `"landing": 160` (level floor at each end before
-  the slope) and stand the door on it, inside the passage, never in the room's mouth (a wider opening: the player
-  walks round it). `check_placement` says when a door is narrower than its passage or on a slope.
+- **A door in a passage** goes in a doorway smaller than the door, as the game's own do: the door overlaps the
+  frame and hides its edges. Give the link `"door": "from"` (or `"to"`, `"both"`): it builds a level landing with
+  a 160 x 180 doorway frame (for the game's 198 x 199 doors), and `jfg64.door_spots(level)` gives each door's
+  `pos` and `facing` for `place` / `place_key_door`. Never a door in a room's mouth (wider: the player walks round
+  it) or one as wide as its tunnel (gaps show round it, play-tested). `check_placement` says when a door doesn't
+  close its opening or stands on a slope.
 
 - **Colour**: the game draws only the vertex colours (the `Col` layer the bake writes), never a material's colour.
   Bake with `tint=True` to carry each material's Base Color in; untextured geometry is otherwise grey.

@@ -38,7 +38,8 @@ SIZED = 12  # describe_type of a shared schema (doors) measures this many of its
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = squads.PATROL_NEAR  # place_patrol moves a squadron farther than this from its route to its first node
 EXPLOSIVE_DRUM, DRUM_SIZE = 0x168, 24
-DOOR_SLACK = 40  # a passage at most this much wider than its door (both sides together)  # most of the game's explosive drums are size 24 (its crates 39)
+DOOR_SLACK = 40  # a passage more than this much wider than its door: the player walks round it
+DOOR_OVERLAP = 10  # a door covers its opening's edges by at least this much (both sides together), or gaps show  # most of the game's explosive drums are size 24 (its crates 39)
 FLYER_CRUISE = 150  # flying squads cruise this far over the floor (the game's: about 150)
 FLYER_ROOM = 60  # and stay this far under a roof
 PATROL_BEHAVIOUR, PATROL_MODE = squads.PATROL_BEHAVIOUR, squads.PATROL_MODE
@@ -686,9 +687,10 @@ class Session:
         return found + self._door_gaps(lv, mesh)
 
     def _door_gaps(self, lv: proj.Level, mesh) -> list[dict]:
-        """Doors with room to walk round them: the walls either side, along the door's own width at waist height,
-        are further apart than the door is wide by more than DOOR_SLACK (a trial's key door stood in a room's
-        mouth, twice its width: play-tested)."""
+        """Doors that don't close their opening: the walls either side (along the door's own width, at waist height)
+        as far apart as the door is wide or further, or the ceiling over it higher than its top. The game's doors
+        overlap their frame (its own levels mostly fit its 198-wide door in openings 150-200 wide); a door as wide
+        as its tunnel showed gaps round it, and one in a room's mouth was walked round (play-tested)."""
         from jfgstudio.gui.viewport import raycast
         out = []
         for o in lv.objects["objects"]:
@@ -706,10 +708,17 @@ class Session:
             at = (x, y + min(100.0, size["y"] / 2), z)
             sides = [raycast(mesh.collision, at, (s * across[0], 0.0, s * across[2])) for s in (1, -1)]
             gap = None if None in sides else sides[0] + sides[1]
+            up = raycast(mesh.collision, (x, y + 5, z), (0.0, 1.0, 0.0))
+            problem = None
             if gap is None or gap > size["x"] + DOOR_SLACK:
-                finding = {"uid": o["uid"], "pos": list(o["pos"]),
-                           "problem": "the passage is wider than the door: the player walks round it",
-                           "door": size["x"], "passage": round(gap) if gap is not None else "open on a side"}
+                problem = "the passage is wider than the door: the player walks round it"
+            elif gap >= size["x"] - DOOR_OVERLAP or (up is not None and up + 5 >= size["y"] - DOOR_OVERLAP):
+                problem = ("the door doesn't overlap its frame: gaps show round it. Give it a doorway narrower and "
+                           "lower than the door (jfg64 layout link \"door\"; door_spots says where)")
+            if problem:
+                finding = {"uid": o["uid"], "pos": list(o["pos"]), "problem": problem, "door": [size["x"], size["y"]],
+                           "passage": round(gap) if gap is not None else "open on a side",
+                           "headroom": round(up + 5) if up is not None else "open above"}
                 if o.get("name"):
                     finding["name"] = o["name"]
                 out.append(finding)

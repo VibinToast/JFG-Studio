@@ -242,12 +242,16 @@ class Doors(AgentTest):
         self.with_catalog()
         self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + _block(-400, -50, -100, 50, 0, 300)
                              + _block(100, -50, 400, 50, 0, 300), (), KILL)  # walls 200 apart along x
-        self.s.model_size = lambda oid: {"x": 198, "y": 199, "z": 20}
+        self.s.model_size = lambda oid: {"x": 230, "y": 199, "z": 20}
         door = self.s.place("home", "0x1AD", [0, 0], example=[11, 7])[0]["uid"]
-        self.assertNotIn(door, [f["uid"] for f in self.s.check_placement("home")])
+        self.assertNotIn(door, [f["uid"] for f in self.s.check_placement("home")])  # wider than its opening
+        self.s.model_size = lambda oid: {"x": 198, "y": 199, "z": 20}  # as wide as it: gaps show
+        gap = next(f for f in self.s.check_placement("home") if f["uid"] == door)
+        self.assertTrue(gap["problem"].startswith("the door doesn't overlap its frame"))
         self.s.model_size = lambda oid: {"x": 120, "y": 199, "z": 20}
         gap = next(f for f in self.s.check_placement("home") if f["uid"] == door)
-        self.assertEqual((gap["door"], gap["passage"]), (120, 200))
+        self.assertEqual((gap["door"], gap["passage"]), ([120, 199], 200))
+        self.assertTrue(gap["problem"].startswith("the passage is wider"))
         self.s.update_object("home", door, facing=90)  # across the passage's length: open both ways
         gap = next(f for f in self.s.check_placement("home") if f["uid"] == door)
         self.assertEqual(gap["passage"], "open on a side")

@@ -133,9 +133,10 @@ Play-tested lessons (a test valley got all of these wrong):
   area, give squads a route (`place_patrol`) so they walk until they see the player.
 - **Flying squads** drop in from above and cruise about 150 over the floor; `place_squad` places them so. Give them
   open air: not a low tunnel.
-- **A door closes its passage.** Stand it inside the passage, on level floor (a link's `landing`), never in a room's
-  mouth, which is wider: there the player walks round it (play-tested). `check_placement` says when a door is
-  narrower than its passage.
+- **A door closes its passage.** It stands in a doorway smaller than itself, so it overlaps the frame: a jfg64
+  link's `"door"` builds one on level floor, and `door_spots` says where the door goes. In a room's mouth the player
+  walked round it; as wide as its tunnel, gaps showed round it (both play-tested). `check_placement` says when a door
+  doesn't close its opening.
 - **Crates and drums keep off walls** and stay the game's size (crates 39, drums 24: the defaults). A crate against
   a level's outer wall clipped into it (play-tested); `check_placement` says "clipping into geometry".
 - **Rocks for cover are big** (radius 90+, about 100 tall); radius-60 rocks are landmarks. Keep squad regions to 4
