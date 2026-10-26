@@ -38,7 +38,6 @@ SIZED = 12  # describe_type of a shared schema (doors) measures this many of its
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = 300  # place_patrol moves a squadron farther than this from its route to the route's first node
 SMART, SENTRY = 0x11, 9  # squadron behaviours (+0x0D): walks to the hero in its region; never walks (MSR mod #6)
-TRIGGER_AT_ONCE = 3  # squadron +0x29: spawn at level start (1: when a hero enters a zone placed for a stock level)
 PATROL_MODE = 6  # a squadron's kind (low 4 bits) that walks the patrol network (decomp: "Squad patrol network")
 IMAGE_PIXELS = 2048  # a new image is stored as one 16-bit texture of at most 4 KB: bigger ones are shrunk
 LAVA_FLOOR_DEPTH = 100  # lava needs a solid floor at most this far under it, or Juno falls through
@@ -887,7 +886,7 @@ class Session:
         squadron = placer.single(SQUADRON_ID, self._pos(lv, [cx, cz], sq_schema, True), sq_ex,
                                  name=f"{label} squad",
                                  fields={"squadronId": squadron_id, "doorId": door_id, "region": region_id,
-                                         "count": members, "baddyType": m_oid, "trigger": TRIGGER_AT_ONCE})
+                                         "count": members, "baddyType": m_oid, "trigger": prefabs.TRIGGER_AT_ONCE})
         if m_kind:
             squadron["kindFields"] = {"baddyType": m_kind}
         wet = []
@@ -1286,7 +1285,7 @@ class Session:
         if matched[1] is not None:
             changes += [edit.Change(m["uid"], ("stock",), copy.deepcopy(m.get("stock")),
                                     {"list": matched[1][0], "entry": matched[1][1]}) for m in members]
-        changes.append(edit.Change(uid, ("fields", "trigger"), sq["fields"].get("trigger"), TRIGGER_AT_ONCE))
+        changes.append(edit.Change(uid, ("fields", "trigger"), sq["fields"].get("trigger"), prefabs.TRIGGER_AT_ONCE))
         region = sq["fields"].get("region")
         corners = [o for o in lv.objects["objects"] if self._key(o) == "regionpoint"
                    and o.get("fields", {}).get("region") == region]

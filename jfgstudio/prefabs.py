@@ -18,6 +18,7 @@ def winding(points) -> float:
     return sum(x0 * z1 - x1 * z0 for (x0, z0), (x1, z1) in zip(points, points[1:] + points[:1], strict=True))
 
 
+TRIGGER_AT_ONCE = 3  # squadron +0x29: spawn at level start (a stock squad's 1 waits in its own level's zone)
 REGION_HALF = 300  # a new squad's region: a square this far around it
 
 
@@ -109,7 +110,7 @@ class Placer:
         region = self.region(pos)
         self.single(SQUADRON_ID, pos, squadron_example, name=f"squad{squadron_id}",
                     fields={"squadronId": squadron_id, "doorId": door_id, "region": region, "count": members,
-                            "baddyType": member_oid})
+                            "baddyType": member_oid, "trigger": TRIGGER_AT_ONCE})
         for k in range(members):
             m = self.single(member_oid, (x + 160 * (k - (members - 1) / 2), y, z), member_example,
                             fields={"squadron": squadron_id})
