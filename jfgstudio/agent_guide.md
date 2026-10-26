@@ -311,6 +311,11 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   value (`startAtLoad`): it means "ride the node's lift", and a squad near one stops at its first node for good
   (`validate`: `patrol-start`).
   Squads without a patrol stay in their region.
+- **Door lock lights** (`doorswitch`, 0xDE and 0xD0-0xD9): the coloured light on a door frame that comes on when
+  the door unlocks, after its squad dies or its switch is shot. It has no door id: it shows the **nearest door**, so
+  place it on that door's frame, nearer to it than to any other door. `validate` (`door-light`) warns when it has no
+  door, another door is nearly as close, or nothing locks its door (then it is on from the start). Its `cutscene`
+  plays a camera cutscene once on unlock; `follow` non-zero makes it mirror the door instead.
 - **Switch doors**: `place_switch_door(level, switch_pos, door="new", door_type, door_pos)` (or `door`: a door's
   uid) places the game's shootable switch: it keeps the door locked until the player shoots it, then opens it and
   sets a game flag so it stays open after a reload (`saved` false: it locks again). Put the switch where the player

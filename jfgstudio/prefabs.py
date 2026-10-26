@@ -6,6 +6,7 @@ are not decoded yet keep the game's values) or, for fully decoded types, from th
 """
 
 import itertools
+import math
 
 from jfgstudio import objects as obj
 from jfgstudio.project import Level
@@ -43,6 +44,34 @@ def convex(poly) -> bool:
     turns = [(b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
              for a, b, c in zip(poly, poly[1:] + poly[:1], poly[2:] + poly[:2], strict=True)]
     return all(t >= 0 for t in turns) or all(t <= 0 for t in turns)
+
+
+def light_door(light: dict, doors: list[dict]) -> tuple[dict | None, float, float]:
+    """The door a door lock light shows (decomp MSR "Door switch"): it has no door id, and on its first frame takes
+    the closest door (behaviour 7) by straight-line distance. (door, its distance, the next door's distance or inf)."""
+    found = sorted((math.dist(light["pos"], d["pos"]), k) for k, d in enumerate(doors))
+    if not found:
+        return None, math.inf, math.inf
+    return doors[found[0][1]], found[0][0], found[1][0] if len(found) > 1 else math.inf
+
+
+def door_lockers(door_fields: dict, objects: list[dict], key, fields) -> list[tuple[str, dict | int]]:
+    """What keeps a door locked: ("squad", squadron) and ("switch", target) with its door id, and ("key", item) for a
+    key lock. `key(o)` is an object's schema key, `fields(o)` its field values."""
+    out: list[tuple[str, dict | int]] = []
+    door_id = door_fields.get("doorId", 0)
+    if door_id:
+        for o in objects:
+            k = key(o)
+            if k in ("squadron", "target") and fields(o).get("doorId") == door_id:
+                out.append(("squad" if k == "squadron" else "switch", o))
+    lock = door_fields.get("keyLock", 0)
+    if lock >= 2:
+        out.append(("key", lock - 2))
+    return out
+
+
+LIGHT_TIE = 1.15  # a second door less than this much farther than the nearest: the light may take either
 
 
 def hole_regions(objects, key) -> dict[int, int]:

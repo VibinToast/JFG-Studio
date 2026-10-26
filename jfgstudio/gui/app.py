@@ -705,6 +705,15 @@ def scene() -> None:
             colour = theme.colour("HIGHLIGHT" if o["uid"] in S.selection else "MUTED")
             draw.add_text(imgui.ImVec2(origin.x + p[0] + 4, origin.y + p[1] - 14), imgui.get_color_u32(colour),
                           _short_label(o))
+    for o in S.all_objects():
+        if o["uid"] in S.selection and (sc := S.schema(o)) and sc.key == "doorswitch":
+            door = pre.light_door(o, _doors())[0]
+            a = vp.project(S.camera, (w, h), o["pos"])
+            b = vp.project(S.camera, (w, h), door["pos"]) if door else None
+            if a and b:
+                draw.add_line(imgui.ImVec2(origin.x + a[0], origin.y + a[1]),
+                              imgui.ImVec2(origin.x + b[0], origin.y + b[1]),
+                              imgui.get_color_u32(theme.colour("HIGHLIGHT")), 2.0)
     if S.tool in ("region", "water", "patrol"):
         if S.drag is not None:
             _end_drag(objs)
@@ -964,14 +973,17 @@ def inspector() -> None:
             if imgui.button("Revert to the game's"):
                 _revert_game(game)
             imgui.end_disabled()
+    light = len(sel) == 1 and (sc := S.schema(sel[0])) is not None and sc.key == "doorswitch"
+    if light and locked:
+        _light_link(sel[0])  # its links select the door and squad even while the light is read-only
     imgui.begin_disabled(locked)
     try:
-        _inspector_body(sel, h)
+        _inspector_body(sel, h, light_shown=light and locked)
     finally:
         imgui.end_disabled()
 
 
-def _inspector_body(sel: list[dict], h) -> None:
+def _inspector_body(sel: list[dict], h, light_shown: bool = False) -> None:
     if len(sel) > 1:
         imgui.text(f"{len(sel)} objects selected")
         _muted("W moves them together; Delete removes them; Ctrl+D duplicates them.")
@@ -1007,6 +1019,8 @@ def _inspector_body(sel: list[dict], h) -> None:
         if imgui.is_item_hovered():
             imgui.set_tooltip("Onto the floor below, a little above it (enemies and start points a bit more), so it "
                               "doesn't spawn inside a slope and fall through")
+    if schema and schema.key == "doorswitch" and not light_shown:
+        _light_link(o)
     if schema and schema.key == "squadron":
         imgui.begin_disabled(S.view.mesh is None)
         if imgui.button("Add cover"):
@@ -1042,6 +1056,42 @@ def _inspector_body(sel: list[dict], h) -> None:
             imgui.text(f"stock base: list {o['stock']['list']}, entry {o['stock']['entry']}")
         if o.get("params"):
             imgui.text_wrapped(f"raw: {o['params']}")
+
+
+def _doors() -> list[dict]:
+    return [o for o in S.all_objects() if (sc := S.schema(o)) and sc.key == "door"]
+
+
+def _light_link(o: dict) -> None:
+    """A door lock light's door, and what locks that door: the light has no door id of its own, it shows the nearest
+    door, which a squad, a switch or a key keeps locked (decomp MSR "Door switch")."""
+    if not imgui.collapsing_header("Lights up for", imgui.TreeNodeFlags_.default_open):
+        return
+    door, dist, second = pre.light_door(o, _doors())
+    if door is None:
+        imgui.text_colored(theme.colour("ERROR"), "No door in the level: this light never changes.")
+        return
+    _muted("The light has no setting of its own: it shows the nearest door, and lights up once nothing keeps that "
+           "door locked. Move it to pick another door.")
+    if imgui.selectable(f"Door: {_short_label(door)}  ({dist:.0f} away)##lightdoor", False)[0]:
+        S.selection = {door["uid"]}
+    if second < dist * pre.LIGHT_TIE:
+        imgui.text_colored(theme.colour("HIGHLIGHT"), f"Another door is nearly as close ({second:.0f}): move the "
+                                                      "light nearer its own.")
+    lockers = pre.door_lockers(S.fields(door, S.schema(door)), S.all_objects(), lambda x: _keys([x])[x["uid"]],
+                               lambda x: S.fields(x, S.schema(x)))
+    if not lockers:
+        imgui.text_colored(theme.colour("HIGHLIGHT"), "Nothing locks that door, so the light is on from the start. "
+                                                      "Give the door a squad (its door id) or a switch.")
+    for kind, x in lockers:
+        if kind == "key":
+            imgui.text(f"Locked by: key (item {x}), in the door's Key lock")
+        elif imgui.selectable(f"Locked by {'squad' if kind == 'squad' else 'switch'}: {_short_label(x)}"
+                              f"##lock{x['uid']}", False)[0]:
+            S.selection = _squad_uids(x) if kind == "squad" else {x["uid"]}
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Click to select it. A squad locks every door with its door id until all its members are "
+                          "dead; set the door id on the squadron (Inspector) to tie another squad to this door.")
 
 
 def _field_input(uid: str, f: obj.Field, value: int, own: bool) -> None:
@@ -1814,6 +1864,7 @@ def _layout() -> hello_imgui.DockingParams:
         split("MainDockSpace", "BottomSpace", d.down, 0.3),
         split("MainDockSpace", "LeftSpace", d.left, 0.2),
         split("MainDockSpace", "RightSpace", d.right, 0.27),
+        split("BottomSpace", "BottomRightSpace", d.right, 0.5),
     ]
 
     def win(label, space, fn):
@@ -1821,23 +1872,23 @@ def _layout() -> hello_imgui.DockingParams:
         w.label, w.dock_space_name, w.gui_function = label, space, guarded(label, fn)
         return w
 
+    # The first window of each space is its front tab: Scene, Hierarchy, Inspector, Project and Console show.
     params.dockable_windows = [
         win("Scene", "MainDockSpace", scene),
         win("Level Graph", "MainDockSpace", level_graph),
         win("Planet", "MainDockSpace", planet_tools.planet_window),
         win("Models", "MainDockSpace", model_viewer.models_window),
-        win("Kinds", "RightSpace", labelled(kind_tools.kinds_window)),
-        win("Triggers", "RightSpace", labelled(script_tools.triggers_window)),
         win("Scripts", "MainDockSpace", script_tools.scripts_window),
-        win("Weapons", "RightSpace", labelled(script_tools.weapons_window)),
         win("Hierarchy", "LeftSpace", hierarchy),
+        win("Prefabs", "LeftSpace", prefabs),
         win("Inspector", "RightSpace", labelled(inspector)),
         win("Level", "RightSpace", labelled(level_tools.level_window)),
+        win("Kinds", "RightSpace", labelled(kind_tools.kinds_window)),
+        win("Triggers", "RightSpace", labelled(script_tools.triggers_window)),
+        win("Weapons", "RightSpace", labelled(script_tools.weapons_window)),
         win("Project", "BottomSpace", project_window),
-        win("Console", "BottomSpace", console),
-        win("Prefabs", "BottomSpace", prefabs),
+        win("Console", "BottomRightSpace", console),
     ]
-    params.dockable_windows[-1].focus_window_at_next_frame = True
     focus = os.environ.get("JFGSTUDIO_FOCUS")  # tests and screenshots: bring that window to the front
     for w in params.dockable_windows:
         if focus and w.label == focus:

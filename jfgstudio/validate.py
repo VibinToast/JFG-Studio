@@ -51,6 +51,37 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     out += _check_reachable(project, schemas)
     out += _check_fog(project, schemas)
     out += _check_flags(project, schemas)
+    out += _check_lights(project, schemas)
+    return out
+
+
+def _check_lights(project: Project, schemas) -> list[Problem]:
+    """Door lock lights (decomp MSR "Door switch"): each shows the nearest door and lights once nothing locks it, so
+    one with no door, a door nearly as close as its own, or a door nothing locks never shows a change. Levels of the
+    pack's own only (an edit's game doors come from the catalog)."""
+    from jfgstudio import prefabs
+    out = []
+    for level in project.levels.values():
+        if level.base is not None:
+            continue
+        objs = level.objects["objects"]
+        of = f"levels/{level.name}/objects.json"
+        doors = [o for o in objs if _key(o, schemas) == "door"]
+        for light in (o for o in objs if _key(o, schemas) == "doorswitch"):
+            door, dist, second = prefabs.light_door(light, doors)
+            if door is None:
+                out.append(Problem(WARNING, "door-light", of, "a door lock light with no door in the level: it never "
+                                   "changes", light["uid"]))
+                continue
+            if second < dist * prefabs.LIGHT_TIE:
+                out.append(Problem(WARNING, "door-light", of, f"the light is nearly as close to another door "
+                                   f"({second:.0f}) as to {door['uid']} ({dist:.0f}): it shows the nearest, so move it "
+                                   "nearer its own", light["uid"]))
+            if not prefabs.door_lockers(door.get("fields", {}), objs, lambda o: _key(o, schemas),
+                                        lambda o: o.get("fields", {})):
+                out.append(Problem(WARNING, "door-light", of, f"the light shows door {door['uid']}, which nothing "
+                                   "locks (no squad or switch with its door id, no key): it is on from the start",
+                                   light["uid"]))
     return out
 
 

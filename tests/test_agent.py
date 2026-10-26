@@ -289,6 +289,25 @@ class Doors(AgentTest):
         gap = next(f for f in self.s.check_placement("home") if f["uid"] == door)
         self.assertEqual(gap["passage"], "open on a side")
 
+    def test_lock_light_shows_the_nearest_door(self):
+        from jfgstudio import prefabs
+        self.with_catalog()
+        near = self.s.place("home", "0x1AD", [0, 0], fields={"keyLock": 1, "doorId": 3}, example=[11, 7])[0]
+        far = self.s.place("home", "0x1AD", [600, 0], example=[11, 7])[0]
+        light = self.s.place("home", "0xDE", [100, 0])[0]
+        lights = [p for p in val.validate(self.s.p) if p.rule == "door-light"]
+        self.assertTrue(any("nothing locks" in p.message for p in lights))  # door 3 has no squad yet
+        door, dist, second = prefabs.light_door(light, [near, far])
+        self.assertEqual((door["uid"], round(dist)), (near["uid"], 100))
+        self.assertGreater(second, 490)  # straight-line: the doors stand a little higher than the light
+        squad = self.s.place("home", "squadron", [0, -400], fields={"doorId": 3})[0]
+        lockers = prefabs.door_lockers(near["fields"], self.s._level("home").objects["objects"], self.s._key,
+                                       lambda o: o.get("fields", {}))
+        self.assertEqual([(k, o["uid"]) for k, o in lockers], [("squad", squad["uid"])])
+        self.assertFalse([p for p in val.validate(self.s.p) if p.rule == "door-light"])
+        self.s.update_object("home", light["uid"], pos=[300, 0])  # halfway: either door
+        self.assertTrue(any("nearly as close" in p.message for p in val.validate(self.s.p) if p.rule == "door-light"))
+
     def test_crate_against_a_wall_with_nothing_behind(self):
         self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + [[(100, 0, -500), (100, 300, -500),
                                                                     (100, 300, 500)],
