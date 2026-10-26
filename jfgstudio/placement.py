@@ -6,6 +6,8 @@ points); zones, lights, sounds and triggers may be anywhere. Heights follow obje
 to floor" places them.
 """
 
+import math
+
 from jfgstudio import objects as obj
 from jfgstudio.gui.viewport import floor_of, raycast
 
@@ -24,6 +26,7 @@ TILT = 10  # the floor under such a base may differ by this much
 # (a health gem half inside a boulder, play-tested).
 CLEAR = {"health": 35, "ammo": 35, "key": 30, "chest": 50, "collectable": 30, "token": 30, "refuel": 40,
          "damagecrate": 40, "startpoint": 40, "exit": 40}
+CRATE_SIZE = 39  # the game's usual crate size, which CLEAR's damagecrate radius is for
 CLIP = 25  # a floor this far above an object's own, within its CLEAR radius, is something it clips into
 RING = ((1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7))
 ENCLOSED = 200  # solid this close above and on all four sides: inside something (a block raised around it)
@@ -89,9 +92,13 @@ def check(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = No
             continue
         target = obj.on_ground(f, s)
         clear = CLEAR.get(s.key) if s else None
+        if clear is not None and s.key == "damagecrate":  # a bigger crate needs more room (39: the game's usual)
+            clear *= max(1.0, o.get("fields", {}).get("size", CRATE_SIZE) / CRATE_SIZE)
         if clear is not None:
             near = [mesh.floor_height(x + dx * clear, z + dz * clear) for dx, dz in RING]
-            if any(h is not None and h > f + CLIP for h in near):
+            # and a wall with nothing behind it (a level's outer wall has no floor past it to rise)
+            walls = [raycast(mesh.collision, (x, f + CLIP, z), (dx, 0.0, dz)) for dx, dz in RING]
+            if any(h is not None and h > f + CLIP for h in near) or                     any(d is not None and d < clear * math.hypot(dx, dz) for d, (dx, dz) in zip(walls, RING)):
                 finding.update({"problem": "clipping into geometry"})
                 out.append(finding)  # move it clear of the rock or wall beside it
                 continue

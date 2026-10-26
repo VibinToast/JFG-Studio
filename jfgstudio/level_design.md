@@ -92,8 +92,10 @@ Every side room, dead end, ledge and glass-sealed chamber should hold something 
   and stats screen), apart from the game's own Tribals. 16 at most per level.
 - **Ship parts and the game's other collectables** set the player's own progress in the main game, once per save:
   ask the owner before using them in a pack.
-- **Health and ammo** after fights; **full health** or a **health upgrade** (`health` 0xE9, its own game flag) as a
-  bigger prize; crates and drums to break open.
+- **Health and ammo** after fights; **full health** or a **health upgrade** (`health` 0xE9: `place` gives it its own
+  game flag) as a bigger prize; crates and drums to break open.
+- **Face rewards to the player**: a chest opens towards the way the player walks in (`place` `facing` [x, z] of
+  the doorway), not towards the room's back wall.
 
 ## Room-graph templates
 
@@ -131,6 +133,13 @@ Play-tested lessons (a test valley got all of these wrong):
   area, give squads a route (`place_patrol`) so they walk until they see the player.
 - **Flying squads** drop in from above and cruise about 150 over the floor; `place_squad` places them so. Give them
   open air: not a low tunnel.
+- **A door closes its passage.** Stand it inside the passage, on level floor (a link's `landing`), never in a room's
+  mouth, which is wider: there the player walks round it (play-tested). `check_placement` says when a door is
+  narrower than its passage.
+- **Crates and drums keep off walls** and stay the game's size (crates 39, drums 24: the defaults). A crate against
+  a level's outer wall clipped into it (play-tested); `check_placement` says "clipping into geometry".
+- **Rocks for cover are big** (radius 90+, about 100 tall); radius-60 rocks are landmarks. Keep squad regions to 4
+  corners.
 
 - **Start:** a quiet start area with no enemy in view, facing the way to go, with a landmark ahead.
 - **Pacing:** fight, reward (health, ammo), quiet stretch, harder fight, gate. A key or switch that sends the player
@@ -150,4 +159,5 @@ Play-tested lessons (a test valley got all of these wrong):
    own, bake light, export, then `import_geometry`.
 4. **Compare:** `level_layout(level)` against the table above. Change what is out of range.
 5. **Dress:** objects, squads (`place_squad`, `add_cover`), pickups, lights, sounds, doors.
-6. **Validate**, then `play`. Ask the player to try it and say what you haven't tested.
+6. **Validate**, then `play` (or `play` with `launch` false, and give the player the `command` it returns, word for
+   word). Ask the player to try it and say what you haven't tested.

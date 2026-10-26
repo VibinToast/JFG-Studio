@@ -57,6 +57,9 @@ def start_level_arg(project: proj.Project, level: str, by_name: bool) -> str:
     return f"{project.id}:level_{level}"
 
 
+COMMAND = "to start it (PowerShell): "  # the log line with the command that starts the game in the level
+
+
 def play(project: proj.Project, level: str | None = None, start_point: int = 0, character: str = "juno",
          rom_path: str | None = None, launch: bool = True, log=print) -> Path:
     """Builds and installs the pack, then starts the game in `level` (the first level by default). Returns the
@@ -85,10 +88,10 @@ def play(project: proj.Project, level: str | None = None, start_point: int = 0, 
         installed = mods / out.name
         shutil.copyfile(out, installed)
     log(f"installed {installed}")
+    cmd = [str(exe), "--mods-only", project.id, "--start-level", start, "--start-point", str(start_point),
+           "--character", character]
+    log(f"{COMMAND}& \"{exe}\" " + " ".join(cmd[1:]))
     if launch:
-        cmd = [str(exe), "--mods-only", project.id, "--start-level", start, "--start-point", str(start_point),
-               "--character", character]
-        log("starting: " + " ".join(cmd[1:]))
         subprocess.Popen(cmd, cwd=exe.parent)
     return installed
 

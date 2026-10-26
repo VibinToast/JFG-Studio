@@ -79,7 +79,7 @@ class FakeCatalog:
     """Made-up stock levels (the tests' own names)."""
 
     def levels(self):
-        return [{"id": i, "name": f"Place {i}", "world": i // 10, "track": i + 1} for i in range(25)]
+        return [{"id": i, "name": f"Place {i}", "world": i // 10, "track": i + 1, "tune": i % 7} for i in range(25)]
 
     def stock_entry(self, list_id, index):
         entry = bytearray(0x50)
@@ -227,6 +227,43 @@ class Geometry(AgentTest):
         self.assertEqual(hit["point"], [0.0, 0.0, 0.0])
 
 
+class Upgrades(AgentTest):
+    def test_health_upgrades_get_their_own_pack_flag(self):
+        one = self.s.place("home", "0xE9", [0, 0])[0]
+        two = self.s.place("home", "0xE9", [100, 0])[0]
+        self.assertEqual((one["fields"]["upgrade"], two["fields"]["upgrade"]), (56, 57))  # flags 103 and 104
+        self.assertFalse([p for p in self.s.validate()["problems"] if p["rule"] == "game-flag"])
+        self.s.update_object("home", two["uid"], fields={"upgrade": 10})  # flag 57: the game's own
+        self.assertIn("game-flag", [p["rule"] for p in self.s.validate()["problems"]])
+
+
+class Doors(AgentTest):
+    def test_door_narrower_than_its_passage(self):
+        self.with_catalog()
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + _block(-400, -50, -100, 50, 0, 300)
+                             + _block(100, -50, 400, 50, 0, 300), (), KILL)  # walls 200 apart along x
+        self.s.model_size = lambda oid: {"x": 198, "y": 199, "z": 20}
+        door = self.s.place("home", "0x1AD", [0, 0], example=[11, 7])[0]["uid"]
+        self.assertNotIn(door, [f["uid"] for f in self.s.check_placement("home")])
+        self.s.model_size = lambda oid: {"x": 120, "y": 199, "z": 20}
+        gap = next(f for f in self.s.check_placement("home") if f["uid"] == door)
+        self.assertEqual((gap["door"], gap["passage"]), (120, 200))
+        self.s.update_object("home", door, facing=90)  # across the passage's length: open both ways
+        gap = next(f for f in self.s.check_placement("home") if f["uid"] == door)
+        self.assertEqual(gap["passage"], "open on a side")
+
+    def test_crate_against_a_wall_with_nothing_behind(self):
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + [[(100, 0, -500), (100, 300, -500),
+                                                                    (100, 300, 500)],
+                                                                   [(100, 0, -500), (100, 300, 500),
+                                                                    (100, 0, 500)]], (), KILL)
+        crate = self.s.place("home", "damagecrate", [80, 0])[0]["uid"]
+        clear = self.s.place("home", "damagecrate", [-200, 0])[0]["uid"]
+        found = {f["uid"]: f["problem"] for f in self.s.check_placement("home")}
+        self.assertEqual(found.get(crate), "clipping into geometry")
+        self.assertNotIn(clear, found)
+
+
 class Reimport(AgentTest):
     def test_reimport_keeps_objects_and_finds_misplaced_ones(self):
         health = self.s.place("home", "health", [100, 100])[0]["uid"]                                  # y 2
@@ -291,9 +328,12 @@ class TrialFindings(AgentTest):
         self.assertEqual(self.s.update_object("home", start["uid"], facing=90)["fields"]["yaw"], 16)
         with self.assertRaises(agent.AgentError):
             self.s.place("home", "health", [0, 0], facing=90)  # no yaw field
+        toward = self.s.place("home", "startpoint", [0, 0], fields={"startPoint": 6}, facing=[0, 1000])[0]
+        self.assertEqual(toward["fields"]["yaw"], 32)  # facing the point at +z: half a turn
+        self.assertEqual(self.s.update_object("home", toward["uid"], facing=[-1000, 0])["fields"]["yaw"], 16)
         levels = self.s.stock_levels()
         self.assertEqual((levels["newGame"], levels["levels"][2]),
-                         (agent.NEW_GAME_LEVEL, "2: Place 2 (world 0, sky -1)"))
+                         (agent.NEW_GAME_LEVEL, "2: Place 2 (world 0, sky -1, tune 2)"))
         self.assertEqual([int(lv.split(":")[0]) for lv in self.s.stock_levels("place 2")["levels"]],
                          [2] + list(range(20, 25)))
         self.assertEqual(len(self.s.stock_levels(world=1)["levels"]), 10)

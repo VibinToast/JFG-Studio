@@ -58,6 +58,7 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
 PACK_FLAGS = range(103, 128)  # unused by the game: packs hand them out from 103
 PACK_FLAGS_MORE = range(301, 352)  # the second choice, unless the pack adds ammo capacity upgrades (they use 0x80 + n)
 FLAG_BYTES = 352  # flags from here on are the regions' tribal rescued / killed bits, cleared at region changes
+HEALTH_UPGRADE, UPGRADE_FLAG = 0xE9, 0x2F  # a health upgrade's number n is saved as game flag 0x2F + n
 GLOBAL_FLAGS = {*range(0, 20), *range(66, 71), *range(73, 77), *range(82, 88), 93, 95}  # copied to the shared file
 
 
@@ -85,6 +86,18 @@ def _check_flags(project: Project, schemas) -> list[Problem]:
         of = f"levels/{level.name}/objects.json"
         door_ids = {o.get("fields", {}).get("doorId") for o in level.objects["objects"] if _key(o, schemas) == "door"}
         for o in level.objects["objects"]:
+            if _key(o, schemas) == "health" and obj.stock_id(o) == HEALTH_UPGRADE:
+                n = o.get("fields", {}).get("upgrade", 0)
+                problem = _flag_problem(UPGRADE_FLAG + n)
+                if problem:
+                    out.append(Problem(problem[0], "game-flag", of, f"the health upgrade's number {n} is saved as "
+                                       f"{problem[1]} (game flag 0x2F + n: give it {PACK_FLAGS[0] - UPGRADE_FLAG}-"
+                                       f"{PACK_FLAGS[-1] - UPGRADE_FLAG})", o["uid"]))
+                elif UPGRADE_FLAG + n in seen:
+                    out.append(Problem(WARNING, "game-flag", of, f"the health upgrade's game flag {UPGRADE_FLAG + n} is "
+                                       f"also {seen[UPGRADE_FLAG + n]}'s: taking one counts as taking both", o["uid"]))
+                seen.setdefault(UPGRADE_FLAG + n, o["uid"])
+                continue
             if _key(o, schemas) != "target":
                 continue
             f = o.get("fields", {})

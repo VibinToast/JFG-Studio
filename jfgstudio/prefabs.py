@@ -20,6 +20,7 @@ HOLE = 1  # RegionInfo flags: a hole of the area it links to (decomp MSR mod #6)
 COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obstacle, made a hole of its region
 COVER_STEP = 20  # the grid obstacles() looks on
 COVER_MAX = 12  # holes Placer.cover makes at most per region
+COVER_MIN = 40  # an obstacle narrower than this both ways is too small to hide behind: no hole (a trial's rocks gave 20)
 
 
 def winding(points) -> float:
@@ -85,7 +86,30 @@ def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float
         x0, z0 = at(min(g[0] for g in group), min(g[1] for g in group))
         x1, z1 = at(max(g[0] for g in group), max(g[1] for g in group))
         boxes.append((x0 - COVER_STEP / 2, z0 - COVER_STEP / 2, x1 + COVER_STEP / 2, z1 + COVER_STEP / 2))
-    return boxes, edge
+    return merge_boxes(boxes, COVER_STEP), edge
+
+
+def _overlap(a, b, gap: float = 0.0) -> bool:
+    return a[0] <= b[2] + gap and b[0] <= a[2] + gap and a[1] <= b[3] + gap and b[1] <= a[3] + gap
+
+
+def merge_boxes(boxes, gap: float = 0.0) -> list[tuple[float, float, float, float]]:
+    """Boxes (x0, z0, x1, z1) that overlap or lie within `gap` of each other made one: a lumpy rock's top breaks into
+    several pieces, and one obstacle should be one hole (a trial got two or three nested holes per rock)."""
+    out = [tuple(b) for b in boxes]
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(out)):
+            for j in range(i + 1, len(out)):
+                if _overlap(out[i], out[j], gap):
+                    a, b = out[i], out.pop(j)
+                    out[i] = (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
+                    merged = True
+                    break
+            if merged:
+                break
+    return out
 
 
 TRIGGER_AT_ONCE = 3  # squadron +0x29: spawn at level start (a stock squad's 1 waits in its own level's zone)
@@ -195,7 +219,8 @@ class Placer:
         """Makes the obstacles inside a squad's region holes of it (obstacles()). A smart squad's members only move
         to the corners of holes and inward corners of their region, where the hero can't see them; in a rectangle
         over open floor they stand and fire (decomp MSR mod #6). Obstacles a hole already covers are left. Returns
-        {"region", "holes": made, "edge": obstacles touching the edge, "old": holes it had, "convex"}."""
+        {"region", "holes": made, "edge": obstacles touching the edge, "old": holes it had, "small": obstacles too
+        small to hide behind (under COVER_MIN across), "convex"}."""
         region = squadron.get("fields", {}).get("region")
         corners = self.corners(region)
         if len(corners) < 3:
@@ -206,14 +231,25 @@ class Placer:
         ground = sy if ground is None else ground
         boxes, edge = obstacles(mesh, poly, ground)
         holes = self.holes_of(region)
-        old = [(o["pos"][0], o["pos"][2]) for h in holes for o in self.corners(h)]
-        made = 0
-        for x0, z0, x1, z1 in boxes:
-            if any(x0 <= x <= x1 and z0 <= z <= z1 for x, z in old) or made >= COVER_MAX:
+        old = []  # the box round each hole the region has (another squad sharing the region made them, or a re-run)
+        for h in holes:
+            pts = [(o["pos"][0], o["pos"][2]) for o in self.corners(h)]
+            if pts:
+                old.append((min(x for x, _ in pts), min(z for _, z in pts), max(x for x, _ in pts),
+                            max(z for _, z in pts)))
+        made = small = 0
+        for box in boxes:
+            x0, z0, x1, z1 = box
+            if any(_overlap(box, o) for o in old) or made >= COVER_MAX:
                 continue  # a hole is there already
+            if x1 - x0 < COVER_MIN and z1 - z0 < COVER_MIN:
+                small += 1
+                continue
             self.hole([(x0, ground, z0), (x0, ground, z1), (x1, ground, z1), (x1, ground, z0)], region)
+            old.append(box)
             made += 1
-        return {"region": region, "holes": made, "edge": edge, "old": len(holes), "convex": convex(poly)}
+        return {"region": region, "holes": made, "edge": edge, "old": len(holes), "small": small,
+                "convex": convex(poly)}
 
     def patrol_point(self, pos, example) -> dict:
         """A patrol point with the next free node number (they run 1..N with no gaps)."""

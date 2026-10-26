@@ -17,15 +17,21 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 7. Reshaping a level later: export it again from Blender and `reimport_geometry` it into the level (one undo step).
    Its objects stay; the result lists the ones the new shape left buried, floating, sunk or over a pit.
    `settle_objects` puts those with a floor back on it; move the rest yourself.
-8. `validate` (it includes that placement check) until there are no errors, then `play` (builds, installs and starts the game in the level). You can't
-   play it yourself: say what to try, and the player reports back.
+8. `validate` (it includes that placement check) until there are no errors, then `play` (builds, installs and
+   starts the game in the level). You can't play it yourself: say what to try, and the player reports back. To build
+   and install only, `play` with `launch` false: give the player the `command` it returns, word for word (the level
+   goes by its pack name, `level_<name>`; a command you write yourself may start nowhere). Without the MCP tools,
+   Studio's command line does the same: `jfgstudio validate <proj>`, `jfgstudio test <proj> --no-launch`.
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender, **version 0.5.1 or newer** (`jfg64.__version__`): it knows the game's
+The jfg64 add-on is **required** in Blender, **version 0.5.2 or newer** (`jfg64.__version__`): it knows the game's
 surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
 Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
-Through a Blender MCP server, run Python in Blender and use it rather than writing your own:
+Through a Blender MCP server, run Python in Blender and use it rather than writing your own. With no Blender
+running (the MCP server finds none), run your script in the background instead, which loads the add-on:
+`blender --background --factory-startup --addons jfg64 --python build.py` (end the script with
+`bpy.ops.wm.save_as_mainfile` to keep the .blend).
 
 ```python
 import bpy, jfg64
@@ -45,8 +51,19 @@ ground = jfg64.terrain("valley", size=(2400, 2400), height=110, seed=7, style="h
                        material=jfg64.game_texture_material(0x160C))   # a game texture (see Themes)
 jfg64.terrain_report(ground)                               # {"walkable", "steepest", "triangles", ...}
 spots = jfg64.scatter_points(ground, 12, min_gap=220, max_slope=25, avoid=[(0, -900, 260)])
-rocks = [jfg64.rock(f"rock{i}", radius=60, seed=i, location=p) for i, p in enumerate(spots)]
+rocks = [jfg64.rock(f"rock{i}", radius=60, seed=i, location=p) for i, p in enumerate(spots)]   # landmarks, steps
+cover = jfg64.rock("cover", radius=95, squash=1.2, location=(x, y, jfg64.ground_height(level, x, y, below=z + 100)))
 ```
+
+- **Heights**: `ground_height(obj, x, y)` is the highest surface there: under a roofed room that's the roof's top.
+  Pass `below` (the room's floor + 100) for the floor. Studio's `surface_at` is the same: pass its `below`. Off the
+  mesh it's None (a rock there raises an error naming it).
+- **Cover** a squad can hide behind must hide it: about 100 tall and 80 across or more (rock radius 90+, squash
+  1.0-1.4). The guide's radius-60 rocks come out about 40 tall: landmarks and steps, not cover (`add_cover` warns
+  and makes no hole for them).
+- **A door in a passage** needs level floor: give that link a `"landing": 160` (level floor at each end before
+  the slope) and stand the door on it, inside the passage, never in the room's mouth (a wider opening: the player
+  walks round it). `check_placement` says when a door is narrower than its passage or on a slope.
 
 - **Colour**: the game draws only the vertex colours (the `Col` layer the bake writes), never a material's colour.
   Bake with `tint=True` to carry each material's Base Color in; untextured geometry is otherwise grey.
@@ -132,17 +149,26 @@ Describe things by what they do; the catalog's names are the player's (never wri
 
 | What | How | Notes |
 |---|---|---|
-| Ammo | `place` `ammo` (0xE8 full, 0xCF extra, 0x17E clip) | `weapon` 0-15: taken only by a hero who has that weapon |
+| Ammo | `place` `ammo` (0xE8 full, 0xCF extra, 0x17E clip) | `weapon`: taken only by a hero who has that weapon (numbers below) |
 | Health | `place` `health` (0xA9) | `amount` 0 small, 1 medium, 2 full; after fights |
+| Health upgrade | `place` `health` 0xE9 | a reward for exploring; `place` gives it its own `upgrade` number (saved as game flag 0x2F + n, a pack's 56-80) |
 | Jetpack fuel | `place` `refuel` (0xB9) | its cylinder (`radius`, `bottom`, `top`) and `maxFuel`; by climbs and gaps |
 | Crates, barrels | `place` `damagecrate` (0x135 crate, 0x168 explosive drum) | breakable; rests on the floor; drums explode |
 | Scenery | `place` a `staticprop` type (behaviour 54: `object_types` behaviour=54) | crates, trees, torches, huts, crystals: solid |
-| Light, glow, beams | `light`, `glow`, `lightbeam` | lights are limited per level (header light slots) |
+| Light, glow, beams | `light`, `glow`, `lightbeam` | up to the level header's `lights` slots (24 unless set); 50 glows |
 | Sound | `audio` | wind, water, machines where they are |
 | Flowing water, lava | `texscroll` | makes a surface's texture move |
-| Chest, keys | `chest`, `place_key_door` | rewards and gates |
+| Chest, keys | `chest`, `place_key_door` | rewards and gates; face a chest the way the player comes in (`facing` [x, z] of the doorway) |
 | Breakable glass | `place_glass(level, a, b, bottom)` (0x12B) | a square pane: fits a square window opening in a wall; never in the open |
-| Drops | squadron `drop` | 20-22 health, 23 health upgrade, 1-16 a weapon's pickup |
+| Drops | squadron `drop` | 20-22 health, 23 health upgrade, 1-16 a weapon's pickup (weapon n is drop n + 1) |
+
+Weapon numbers (ammo's `weapon`, drops, chests): 1 homing missiles, 2 machine gun, 3 shotgun, 4 electricity,
+5 rockets, 6 flamethrower, 7 sniper, 8 grenades, 9 shuriken, 10 fish food, 11 timed mines, 12 remote mines,
+13 flares, 14 cluster bombs (the chest's contents name them; 0 is in no chest, probably the starting gun).
+
+**Facing** (`facing` on `place` and `update_object`): degrees, 0 towards -z, 90 towards -x, 180 towards +z,
+270 towards +x (counter-clockwise seen from above), or an [x, z] point to face. **Music**: `stock_levels` lists
+each game level's `tune`; `stock_level_textures` gives its header (music, fog, ambience) to match a theme's mood.
 
 Enemies besides ants (`place_squad` with the type's id; `object_types` names them):
 
@@ -232,8 +258,10 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   of holes (obstacles cut out of the region) and inward corners of the region, where the hero can't see them. In a
   rectangle over open floor they stand and fire. `place_squad` makes every block, crate or pillar inside the region
   a hole (`add_cover` does it for a squad made before; `validate` warns: `squad-cover`); members also keep out of
-  holes. So give a squad's area things to hide behind, and keep obstacles off the region's edge (cut the outline
-  round those). Play-tested: ants in a counter-clockwise region with two crates made holes run between cover,
+  holes. So give a squad's area things to hide behind (about 100 tall and 80 across: smaller ones get no hole), and
+  keep obstacles off the region's edge. Keep a region to **4 corners**: only those are play-tested (`validate`
+  notes others), so move an edge clear of an obstacle rather than cutting round it. Each obstacle gets one hole, and
+  squads sharing a region share its holes. Play-tested: ants in a counter-clockwise region with two crates made holes run between cover,
   turn and chase; in the same region without holes they crouched and fired. Patrols walking their route are
   play-tested too (watch one with the port's Tools > Cheats > Enemies ignore you). `level_preview` draws patrol
   routes in blue and holes pink and crossed.

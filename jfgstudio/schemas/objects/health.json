@@ -12,6 +12,6 @@
  "fields": [
   {"name": "amount", "offset": "0x0A", "type": "s8", "enum": {"0": "small (1 unit)", "1": "medium (5 units)", "2": "full"}, "description": "how much health (ignored by the upgrade)"},
   {"name": "respawn", "offset": "0x0B", "type": "s8", "description": "respawn delay in seconds after it is taken; 0 = gone for good"},
-  {"name": "upgrade", "offset": "0x0C", "type": "u8", "description": "upgrade only: which one (saved as game flag 0x2F + n); give each its own n"}
+  {"name": "upgrade", "offset": "0x0C", "type": "u8", "description": "upgrade only: which one, saved as game flag 0x2F + n: a pack's are 56-80 (flags 103-127), each its own; place picks a free one"}
  ]
 }

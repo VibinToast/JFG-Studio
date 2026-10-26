@@ -33,8 +33,11 @@ _EXAMPLE = {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxIt
 
 
 _RGB = {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3}
-_FACING = {"type": "number", "description": "facing in degrees, 0 = towards -z (as start points face); written into "
-                                            "the type's yaw field in its own angle steps"}
+_FACING = {"anyOf": [{"type": "number"}, {"type": "array", "items": {"type": "number"}}],
+           "description": "facing in degrees: 0 towards -z (as start points face), 90 towards -x, 180 towards +z, "
+                          "270 towards +x (counter-clockwise seen from above); or an [x, z] point to face, such as "
+                          "the doorway the player comes in by (chests, switches). Written into the type's yaw field "
+                          "in its own angle steps"}
 
 
 def _doc_schema(name: str) -> dict:
@@ -315,7 +318,9 @@ TOOLS = [
            "geometry": {"type": "boolean", "description": "also check placement against the geometry (default "
                                                           "true)"}}),
     _tool("build", "Build the .nrm pack.", lambda s, a: s.build(a.get("out")), {"out": {"type": "string"}}),
-    _tool("play", "Build, install into the port and start the game in a level, for the player to play.",
+    _tool("play", "Build, install into the port and start the game in a level, for the player to play. With launch "
+          "false it builds and installs only: give the player the \"command\" it returns (the exact one that starts "
+          "the level; never write your own).",
           lambda s, a: s.play(a.get("level"), a.get("start_point", 0), a.get("character", "juno"),
                               a.get("launch", True)),
           {"level": _LEVEL, "start_point": {"type": "integer"},

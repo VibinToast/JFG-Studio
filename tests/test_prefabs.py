@@ -128,6 +128,22 @@ class Cover(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.placer().cover(self.mesh, {"pos": [0, 0, 0], "fields": {"region": 99}})
 
+    def test_one_hole_per_obstacle_and_none_for_pebbles(self):
+        from tests.test_agent import KILL, QuadMesh, _block, _quad
+        # a lumpy rock: two tops 40 apart with a dip between (two pieces), and a pebble too small to hide behind
+        rock = _block(-120, -60, -60, 20, 0, 90) + _block(-40, -60, 20, 20, 0, 90) + _block(-60, -60, -40, 20, 0, 30)
+        pebble = _block(144, 144, 158, 158, 0, 60)  # round one grid point
+        mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + rock + pebble, (), KILL)
+        squad = next(o for o in self.squad(None) if o["type"] == "stock:objtype/0x4F")
+        placer = self.placer()
+        got = placer.cover(mesh, squad)
+        self.assertEqual((got["holes"], got["small"]), (1, 1))
+        self.keep(placer)
+        other = self.placer()  # another squad sharing the region (a flying one): no holes over the first's
+        self.assertEqual(other.cover(mesh, squad)["holes"], 0)
+        self.assertEqual(prefabs.merge_boxes([(0, 0, 10, 10), (30, 0, 40, 10), (100, 0, 110, 10)], 20),
+                         [(0, 0, 40, 10), (100, 0, 110, 10)])
+
     def test_hole_drawn_by_hand(self):
         placer = self.placer()
         area = placer.polygon([(2000, 0, 2000), (2600, 0, 2000), (2600, 0, 2600), (2000, 0, 2600)])

@@ -37,7 +37,8 @@ NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way 
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = squads.PATROL_NEAR  # place_patrol moves a squadron farther than this from its route to its first node
-EXPLOSIVE_DRUM, DRUM_SIZE = 0x168, 24  # most of the game's explosive drums are size 24 (its crates 39)
+EXPLOSIVE_DRUM, DRUM_SIZE = 0x168, 24
+DOOR_SLACK = 40  # a passage at most this much wider than its door (both sides together)  # most of the game's explosive drums are size 24 (its crates 39)
 FLYER_CRUISE = 150  # flying squads cruise this far over the floor (the game's: about 150)
 FLYER_ROOM = 60  # and stay this far under a roof
 PATROL_BEHAVIOUR, PATROL_MODE = squads.PATROL_BEHAVIOUR, squads.PATROL_MODE
@@ -255,12 +256,12 @@ class Session:
         return d
 
     def stock_levels(self, search: str | None = None, world: int | None = None) -> dict:
-        """The game's own levels (from the catalog) as "id: name (world w, sky s)"; `search` filters by name, `world` by
-        world. Exits and entry levels name them stock:level/<id>; set_level's `sky` takes a level's sky number (-1 is
-        none: black above)."""
+        """The game's own levels (from the catalog) as "id: name (world w, sky s, tune t)"; `search` filters by name,
+        `world` by world. Exits and entry levels name them stock:level/<id>; set_level's `sky` takes a level's sky
+        number (-1 is none: black above) and its header's "tune" a level's music."""
         if self.catalog() is None:
             raise AgentError(f"the catalog is not available ({self._catalog_error})")
-        out = [f"{lv['id']}: {lv['name']} (world {lv['world']}, sky {lv.get('sky', -1)})"
+        out = [f"{lv['id']}: {lv['name']} (world {lv['world']}, sky {lv.get('sky', -1)}, tune {lv.get('tune')})"
                for lv in self._catalog.levels()
                if (not search or search.lower() in lv["name"].lower()) and (world is None or lv["world"] == world)]
         return {"levels": out[:LIST_LIMIT * 3], "newGame": NEW_GAME_LEVEL,
@@ -327,8 +328,9 @@ class Session:
                          "repeats": "both" if all(rep) else "across" if rep[0] else "up" if rep[1] else "no",
                          "size": [tex[t]["width"], tex[t]["height"]], "words": tex[t]["words"]})
         return {"png": lib.sheet([int(r["id"], 16) for r in rows]), "level": f"{lv['id']}: {lv['name']}",
-                "world": lv["world"], "textures": rows,
-                "note": "the picture shows them in this order, left to right, with each id under it"}
+                "world": lv["world"], "textures": rows, "header": lv.get("header", {}),
+                "note": "the picture shows them in this order, left to right, with each id under it. header: the "
+                        "level's music (tune), fog and ambience, for set_level's header to match its mood"}
 
     def _layout_of(self, mesh) -> tuple[dict, bytes]:
         from jfgstudio import layout_study
@@ -676,9 +678,42 @@ class Session:
         return {"png": png, "legend": legend}
 
     def check_placement(self, level: str) -> list[dict]:
-        """The level's objects that should stand on the floor but are buried, floating, sunk or over a pit."""
+        """The level's objects that should stand on the floor but are buried, floating, sunk or over a pit, and
+        doors narrower than the passage they stand in."""
         lv = self._level(level)
-        return placement.check(self._mesh(level), lv.objects["objects"], self.schemas, self._behaviours())
+        mesh = self._mesh(level)
+        found = placement.check(mesh, lv.objects["objects"], self.schemas, self._behaviours())
+        return found + self._door_gaps(lv, mesh)
+
+    def _door_gaps(self, lv: proj.Level, mesh) -> list[dict]:
+        """Doors with room to walk round them: the walls either side, along the door's own width at waist height,
+        are further apart than the door is wide by more than DOOR_SLACK (a trial's key door stood in a room's
+        mouth, twice its width: play-tested)."""
+        from jfgstudio.gui.viewport import raycast
+        out = []
+        for o in lv.objects["objects"]:
+            if self._key(o) != "door":
+                continue
+            schema = obj.schema_for(o, self.schemas, self._behaviours())
+            f = schema.role("yaw") if schema else None
+            oid = obj.stock_id(o)
+            size = self.model_size(oid) if oid is not None else None
+            if f is None or size is None:
+                continue
+            a = obj.angle_of(f, o.get("fields", {}).get(f.name, 0))
+            across = (math.cos(a), 0.0, -math.sin(a))  # the model's x at facing a (0: towards -z, x across)
+            x, y, z = (float(v) for v in o["pos"])
+            at = (x, y + min(100.0, size["y"] / 2), z)
+            sides = [raycast(mesh.collision, at, (s * across[0], 0.0, s * across[2])) for s in (1, -1)]
+            gap = None if None in sides else sides[0] + sides[1]
+            if gap is None or gap > size["x"] + DOOR_SLACK:
+                finding = {"uid": o["uid"], "pos": list(o["pos"]),
+                           "problem": "the passage is wider than the door: the player walks round it",
+                           "door": size["x"], "passage": round(gap) if gap is not None else "open on a side"}
+                if o.get("name"):
+                    finding["name"] = o["name"]
+                out.append(finding)
+        return out
 
     def settle_objects(self, level: str, uids: list[str] | None = None) -> dict:
         """Puts objects back on the floor where check_placement found one for them (all of its findings, or `uids`),
@@ -909,15 +944,22 @@ class Session:
               on_floor: bool = True, lift: float = 0, example=None, target: str | None = None,
               facing: float | None = None) -> list[dict]:
         """One object. A type that isn't fully decoded starts from a stock entry (from the catalog, or `example`).
-        `facing`: degrees, 0 = towards -z (as start points face), for the type's yaw field in its own steps."""
+        `facing`: degrees, 0 = towards -z (as start points face), for the type's yaw field in its own steps; or an
+        [x, z] point to face (a chest faces the way the player comes in)."""
         lv = self._level(level)
         oid, schema, kind = self._type(type)
         checked = self._fields(schema, fields)
         if oid == EXPLOSIVE_DRUM and "size" not in checked:
             checked["size"] = DRUM_SIZE  # the game's drums are smaller than its crates (the schema's default)
-        if facing is not None:
-            checked.update([self._facing(schema, facing)])
+        if oid == val.HEALTH_UPGRADE and "upgrade" not in checked:  # its own number, saved as a pack's game flag
+            taken = self._flags_in_use()
+            flag = next((f for f in val.PACK_FLAGS if f not in taken), None)
+            if flag is None:
+                raise AgentError("the pack has used every game flag a health upgrade can take (103-127)")
+            checked["upgrade"] = flag - val.UPGRADE_FLAG
         at = self._pos(lv, pos, schema, on_floor, lift)
+        if facing is not None:
+            checked.update([self._facing(schema, facing, (at[0], at[2]))])
         ex = self._example(oid, schema, example)
         placer = prefabs.Placer(lv, self.schemas, self._behaviours())
         try:
@@ -938,13 +980,18 @@ class Session:
         return self._add(lv, placer.made, f"place {name or o['uid']}")
 
     @staticmethod
-    def _facing(schema, degrees) -> tuple[str, int]:
-        """(yaw field, value) for a facing in degrees, in whatever angle steps the type's yaw field takes."""
+    def _facing(schema, degrees, at=None) -> tuple[str, int]:
+        """(yaw field, value) for a facing in degrees (0 towards -z, 90 towards -x, 180 towards +z, 270 towards +x:
+        counter-clockwise seen from above), in whatever angle steps the type's yaw field takes; or for an [x, z]
+        point to face from `at` ((x, z))."""
         f = schema.role("yaw") if schema else None
         if f is None:
             raise AgentError(f"{schema.key if schema else 'this type'} has no facing (no yaw field)")
+        if isinstance(degrees, list | tuple) and len(degrees) >= 2 and at is not None:
+            x, z = float(degrees[0]), float(degrees[-1])
+            return f.name, obj.value_of_angle(f, math.atan2(at[0] - x, at[1] - z))  # as _toward
         if isinstance(degrees, bool) or not isinstance(degrees, int | float):
-            raise AgentError("facing is in degrees")
+            raise AgentError("facing is in degrees, or an [x, z] point to face")
         return f.name, obj.value_of_angle(f, math.radians(float(degrees)))
 
     def _target(self, target: str) -> None:
@@ -1077,7 +1124,7 @@ class Session:
     def add_cover(self, level: str, squadron: str) -> list[dict]:
         """Makes the obstacles inside a squad's region holes of it (prefabs.Placer.cover): a smart squad's members
         only move to the corners of holes and inward corners of their region (decomp MSR mod #6). Each hole is the box
-        around one obstacle; obstacles touching the region's edge are left (cut the outline round them instead).
+        around one obstacle; obstacles touching the region's edge are left (move the edge clear of them).
         Warns when the region still gives no cover."""
         lv = self._level(level)
         sq = self._object(lv, squadron)
@@ -1090,11 +1137,15 @@ class Session:
         except ValueError as e:
             raise AgentError(str(e)) from e
         made = self._add(lv, placer.made, "cover") if placer.made else []
+        if got["small"]:
+            made.append({"warning": f"{got['small']} obstacle(s) in region {got['region']} are under "
+                                    f"{prefabs.COVER_MIN} across: too small to hide behind, so no hole. Cover the "
+                                    "player can't see over is about 100 tall and 80 across (rock radius 90+)"})
         if not got["holes"] and not got["old"] and got["convex"] and self._behaviour(sq) == SMART:
             made.append({"warning": f"region {got['region']} has no obstacle inside it and no inward corner: its "
                                     "smart squad finds no cover to move to and stands and fires. Put a block or crate "
-                                    "in it (then add_cover), or give the region an inward notch"
-                                    + (f" ({got['edge']} obstacle(s) touch its edge: cut the outline round them)"
+                                    "in it (then add_cover)"
+                                    + (f" ({got['edge']} obstacle(s) touch its edge: move the edge clear of them)"
                                        if got["edge"] else "")})
         return made
 
@@ -1375,6 +1426,8 @@ class Session:
                 if self._key(o) == "target"}
         used |= {a.get("flag") for t in scripts.load_triggers(self.p) for a in t.get("then", [])
                  if a.get("do") == "flag"}
+        used |= {val.UPGRADE_FLAG + o.get("fields", {}).get("upgrade", 0) for lv in self.p.levels.values()
+                 for o in lv.objects["objects"] if obj.stock_id(o) == val.HEALTH_UPGRADE}
         return {f for f in used if isinstance(f, int)}
 
     def _move_squad(self, lv: proj.Level, sq: dict, to) -> list[dict]:
@@ -1434,7 +1487,8 @@ class Session:
                 raise AgentError("the pack has used every flag it can (103-127, 301-351): use saved false")
         fields = {"doorId": door_id, "gameFlag": game_flag}
         if switch_facing is not None:
-            fields.update([self._facing(target_schema, switch_facing)])
+            fields.update([self._facing(target_schema, switch_facing,
+                                        (float(switch_pos[0]), float(switch_pos[-1])))])
         placer.single(0x48, self._pos(lv, switch_pos, target_schema, True, switch_lift), name="door switch",
                       fields=fields)
         if door == "new":
@@ -1443,7 +1497,7 @@ class Session:
                 raise AgentError(f"{door_type!r} is not a door type (behaviour 7)")
             d_fields = {"doorId": door_id}  # no key value: the switch's lock does the locking
             if door_facing is not None:
-                d_fields.update([self._facing(d_schema, door_facing)])
+                d_fields.update([self._facing(d_schema, door_facing, (float(door_pos[0]), float(door_pos[-1])))])
             d = placer.single(d_oid, self._pos(lv, door_pos, d_schema, True), self._example(d_oid, d_schema, None),
                               name="switch door", fields=d_fields)
             d["schema"] = "door"
@@ -1647,7 +1701,8 @@ class Session:
         changes = []
         values = self._fields(schema, fields)
         if facing is not None:
-            values.update([self._facing(schema, facing)])
+            where = pos if pos is not None else o["pos"]
+            values.update([self._facing(schema, facing, (float(where[0]), float(where[-1])))])
         for k, v in values.items():
             changes.append(edit.Change(uid, ("fields", k), o.get("fields", {}).get(k), v))
         if pos is not None:
@@ -1846,7 +1901,8 @@ class Session:
         except PermissionError as e:
             raise AgentError(f"{e.filename} is in use: the game is probably running with the pack loaded. Ask the "
                              "player to close it, then try again") from e
-        return {"installed": str(installed), "log": lines}
+        command = next((ln[len(testrun.COMMAND):] for ln in lines if ln.startswith(testrun.COMMAND)), None)
+        return {"installed": str(installed), "command": command, "log": lines}
 
 
 PATTERNS = ("solid", "noise", "stripes", "spots", "heat")
