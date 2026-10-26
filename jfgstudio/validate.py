@@ -287,7 +287,7 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
             out.append(Problem(ERROR, "uid", of, f"uid {uid} is used {n} times", uid))
 
     total = obj.LIST_HEADER_SIZE
-    squadrons, members, doors, region_corners, starts = [], [], [], defaultdict(set), []
+    squadrons, members, doors, region_corners, starts, switches = [], [], [], defaultdict(set), [], []
     patrol_nodes, patrol_links, counts = [], [], Counter()
     for o in items:
         uid = o["uid"]
@@ -324,6 +324,8 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
             members.append(o)
         elif key == "door":
             doors.append(o)
+        elif key == "target":
+            switches.append(o)
         elif key == "regionpoint" and "region" in fields:
             region_corners[fields["region"]].add(fields.get("corner"))
         elif key == "startpoint":
@@ -345,7 +347,7 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
                                                    f"0x{obj.LIST_BUFFER_SIZE:X} (header included)"))
     if stock_base:
         return out
-    out += _check_squads(squadrons, members, doors, region_corners, of)
+    out += _check_squads(squadrons, members, doors, region_corners, of, switches)
     out += _check_patrols(patrol_nodes, patrol_links, of)
     for key, limit, what in (("camerazone", 24, "camera zones (the rest are ignored)"),
                              ("texscroll", 16, "texture scrolls (the rest are dropped)"),
@@ -389,7 +391,7 @@ def _check_patrols(nodes, links, of) -> list[Problem]:
     return out
 
 
-def _check_squads(squadrons, members, doors, region_corners, of) -> list[Problem]:
+def _check_squads(squadrons, members, doors, region_corners, of, switches=()) -> list[Problem]:
     out = []
     ids = Counter(s.get("fields", {}).get("squadronId") for s in squadrons)
     for sid, n in ids.items():
@@ -435,8 +437,9 @@ def _check_squads(squadrons, members, doors, region_corners, of) -> list[Problem
                                                            "(members without a squadron are never spawned)", m["uid"]))
     for d in doors:
         door = d.get("fields", {}).get("doorId", 0)
-        if door and not any(s.get("fields", {}).get("doorId") == door for s in squadrons):
-            out.append(Problem(INFO, "door-link", of, f"door id {door} is not locked by any squadron in this list",
+        if door and not any(s.get("fields", {}).get("doorId") == door for s in [*squadrons, *switches]):
+            out.append(Problem(INFO, "door-link", of, f"door id {door} is not locked by any squadron or switch in "
+                                                      "this list",
                                d["uid"]))
     for region, corners in region_corners.items():
         if corners != set(range(len(corners))):

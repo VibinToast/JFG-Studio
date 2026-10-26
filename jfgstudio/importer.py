@@ -49,8 +49,8 @@ def check(path: str | Path, catalog, log=None) -> Report:
     lost = lost_collision(track)
     if lost:
         out.append(f"error: {lost} colliding triangles come after non-colliding (nocollide) ones in their segment: the "
-                   "game gives them no collision (the player falls through). Don't use nocollide surfaces until the "
-                   "importer puts them last")
+                   "game gives them no collision (the player falls through). The importer puts them last within a draw "
+                   "pass: make the see-through surfaces after them colliding, or the decoration solid")
     report = Report(not lost, out)
     try:
         from jfgstudio.gui.viewport import TrackMesh  # numpy only; no window needed

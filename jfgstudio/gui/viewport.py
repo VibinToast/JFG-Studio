@@ -289,6 +289,7 @@ def _surface(mat: dict) -> str:
     """The game surface a material makes, from the same words and flags tracks.py reads."""
     name = mat.get("name", "").lower()
     flags = (mat.get("extras") or {}).get("batchFlags", 0)
+    tri_flags = (mat.get("extras") or {}).get("triangleFlags", 0)
     words = set("".join(ch if ch.isalnum() else " " for ch in name).split())
     if "kill" in words or flags & 0x80000000:
         return "kill"
@@ -298,8 +299,10 @@ def _surface(mat: dict) -> str:
         return "lava"
     if "collider" in words or "hidden" in words or flags & 0x400:
         return "hidden"
-    if "nocollide" in words:
+    if "nocollide" in words or tri_flags & 0x80:
         return "nocollide"
+    if "ledge" in words or tri_flags & 0x02:
+        return "ledge"  # solid: a top whose edges the heroes can grab
     return "solid"
 
 

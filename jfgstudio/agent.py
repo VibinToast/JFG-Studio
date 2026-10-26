@@ -29,15 +29,18 @@ from jfgstudio import validate as val
 SQUADRON_ID = prefabs.SQUADRON_ID
 DOOR_LOCKED = 1  # a door's keyLock: locked until its squadrons are dead (or a switch opens it)
 LEVEL_KEYS = ("name", "track", "sky", "music", "planet", "ambient", "header")
-SURFACES = ("solid", "lava", "hidden", "water", "kill", "nocollide")  # TrackMesh's kinds; the first three are floor
-FLOOR_KINDS = ("solid", "lava", "hidden")
+SURFACES = ("solid", "ledge", "lava", "hidden", "water", "kill", "nocollide")  # TrackMesh's kinds; 4 are floor
+FLOOR_KINDS = ("solid", "ledge", "lava", "hidden")
 LIST_LIMIT = 150  # catalog types listed at once
 NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way back to the game
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
+PATROL_NEAR = 300  # place_patrol moves a squadron farther than this from its route to the route's first node
 PATROL_MODE = 6  # a squadron's kind (low 4 bits) that walks the patrol network (decomp: "Squad patrol network")
+IMAGE_PIXELS = 2048  # a new image is stored as one 16-bit texture of at most 4 KB: bigger ones are shrunk
 LAVA_FLOOR_DEPTH = 100  # lava needs a solid floor at most this far under it, or Juno falls through
-DOOR_CLEARANCE = 120  # a door placed by [x, z] stands on the lowest floor with this much room above it
+DOOR_CLEARANCE = 120  # doors, exits and start points placed by [x, z]: the lowest floor with this much room above
+OPEN_FLOOR_KEYS = ("door", "exit", "startpoint")
 SPREAD_TRIES = 24  # place_squad looks this many places around the centre for a dry spot for each member
 
 
@@ -65,6 +68,7 @@ class Session:
         self._sizes: dict[int, dict | None] = {}
         self._slots: dict[int, list] = {}
         self._lost: dict[tuple, int] = {}
+        self._notes: list[str] = []  # what placing chose where there was a choice; added to the call's result
         self._model_data = None
         if path is not None:
             self.open(path)
@@ -361,7 +365,7 @@ class Session:
             if kill is not None and (at["floor"] is None or kill > at["floor"]):
                 at["kill"] = round(kill, 1)
             if at.get("kind") == "lava":  # Juno passes through lava: what holds him up is the solid floor under it
-                under = floor_of(kinds["solid"], x, z, at["floor"] - 1)
+                under = floor_of(np.concatenate([kinds["solid"], kinds["ledge"]]), x, z, at["floor"] - 1)
                 hidden = floor_of(kinds["hidden"], x, z, at["floor"] - 1)
                 under = max((y for y in (under, hidden) if y is not None), default=None)
                 at["underLava"] = round(under, 1) if under is not None else None
@@ -402,7 +406,7 @@ class Session:
         from jfgstudio.gui.viewport import floor_of
         mesh = self._mesh(level)
         lava = mesh.kind_triangles("lava")
-        ground = np.concatenate([mesh.kind_triangles("solid"), mesh.kind_triangles("hidden")])
+        ground = np.concatenate([mesh.kind_triangles(k) for k in ("solid", "ledge", "hidden")])
         out = []
         for t in lava:
             x, y, z = (float(v) for v in t.mean(axis=0))
@@ -454,15 +458,47 @@ class Session:
     def geometry_info(self, name: str) -> dict:
         """A geometry file's (or level's track's) size, surfaces and the game's limits it is measured against."""
         mesh = self._mesh(name)
+        images = self._glb_images(name)
         lo, hi = mesh.bounds
         far = float(max(abs(float(v)) for v in (*lo, *hi)))
         counts = {k: len(mesh.kind_triangles(k)) for k in SURFACES}
         out = {"bounds": [[round(float(v)) for v in lo], [round(float(v)) for v in hi]],
                "triangles": sum(counts.values()), "surfaces": {k: n for k, n in counts.items() if n},
-               "images": len(mesh.images), "farthest": round(far),
-               "limits": {"farthest": 32767, "imagePixels": 2048}}
+               "images": len(images), "farthest": round(far),
+               "limits": {"farthest": 32767, "imagePixels": IMAGE_PIXELS}}
+        shrunk = [n for n, (w, h) in images.items() if w * h > IMAGE_PIXELS or w & (w - 1) or h & (h - 1)]
+        if shrunk:
+            out["shrunk"] = shrunk  # the game stores them smaller: draw them at 64 x 32, 32 x 64 ...
         if far > 32767:
             out["problem"] = "a vertex is farther than 32767 units from the origin: the game can't hold it"
+        return out
+
+    def _glb_images(self, name: str) -> dict[str, tuple[int, int]]:
+        """The images the materials of a level's (or geometry file's) .glb use: name -> (width, height)."""
+        track = self.p.levels[name].level.get("track", "") if name in self.p.levels else f"pack:track/{name}"
+        if not track.startswith("pack:track/"):
+            return {}
+        path = self.p.geometry_path(track.split("/", 1)[1])
+        try:
+            from jfgformats import gltf
+            doc, blob = gltf.parse_glb(path.read_bytes(), "geometry")
+        except Exception:  # noqa: BLE001 (not a .glb the reader takes: counted as none)
+            return {}
+        used = set()
+        for m in doc.get("materials", []):
+            t = ((m.get("pbrMetallicRoughness") or {}).get("baseColorTexture") or {}).get("index")
+            if t is not None and t < len(doc.get("textures", [])) and "source" in doc["textures"][t]:
+                used.add(doc["textures"][t]["source"])
+        out = {}
+        for i in sorted(used):
+            img = doc["images"][i]
+            data = b""
+            if "bufferView" in img:
+                v = doc["bufferViews"][img["bufferView"]]
+                data = bytes(blob[v.get("byteOffset", 0):v.get("byteOffset", 0) + 24])
+            size = (int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")) \
+                if data[:8] == b"\x89PNG\r\n\x1a\n" else (0, 0)
+            out[img.get("name") or f"image{i}"] = size
         return out
 
     def import_geometry(self, src: str, name: str | None = None) -> dict:
@@ -719,8 +755,8 @@ class Session:
             return [round(x), round(float(pos[1]) + lift), round(z)]
         below = float(pos[1]) if len(pos) == 3 else None
         mesh = self._mesh(level.name)
-        if below is None and schema is not None and schema.key == "door":
-            y = self._door_floor(mesh, x, z)
+        if below is None and schema is not None and schema.key in OPEN_FLOOR_KEYS:
+            y = self._open_floor(mesh, x, z)
         else:
             y = self._floor(mesh, x, z, below)
         if y is None:
@@ -728,24 +764,36 @@ class Session:
             raise AgentError(f"no floor under ({x:g}, {z:g}){where}: check surface_at, or give on_floor false")
         return [round(x), obj.on_ground(y, schema) + round(lift), round(z)]
 
-    @staticmethod
-    def _door_floor(mesh, x: float, z: float) -> float | None:
-        """Where a door at (x, z) stands: the lowest floor with at least DOOR_CLEARANCE free above it (up to the next
-        surface: a lintel's underside, or the top of the wall when the opening's top isn't modelled). A door is the
-        one thing usually placed under something; give [x, y, z] for a door on an upper floor."""
-        from jfgstudio.gui.viewport import heights_at
+    def _open_floor(self, mesh, x: float, z: float) -> float | None:
+        """Where a door, exit or start point at (x, z) goes: the lowest dry floor with at least DOOR_CLEARANCE free
+        above it (up to the next surface: a lintel's underside, a roof, or the top of a wall whose opening's top isn't
+        modelled), so it lands inside a roofed room or doorway, not on top; floors under water, lava or a kill floor
+        are skipped (the bridge, not the river bed). With several floors there, a note says which were passed over:
+        give [x, y, z] for another."""
+        from jfgstudio.gui.viewport import floor_of, heights_at
         floors = sorted(set(heights_at(mesh.collision, x, z, facing=1).tolist()))
         surfaces = sorted(set(heights_at(mesh.collision, x, z).tolist()))
+        wet = [y for y in (floor_of(mesh.kind_triangles(k), x, z) for k in ("water", "lava", "kill")) if y is not None]
+        chosen = None
         for f in floors:
             above = next((s for s in surfaces if s > f + 1), math.inf)
-            if above - f >= DOOR_CLEARANCE:
-                return f
-        return floors[-1] if floors else None
+            if above - f >= DOOR_CLEARANCE and not any(w > f for w in wet):
+                chosen = f
+                break
+        if chosen is None and floors:
+            chosen = floors[-1]
+        if len(floors) > 1:
+            self._notes.append(f"({x:g}, {z:g}) has floors at {[round(f) for f in floors]}: placed on {round(chosen)}, "
+                               "the lowest dry one with room above it; give [x, y, z] for another")
+        return chosen
 
     def _add(self, level: proj.Level, made: list[dict], label: str) -> list[dict]:
         self._history(level).add(made, label)
         self._save()
-        return [self._describe(o) for o in made]
+        out = [self._describe(o) for o in made]
+        out += [{"note": n} for n in self._notes]
+        self._notes.clear()
+        return out
 
     def place(self, level: str, type, pos, fields: dict | None = None, name: str | None = None,
               on_floor: bool = True, lift: float = 0, example=None, target: str | None = None,
@@ -1037,6 +1085,24 @@ class Session:
                  if a.get("do") == "flag"}
         return {f for f in used if isinstance(f, int)}
 
+    def _move_squad(self, lv: proj.Level, sq: dict, to) -> list[dict]:
+        """Moves a squadron, its members and its region's corners together (on the floor) so the squadron stands at
+        `to`, as one undo step; a squadron walks the patrol route nearest to itself."""
+        f = sq.get("fields", {})
+        dx, dz = to[0] - sq["pos"][0], to[2] - sq["pos"][2]
+        group = [o for o in lv.objects["objects"] if o is sq
+                 or (self._key(o) == "squadmember" and o.get("fields", {}).get("squadron") == f.get("squadronId"))
+                 or (self._key(o) == "regionpoint" and o.get("fields", {}).get("region") == f.get("region"))]
+        changes = []
+        for o in group:
+            at = self._pos(lv, [o["pos"][0] + dx, o["pos"][2] + dz], obj.schema_for(o, self.schemas,
+                                                                                    self._behaviours()), True)
+            changes.append(edit.Change(o["uid"], ("pos",), list(o["pos"]), at))
+        self._history(lv).do(edit.Command("move squad to its patrol", changes))
+        self._save()
+        return [{"note": f"moved the squad ({len(group)} objects: squadron, members, region) by ({dx:g}, {dz:g}) "
+                         "to the route's first node: a squadron walks the route nearest to itself"}]
+
     def place_switch_door(self, level: str, switch_pos, door=None, door_type=None, door_pos=None,
                           saved: bool = True, flag: int | None = None, switch_facing: float | None = None,
                           door_facing: float | None = None, switch_lift: float = 0) -> list[dict]:
@@ -1092,6 +1158,7 @@ class Session:
         made = self._add(lv, placer.made, "switch door")
         if existing is not None and existing.get("fields", {}).get("doorId") != door_id:
             made.append(self.update_object(lv.name, existing["uid"], fields={"doorId": door_id}))
+        made.append({"note": f"the switch locks door id {door_id} itself (the door's keyLock stays 0, 'not locked')"})
         if game_flag:
             made.append({"note": f"game flag {game_flag}: set when the switch is shot (saved with the player's game)"})
         return made
@@ -1127,6 +1194,8 @@ class Session:
             nearest = min(nodes, key=lambda n: math.dist(n["pos"], sq["pos"]))
             nearest["fields"]["startAtLoad"] = 1
         made = self._add(lv, placer.made, "patrol")
+        if sq is not None and min(math.dist(n["pos"][::2], sq["pos"][::2]) for n in nodes) > PATROL_NEAR:
+            made += self._move_squad(lv, sq, nodes[0]["pos"])
         if sq is not None:
             kind = sq.get("fields", {}).get("kind")
             if kind is None and sq.get("stock") and self.catalog() is not None:
@@ -1210,7 +1279,7 @@ class Session:
             raise AgentError(f"no object {uid!r} in {level.name}")
         return o
 
-    def update_object(self, level: str, uid: str, fields: dict | None = None, pos=None, on_floor: bool = False,
+    def update_object(self, level: str, uid: str, fields: dict | None = None, pos=None, on_floor: bool | None = None,
                       name: str | None = None, target: str | None = None, facing: float | None = None) -> dict:
         """Changes an object's fields (merged), position, name or exit target, as one undo step."""
         lv = self._level(level)
@@ -1223,7 +1292,8 @@ class Session:
         for k, v in values.items():
             changes.append(edit.Change(uid, ("fields", k), o.get("fields", {}).get(k), v))
         if pos is not None:
-            changes.append(edit.Change(uid, ("pos",), list(o["pos"]), self._pos(lv, pos, schema, on_floor)))
+            floor = on_floor if on_floor is not None else len(pos) == 2  # [x, z]: onto the floor, as place does
+            changes.append(edit.Change(uid, ("pos",), list(o["pos"]), self._pos(lv, pos, schema, floor)))
         if name is not None:
             changes.append(edit.Change(uid, ("name",), o.get("name"), name or None))
         if target is not None:
@@ -1322,7 +1392,8 @@ class Session:
                 problems.append(val.Problem(val.ERROR, "collision", f"levels/{name}/level.json",
                                             f"{lost} colliding triangles of its geometry come after non-colliding "
                                             "(nocollide) ones: the game gives them no collision and the player falls "
-                                            "through. Don't use nocollide surfaces for now"))
+                                            "through. Make the decoration solid, or the see-through surfaces after "
+                                            "it colliding"))
             for name in self.p.levels:  # lava over nothing: a hole for Juno
                 try:
                     holes = self.lava_holes(name)

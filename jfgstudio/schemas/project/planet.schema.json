@@ -49,9 +49,10 @@
   },
   "entryLevel": {
    "type": "object",
+   "description": "where each hero starts the planet from the map: pack:level/<name> (a level of the project) or stock:level/<n>",
    "required": ["vela", "juno", "lupus"],
    "additionalProperties": false,
-   "properties": {"vela": {"type": "string"}, "juno": {"type": "string"}, "lupus": {"type": "string"}}
+   "properties": {"vela": {"type": "string", "description": "pack:level/<name> or stock:level/<n>"}, "juno": {"type": "string", "description": "pack:level/<name> or stock:level/<n>"}, "lupus": {"type": "string", "description": "pack:level/<name> or stock:level/<n>"}}
   }
  }
 }

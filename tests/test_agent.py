@@ -421,6 +421,20 @@ class Prefabs(AgentTest):
             self.s.place_key_door("home", "health", [0, 0], [0, 0])  # not a door
         self.assertFalse([p for p in self.s.validate()["problems"] if p["rule"] == "key"])
 
+    def test_patrol_brings_its_squad(self):
+        self.with_catalog()
+        squad = self.s.place_squad("home", [-400, -500], "0x29", members=2)
+        sq = next(o for o in squad if o.get("schema") == "squadron")
+        before = {o["uid"]: o["pos"] for o in squad if "uid" in o}
+        made = self.s.place_patrol("home", [[400, -200], [400, 200]], squadron=sq["uid"])
+        self.assertTrue(any("moved the squad" in o.get("note", "") for o in made))
+        after = {o["uid"]: o["pos"] for o in self.s.level_info("home")["objects"] if o["uid"] in before}
+        self.assertEqual(after[sq["uid"]][::2], [400, -200])  # the squadron at the first node
+        for uid, pos in before.items():  # members and region corners moved with it
+            self.assertEqual((after[uid][0] - pos[0], after[uid][2] - pos[2]), (800, 300))
+        moved = self.s.update_object("home", sq["uid"], pos=[350, -150])  # [x, z]: onto the floor by default
+        self.assertEqual(moved["pos"], [350, 8, -150])
+
     def test_switch_doors(self):
         self.with_catalog()
         first = self.s.place_switch_door("home", [0, -200], door="new", door_type="0x1AD", door_pos=[0, 0],

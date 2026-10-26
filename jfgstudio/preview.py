@@ -12,9 +12,10 @@ import numpy as np
 
 from jfgstudio import objects as obj
 
-SURFACE_RGB = {"solid": (120, 150, 105), "lava": (230, 110, 30), "hidden": (110, 110, 120), "water": (60, 120, 220),
+SURFACE_RGB = {"solid": (120, 150, 105), "ledge": (235, 200, 60), "lava": (230, 110, 30), "hidden": (110, 110, 120),
+               "water": (60, 120, 220),
                "kill": (90, 20, 30), "nocollide": (150, 140, 120)}
-DRAW_ORDER = ("kill", "solid", "hidden", "nocollide", "lava", "water")  # later kinds win where they are on top
+DRAW_ORDER = ("kill", "solid", "ledge", "hidden", "nocollide", "lava", "water")  # later kinds win where they are on top
 BACKGROUND = (16, 16, 20)
 MARKS = {  # schema key -> (colour, shape, size in pixels)
     "startpoint": ((255, 255, 255), "arrow", 6),

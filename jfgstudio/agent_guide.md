@@ -22,7 +22,7 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender, **version 0.3.0 or newer** (`jfg64.__version__`): it knows the game's
+The jfg64 add-on is **required** in Blender, **version 0.3.3 or newer** (`jfg64.__version__`): it knows the game's
 surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
 Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
 Through a Blender MCP server, run Python in Blender and use it rather than writing your own:
@@ -32,7 +32,7 @@ import bpy, jfg64
 jfg64.set_surface(bpy.data.materials["river"], "water")    # solid, water, lava, kill, collider, nocollide
 jfg64.bake_light(obj.data, obj.matrix_world, sun_dir, sun_colour, ambient, tint=True)  # one mesh
 jfg64.bake_scene(objects, tint=True)                       # several, with the scene's Sun lamp
-jfg64.budgets(objects)                                     # {"triangles", "images", "far", "surfaces"}
+jfg64.budgets(objects)                                     # {"triangles", "images", "shrunk", "far", ...}
 jfg64.export("C:/path/level.glb", collection="level_1")    # or objects=[...]; default: everything visible
 ```
 
@@ -40,9 +40,12 @@ jfg64.export("C:/path/level.glb", collection="level_1")    # or objects=[...]; d
   Bake with `tint=True` to carry each material's Base Color in; untextured geometry is otherwise grey.
 - **Spaces**: Blender's own (Z up). `sun_dir` is the direction the light travels ((0, 0, -1) = straight down);
   colours are RGB 0-1. `help(jfg64)` lists everything.
-- **Several levels in one .blend**: one collection per level, exported with `collection=`.
-- **Don't take over the player's Blender**: work in a new scene or file of your own, and leave what was open as it
-  was.
+- **Several levels in one .blend**: one collection per level, exported with `collection=`. It works from a scene of
+  your own: the window shows that scene for the export and goes back, and only that collection's objects go out
+  (never another scene's). Don't override the scene in a context yourself: that crashed Blender in a trial.
+- **Don't take over the player's Blender**: work in a new scene of your own, and leave what was open as it was.
+- **Images**: `budgets` lists in `shrunk` any image the game will shrink (over 2048 pixels, or sides that aren't
+  powers of two): redraw those at 64 x 32, 32 x 64, 32 x 32 ...
 
 Then `import_geometry` the `.glb` here. If `import jfg64` fails, the add-on isn't installed or enabled: ask the
 player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–¾ menu > Install from Disk...,
@@ -59,10 +62,11 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
 - Surfaces come from material names: `water` (swimmable surface; deep water drowns heroes who can't swim), `lava`
   (hurts), `kill` (a pit floor: falling onto it is death), `collider` (invisible but solid), `nocollide` (drawn,
   not solid). Anything else is solid floor and wall.
-- **Don't use `nocollide` for now.** The game collides only the first N triangles of each piece of the level (N =
-  how many collide), so non-colliding triangles must come last, and the importer doesn't order them yet: a trial
-  level with a few non-colliding signs lost the collision of most of its floors (play-tested). Signs and decoration
-  can simply be solid. `import_geometry` and `validate` report it as an error if it happens.
+- **`nocollide` is for decoration** (signs, grass tufts). The game looks up each triangle's collision by its place in
+  the level piece, so every colliding triangle must come before every non-colliding one; the importer (jfgformats
+  0.3.2) orders them, within each draw pass. One case it can't fix: a non-colliding opaque surface in the same piece
+  as colliding see-through ones (water, glass). `import_geometry` and `validate` report it as an error (a trial
+  level whose signs came first lost most of its floors: the player fell through).
 - **Lava needs solid ground under it.** It burns Vela and Lupus, but Juno passes through lava unhurt: for him it
   isn't there, so lava over nothing is a hole he falls through (play-tested). Model lava as a surface over a solid
   floor a little below it (30 under: he wades in it). `validate` warns about lava with no floor under it, and
@@ -88,7 +92,9 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
     `ledge` surface (`jfg64.set_surface`); the walls under its edges need nothing, as long as their top edges sit
     exactly on the top's corners: the importer finds them. The hero catches the edge while falling past it (walking
     off, or dropping beside a jump). Plain geometry has no ledges at all. The import report counts ledge edges per
-    segment and names top edges with no wall below them.
+    segment and names top edges with no wall below them; `surface_at` gives a ledge top's kind as `ledge`, and
+    `level_preview` draws ledge tops yellow. On the scale course (before ledges existed) Juno got onto 250-high
+    blocks with a plain jump: a ledge is a way up, not a barrier, unless the climb is higher than that.
 - **Facing**: `place`, `update_object` and `connect` take degrees (0 = towards -z, the way a start point at yaw 0
   faces). Types store it in their own steps: `describe_type` gives each angle field's `perTurn` (64 for angle10,
   256 for angle8, 65536 for angle16).
@@ -118,8 +124,9 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   level). Put the key somewhere the player has to reach first: a ledge, past a squad.
 - **Patrols**: `place_patrol(level, points, loop, squadron)` lays a route of nodes along the points and puts the
   squadron in patrol mode: a chain is walked there and back, a ring (`loop`) round and round. A squadron walks the
-  route nearest to itself, so keep it beside its route; stock patrols set off when the squadron is activated
-  (`start_at_load` sets off at once). Squads without a patrol stay in their region.
+  route nearest to itself: a squad more than 300 from its route is moved to the route's first node with its
+  members and region. Stock patrols set off when the squadron is activated (`start_at_load` sets off at once).
+  Squads without a patrol stay in their region.
 - **Switch doors**: `place_switch_door(level, switch_pos, door="new", door_type, door_pos)` (or `door`: a door's
   uid) places the game's shootable switch: it keeps the door locked until the player shoots it, then opens it and
   sets a game flag so it stays open after a reload (`saved` false: it locks again). Put the switch where the player
@@ -142,8 +149,10 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
 - **Mood**: `fogzone`, `light`, `glow`, and the level header's fog colour and distances (see Fog); music per level.
 - **The game's own levels**: `stock_levels` lists them (`stock:level/<id>`; `search` by name, `world`); it says
   where a new game starts, the usual way back to the game and a good place for a portal.
-- **Doors**: place one by `[x, z]` and it stands on the lowest floor there with room for a door (the bottom of its
-  opening, not the top of the wall); give `[x, y, z]` for a door on an upper floor. `describe_type <id>`'s
+- **Doors, exits and start points** placed by `[x, z]` go on the lowest dry floor there with room above it: inside
+  a roofed room or doorway, not on its roof; on a bridge, not in the river under it. Where there are several floors
+  the result has a note naming them: give `[x, y, z]` for another (an upper floor, a walkway). Other objects go on
+  the highest floor (a key on its ledge). `update_object` with `[x, z]` also puts the object on the floor. `describe_type <id>`'s
   `modelSize` gives its size and, in `from` / `to`, its box around its position. In a doorway `surface_at` returns
   the top of the wall over it: pass `below` to reach the floor.
 

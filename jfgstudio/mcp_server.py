@@ -212,7 +212,7 @@ TOOLS = [
            "arrive_start_point": {"type": "integer", "description": "arrive at this existing start point instead"}},
           ["from_level", "exit_pos", "to_level"]),
     _tool("update_object", "Change an object's fields (merged), position, name or exit target.",
-          lambda s, a: s.update_object(a["level"], a["uid"], a.get("fields"), a.get("pos"), a.get("on_floor", False),
+          lambda s, a: s.update_object(a["level"], a["uid"], a.get("fields"), a.get("pos"), a.get("on_floor"),
                                        a.get("name"), a.get("target"), a.get("facing")),
           {"level": _LEVEL, "uid": {"type": "string"}, "fields": {"type": "object"}, "pos": _POS,
            "on_floor": {"type": "boolean"}, "name": {"type": "string"}, "target": {"type": "string"},
