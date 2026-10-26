@@ -37,6 +37,7 @@ NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way 
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = squads.PATROL_NEAR  # place_patrol moves a squadron farther than this from its route to its first node
+EXPLOSIVE_DRUM, DRUM_SIZE = 0x168, 24  # most of the game's explosive drums are size 24 (its crates 39)
 FLYER_CRUISE = 150  # flying squads cruise this far over the floor (the game's: about 150)
 FLYER_ROOM = 60  # and stay this far under a roof
 PATROL_BEHAVIOUR, PATROL_MODE = squads.PATROL_BEHAVIOUR, squads.PATROL_MODE
@@ -912,6 +913,8 @@ class Session:
         lv = self._level(level)
         oid, schema, kind = self._type(type)
         checked = self._fields(schema, fields)
+        if oid == EXPLOSIVE_DRUM and "size" not in checked:
+            checked["size"] = DRUM_SIZE  # the game's drums are smaller than its crates (the schema's default)
         if facing is not None:
             checked.update([self._facing(schema, facing)])
         at = self._pos(lv, pos, schema, on_floor, lift)

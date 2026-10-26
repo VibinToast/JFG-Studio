@@ -9,7 +9,7 @@
  "status": "decoded",
  "description": "Crates, drums and other breakables. MSR 'Damage crate'.",
  "fields": [
-  {"name": "size", "offset": "0x0B", "type": "u8", "default": 64, "role": "scale", "scale": {"div": 64, "min": 0.1}, "description": "scale, 64 = normal"},
+  {"name": "size", "offset": "0x0B", "type": "u8", "default": 39, "role": "scale", "scale": {"div": 64, "min": 0.1}, "description": "scale, 64 = the model's own size; the game's crates are 30-40 (most 39), its explosive drums 24-36 (most 24): 64 is far bigger than any of them"},
   {"name": "yaw", "offset": "0x0C", "type": "u8", "unit": "angle8", "role": "yaw", "description": "facing"},
   {"name": "unused0D", "offset": "0x0D", "type": "u8", "default": 1, "description": "not read; stock writes 1"}
  ]
