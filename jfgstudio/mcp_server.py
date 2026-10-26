@@ -81,6 +81,26 @@ TOOLS = [
           "result lists those the new shape left buried, floating, sunk or over a pit.",
           lambda s, a: s.reimport_geometry(a["level"], a["path"]),
           {"level": _LEVEL, "path": {"type": "string", "description": "the new .glb"}}, ["level", "path"]),
+    _tool("game_textures", "The game's own level textures, from the player's ROM: a level painted with them carries "
+          "none (each player's game shows them). Filter by colour words, a game level or a size; each comes with "
+          "the levels that use it and its PNG path for Blender (jfg64.game_texture_material).",
+          lambda s, a: s.game_textures(a.get("words"), a.get("level"), a.get("size"), a.get("limit", 40)),
+          {"words": {"type": "array", "items": {"type": "string"},
+                     "description": "all of: a colour (green, brown, grey, blue, cyan, orange, yellow, red, pink, "
+                                    "purple, white, black) and dark / mid / bright / vivid"},
+           "level": {"type": "integer", "description": "a game level id (stock_levels) that uses it"},
+           "size": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+           "limit": {"type": "integer"}}, []),
+    _tool("stock_level_textures", "What a game level is made of: its textures by the share of the level they cover, "
+          "each mostly floor, wall or ceiling, with a picture. For a theme (\"a forest level\"), look at the game's "
+          "levels of that kind and use their textures.",
+          lambda s, a: s.stock_level_textures(a["level"], a.get("limit", 24)),
+          {"level": {"type": "integer", "description": "a game level id (stock_levels)"},
+           "limit": {"type": "integer"}}, ["level"]),
+    _tool("texture_sheet", "A picture of game textures side by side, each id under it.",
+          lambda s, a: s.texture_sheet(a["ids"]),
+          {"ids": {"type": "array", "items": {"type": "string"}, "description": "hex ids, as game_textures gives"}},
+          ["ids"]),
     _tool("level_preview", "A top-down picture of a level: the geometry shaded by height and coloured by surface, with "
           "start points, exits (their radius), squads and their regions, doors (across their facing), keys and "
           "pickups drawn on (an edit of a game level: that level's own start points and exits, grey). Up is -z. "

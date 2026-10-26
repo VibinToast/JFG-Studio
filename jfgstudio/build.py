@@ -75,6 +75,14 @@ class _Builder:
         self.catalog = Catalog(image)
         self.schemas = obj.load_schemas()
         self.problems: list[str] = []
+        self._game_textures = None
+
+    def game_textures(self):
+        """The game's textures from the player's ROM (game_textures.Library; built in the catalog the first time)."""
+        if self._game_textures is None:
+            from jfgstudio import game_textures
+            self._game_textures = game_textures.Library(self.catalog)
+        return self._game_textures
 
     # ids: fixed in the project, or appended (the expected numbers; the port's linker has the last word)
     def plan_ids(self):
@@ -184,6 +192,10 @@ class _Builder:
                 if not 0 <= k < slots:
                     raise BuildError([f"kinds/{name}.json: texture slot {k}: the base model has {slots}"])
                 png_bytes = (self.p.path / "kinds" / name / file).read_bytes()
+                if self.game_textures().game_art(png_bytes):
+                    raise BuildError([f"kinds/{name}/{file}: it is one of the game's own images, which a pack can't "
+                                      "carry (each player has them in their own game). Paint the slot yourself, or "
+                                      "leave it out and the kind keeps its base's texture there"])
                 from jfgformats import png as pngmod
                 w, h, _ = pngmod.read_png(png_bytes)
                 ref = f"texture_kind_{name}_{k}"
@@ -221,7 +233,16 @@ class _Builder:
         for name, tid in self.track_ids.items():
             glb = self.p.geometry_path(name)
             self.log(f"track {name}: importing {glb.name} as track {tid}")
-            result = self.tracks.import_track(data, str(glb), track_id=tid, log=self.log)
+            ready, used = self.game_textures().prepare_glb(glb)
+            if used:
+                self.log(f"track {name}: {len(set(used))} of the game's level textures, named by number (the player's "
+                         "own game shows them; the pack carries none)")
+            result = self.tracks.import_track(data, str(ready), track_id=tid, log=self.log, stock_textures=True)
+            art = [key for key, png in result.get("newTextures", {}).items() if self.game_textures().game_art(png)]
+            if art:
+                raise BuildError([f"geometry/{glb.name}: {len(art)} image(s) are the game's own art but not level "
+                                  "textures (a model's or the menus', say). A pack can't carry them: use the game's "
+                                  "level textures (game_textures) or images of your own"])
             if result.get("textures"):
                 raise BuildError([f"geometry/{glb.name}: it changes the pixels of stock textures, which a pack can't "
                                   "carry yet; give those materials their own images"])

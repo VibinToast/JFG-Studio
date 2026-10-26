@@ -498,6 +498,17 @@ class Prefabs(AgentTest):
         self.assertFalse(rules & {"squad-cover", "region-winding"})
         self.assertFalse([o for o in self.s.add_cover("home", sq) if o.get("schema")])  # no second hole
 
+    def test_squads_that_spawn_their_own_members(self):
+        self.with_catalog()
+        self.s._squads[0x54] = [(2, True, None, (14, 1), 5)]  # a flyer: the game's squads of it list no members
+        made = self.s.place_squad("home", [0, -300], "0x54", members=4)
+        self.assertEqual([o.get("schema") for o in made if o.get("schema") in ("squadron", "squadmember")],
+                         ["squadron"])
+        sq = next(o for o in made if o.get("schema") == "squadron")
+        self.assertEqual((sq["stock"], sq["fields"]["count"]), ({"list": 14, "entry": 1}, 4))
+        self.assertTrue([o for o in made if "spawns its 4 member" in o.get("note", "")])
+        self.assertFalse([p for p in self.s.validate()["problems"] if p["severity"] == "error"])
+
     def test_switch_doors(self):
         self.with_catalog()
         first = self.s.place_switch_door("home", [0, -200], door="new", door_type="0x1AD", door_pos=[0, 0],

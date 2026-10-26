@@ -33,7 +33,11 @@ def check(path: str | Path, catalog, log=None) -> Report:
     lines = []
     try:
         data = models.ModelData(catalog.assets)
-        result = tracks.import_track(data, str(path), track_id=catalog.track_count(), log=lines.append)
+        from jfgstudio import game_textures
+        library = game_textures.Library(catalog)
+        ready, used = library.prepare_glb(Path(path))
+        result = tracks.import_track(data, str(ready), track_id=catalog.track_count(), log=lines.append,
+                                     stock_textures=True)
         tracks.check_track_buffer(result["data"], name=Path(path).name)
         track = tracks.read_track(result["data"])
     except (jf.FormatError, OSError, ValueError, KeyError) as e:
@@ -45,13 +49,20 @@ def check(path: str | Path, catalog, log=None) -> Report:
            f"{triangles} triangles, {len(track.get('textures', []))} textures "
            f"({len(result.get('newTextures', {}))} new images)",
            f"buffer: {len(result['data'])} bytes unpacked; fits the game's track buffer"]
+    if used:
+        out.append(f"game textures: {len(set(used))} of the game's level textures, named by number (the pack carries "
+                   "none of them)")
+    art = sum(1 for png in result.get("newTextures", {}).values() if library.game_art(png))
+    if art:
+        out.append(f"error: {art} image(s) are the game's own art but not level textures: a pack can't carry them. "
+                   "Use the game's level textures (game_textures) or images of your own")
     out += [line for line in lines if line.strip()]
     lost = lost_collision(track)
     if lost:
         out.append(f"error: {lost} colliding triangles come after non-colliding (nocollide) ones in their segment: the "
                    "game gives them no collision (the player falls through). The importer puts them last within a draw "
                    "pass: make the see-through surfaces after them colliding, or the decoration solid")
-    report = Report(not lost, out)
+    report = Report(not lost and not art, out)
     try:
         from jfgstudio.gui.viewport import TrackMesh  # numpy only; no window needed
         mesh = TrackMesh(str(path))

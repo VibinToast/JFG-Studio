@@ -71,6 +71,7 @@ class Session:
         self._slots: dict[int, list] = {}
         self._lost: dict[tuple, int] = {}
         self._squads: dict | None = None  # enemy -> the best stock squad of it (squad_examples)
+        self._textures = None  # game_textures.Library, made on first use
         self._notes: list[str] = []  # what placing chose where there was a choice; added to the call's result
         self._model_data = None
         if path is not None:
@@ -260,6 +261,75 @@ class Session:
         return {"levels": out[:LIST_LIMIT * 3], "newGame": NEW_GAME_LEVEL,
                 "note": f"stock:level/{NEW_GAME_LEVEL} is where a new game starts (Juno): the usual way back to the "
                         "game, and a good place for a portal into the pack"}
+
+    # ------------------------------------------------------------------ the game's textures
+
+    def _library(self):
+        if self.catalog() is None:
+            raise AgentError(f"the catalog is not available ({self._catalog_error}): it has the game's textures")
+        if self._textures is None:
+            from jfgstudio import game_textures
+            self._textures = game_textures.Library(self._catalog)
+        return self._textures
+
+    def _level_names(self, ids) -> list[str]:
+        levels = self._catalog.levels()
+        return [f"{n}: {levels[n]['name']}" for n in ids if 0 <= n < len(levels)]
+
+    def game_textures(self, words=None, level=None, size=None, limit: int = 40) -> dict:
+        """The game's level textures (from the player's ROM; a level painted with them carries none of them): those
+        with all of `words` (a colour: green, brown, grey, blue, cyan, orange, yellow, red, pink, purple, white,
+        black; dark / mid / bright / vivid), used by game level `level`, of `size` [w, h]. Each: id (hex, for jfg64's
+        game_texture_material), size, words, alpha, the game levels that use it, and its PNG's path."""
+        lib = self._library()
+        want = {w.lower() for w in (words or [])}
+        lv = _as_int(level, "level") if level is not None else None
+        out = []
+        for tex, t in sorted(lib.textures().items(), key=lambda kv: -len(kv[1]["levels"])):
+            if want - set(t["words"]) or (lv is not None and lv not in t["levels"]):
+                continue
+            if size is not None and [t["width"], t["height"]] != [int(v) for v in size]:
+                continue
+            out.append({"id": f"{tex:04X}", "size": [t["width"], t["height"]], "words": t["words"],
+                        "alpha": t["alpha"], "levels": self._level_names(t["levels"][:4])
+                        + ([f"... {len(t['levels']) - 4} more"] if len(t["levels"]) > 4 else []),
+                        "path": str(lib.path(tex))})
+            if len(out) >= max(1, int(limit)):
+                break
+        return {"textures": out, "note": "texture_sheet shows them; in Blender "
+                                         "jfg64.game_texture_material(int(id, 16)) paints with one. Most used first"}
+
+    def stock_level_textures(self, level, limit: int = 24) -> dict:
+        """What a game level is made of: its textures by how much of the level they cover, each as floor, wall or
+        ceiling, with a picture of them (ids under each). For a theme ("a forest level"): find the game's levels
+        of that kind (stock_levels), look at what they use, and paint with the same textures."""
+        lib = self._library()
+        lv = self._catalog.levels()[_as_int(level, "level")]
+        usage = lib.track_usage(lv["track"])
+        total = sum(u["area"] for u in usage.values()) or 1
+        tex = lib.textures()
+        rows = []
+        for t, u in sorted(usage.items(), key=lambda kv: -kv[1]["area"])[:max(1, int(limit))]:
+            use = max(("floor", "wall", "ceiling"), key=lambda k: u[k])
+            rows.append({"id": f"{t:04X}", "share": f"{100 * u['area'] / total:.1f}%", "mostly": use,
+                         "size": [tex[t]["width"], tex[t]["height"]], "words": tex[t]["words"]})
+        return {"png": lib.sheet([int(r["id"], 16) for r in rows]), "level": f"{lv['id']}: {lv['name']}",
+                "world": lv["world"], "textures": rows,
+                "note": "the picture shows them in this order, left to right, with each id under it"}
+
+    def texture_sheet(self, ids) -> dict:
+        """A picture of game textures side by side, each id (hex) under it."""
+        lib = self._library()
+        tex = lib.textures()
+        picked = []
+        for i in ids or []:
+            n = int(i, 16) if isinstance(i, str) else int(i)
+            if n not in tex:
+                raise AgentError(f"{i}: not one of the game's level textures (game_textures lists them)")
+            picked.append(n)
+        if not picked:
+            raise AgentError("give the texture ids to show")
+        return {"png": lib.sheet(picked[:64]), "shown": [f"{n:04X}" for n in picked[:64]]}
 
     def _type(self, type) -> tuple[int | None, obj.Schema | None, str | None]:
         """(stock object id, schema, pack kind ref) of a type named by schema key, id or kind."""
@@ -860,8 +930,11 @@ class Session:
         sq_schema = self.schemas["squadron"]
         matched = self.squad_examples(m_oid) if squadron_example is None else None
         sq_ex = self._example(SQUADRON_ID, sq_schema, squadron_example if matched is None else list(matched[0]))
-        m_ex = self._example(m_oid, None, member_example if member_example is not None or matched is None
-                             or matched[1] is None else list(matched[1]))
+        # Flying enemies and some others have no member entries in the game's lists: their squadron spawns its own
+        # members (count of them) round itself. Such a squad is the squadron alone.
+        spawns_own = member_example is None and matched is not None and matched[1] is None
+        m_ex = None if spawns_own else self._example(m_oid, None, member_example if member_example is not None
+                                                     or matched is None or matched[1] is None else list(matched[1]))
         squadron_id = placer.free("squadron", "squadronId")
         door_id, existing = 0, None
         if door == "new":
@@ -891,7 +964,7 @@ class Session:
         if m_kind:
             squadron["kindFields"] = {"baddyType": m_kind}
         wet = []
-        for k in range(members):
+        for k in range(0 if spawns_own else members):
             a = 2 * math.pi * k / members
             spot = self._dry_spot(lv.name, cx + spread * math.sin(a), cz + spread * math.cos(a), cx, cz)
             if spot is None:
@@ -922,6 +995,9 @@ class Session:
             made += self.add_cover(lv.name, squadron["uid"])
         except AgentError as e:  # no geometry to look at yet
             made.append({"warning": f"no cover added ({e}): run add_cover once the level has geometry"})
+        if spawns_own:
+            made.append({"note": f"the game's squads of 0x{m_oid:X} have no member entries: the squadron spawns its "
+                                 f"{members} member(s) itself, round it (a flying enemy rises to its own height)"})
         if squadron_example is None and matched is None:
             made.append({"warning": f"the game has no squad of 0x{m_oid:X}: the squadron's unknown bytes (behaviour, "
                                     "missions) come from another enemy's squad, so it may not move or fight right"})

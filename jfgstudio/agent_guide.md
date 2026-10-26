@@ -22,7 +22,7 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender, **version 0.3.3 or newer** (`jfg64.__version__`): it knows the game's
+The jfg64 add-on is **required** in Blender, **version 0.4.0 or newer** (`jfg64.__version__`): it knows the game's
 surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
 Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
 Through a Blender MCP server, run Python in Blender and use it rather than writing your own:
@@ -34,6 +34,12 @@ jfg64.bake_light(obj.data, obj.matrix_world, sun_dir, sun_colour, ambient, tint=
 jfg64.bake_scene(objects, tint=True)                       # several, with the scene's Sun lamp
 jfg64.budgets(objects)                                     # {"triangles", "images", "shrunk", "far", ...}
 jfg64.export("C:/path/level.glb", collection="level_1")    # or objects=[...]; default: everything visible
+ground = jfg64.terrain("valley", size=(2400, 2400), height=110, seed=7, style="hills",   # or ridges, terraces
+                       flat=[(0, -900, 220)], paths=[[(0, -900), (150, 300)]], rim=380,
+                       material=jfg64.game_texture_material(0x160C))   # a game texture (see Themes)
+jfg64.terrain_report(ground)                               # {"walkable", "steepest", "triangles", ...}
+spots = jfg64.scatter_points(ground, 12, min_gap=220, max_slope=25, avoid=[(0, -900, 260)])
+rocks = [jfg64.rock(f"rock{i}", radius=60, seed=i, location=p) for i, p in enumerate(spots)]
 ```
 
 - **Colour**: the game draws only the vertex colours (the `Col` layer the bake writes), never a material's colour.
@@ -50,6 +56,75 @@ jfg64.export("C:/path/level.glb", collection="level_1")    # or objects=[...]; d
 Then `import_geometry` the `.glb` here. If `import jfg64` fails, the add-on isn't installed or enabled: ask the
 player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the ▾ menu > Install from Disk...,
 `jfg64.zip`, tick "jfg64: Jet Force Gemini levels") before modelling.
+
+## Themes: the game's own textures
+
+A level can wear the game's own textures without the pack carrying them: Studio names them by number and each
+player's game shows them from their own ROM. That is how to make "a forest level" look like the game's forests.
+
+1. `stock_levels` (search, world) finds the game's levels of that kind; `stock_level_textures(level)` shows what one
+   is made of: its textures by the share of the level they cover, each mostly floor, wall or ceiling, with a
+   picture. Look at two or three levels of the theme.
+2. `game_textures(words, level, size)` searches all of them (colour words: green, brown, grey, blue ...; dark, mid,
+   bright, vivid); `texture_sheet(ids)` shows a set side by side before you choose.
+3. In Blender, `jfg64.game_texture_material(int(id, 16), surface)` makes a material showing one; use it like any
+   other (floors from the floors you saw, walls from the walls). `budgets` counts them as `game`, not as images.
+4. Never edit those images or copy their pixels into an image of your own: a changed copy is a new image, and the
+   game's art can't go in a pack (`import_geometry` and `build` refuse any image that is the game's but not a level
+   texture). Your own images (painted, generated) mix freely with them.
+
+Bake light over them as usual: the game multiplies a texture by the vertex colours, so a warm sun and a cool ambient
+give the level its mood.
+
+## Making a place, not a box
+
+Agents' first levels were flat floors and boxes. A level should feel like somewhere:
+
+- **Ground**: outdoors, start from `jfg64.terrain` (layered noise): `hills` for meadows and forests, `ridges` for
+  rocky mountains, `terraces` for farmland or ruins. Clear `flat` spots for the start, exits and squads, join them
+  with `paths`, and end the level with a `rim` of hills instead of walls. A new `seed` is a new landscape: never
+  reuse the same one twice in a pack. Keep slopes walkable where the player must go (`terrain_report`: most of
+  the ground under 45 degrees); steep is fine for the rim and for cliffs that block on purpose.
+- **Cover and landmarks**: `jfg64.rock` boulders, pillars, ruined walls, crates where squads fight (they make the
+  holes squads move to: `add_cover`), and one landmark seen from the start (a tower, a big rock, a glow).
+- **Height**: ledges to climb (Ledge surfaces), overlooks, a lower area seen before it is reached, ramps up to 45
+  degrees. A refuel pad next to a climb for the jetpack.
+- **Indoors**: vary the boxes: alcoves, pillars, catwalks, broken walls, rooms of different sizes and heights.
+- **Shape**: two or three distinct areas, loops instead of dead ends, a secret or two (a pickup behind a crate, on
+  a ledge). Each level of a pack its own layout, palette and light.
+
+### What to fill it with
+
+Describe things by what they do; the catalog's names are the player's (never write them into the project).
+
+| What | How | Notes |
+|---|---|---|
+| Ammo | `place` `ammo` (0xE8 full, 0xCF extra, 0x17E clip) | `weapon` 0-15: taken only by a hero who has that weapon |
+| Health | `place` `health` (0xA9) | `amount` 0 small, 1 medium, 2 full; after fights |
+| Jetpack fuel | `place` `refuel` (0xB9) | its cylinder (`radius`, `bottom`, `top`) and `maxFuel`; by climbs and gaps |
+| Crates, barrels | `place` `damagecrate` (0x135 crate, 0x168 explosive drum) | breakable; rests on the floor; drums explode |
+| Scenery | `place` a `staticprop` type (behaviour 54: `object_types` behaviour=54) | crates, trees, torches, huts, crystals: solid |
+| Light, glow, beams | `light`, `glow`, `lightbeam` | lights are limited per level (header light slots) |
+| Sound | `audio` | wind, water, machines where they are |
+| Flowing water, lava | `texscroll` | makes a surface's texture move |
+| Chest, keys | `chest`, `place_key_door` | rewards and gates |
+| Breakable glass | `place` 0x12B (or 0x223, 0x1F2) from a stock entry | not decoded: size and facing as the stock one; check in game |
+| Drops | squadron `drop` | 20-22 health, 23 health upgrade, 1-16 a weapon's pickup |
+
+Enemies besides ants (`place_squad` with the type's id; `object_types` names them):
+
+- **Ground**: 0x9C, 0x99 (shielded), 0x12F (captains), 0x121 (undead), 0x143 (armoured gunners: most of the
+  game's squads of them are sentries; `place_squad` takes its one smart squad), 0xEE, 0xBE, 0xBD, 0xEF, 0x122
+  (beetles and bugs), 0xE1 (small, fast), 0xF5 (a gun turret: doesn't move). Set `health` and `size` on the
+  squadron for tougher or bigger ones.
+- **Flying**: 0x54, 0x2D, 0x29, 0x152, 0x150, 0x2B, 0x151, 0x149. Their squadron spawns its own members round it
+  (`place_squad` places the squadron alone); they rise to their own height. Give them open air.
+- Mix them: a different enemy for each area, a flying squad over open ground, a tough squad at the end.
+- Not play-tested in a pack's own level yet: flying squads, the non-ant enemies, glass, refuel pads. Ask the player
+  to check them in game, and say so in your report.
+
+Not possible yet: **lifts and moving platforms** (the game moves them from a level's animation data, which Studio
+doesn't write). Use ramps, ledges and the jetpack instead.
 
 ## Units and space
 
