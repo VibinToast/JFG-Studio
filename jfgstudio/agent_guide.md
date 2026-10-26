@@ -106,8 +106,15 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   `place_squad` makes all of it. With `door`, the squadron keeps that door locked until all its members are dead:
   the door's `doorId` matches the squadron's, and each locked door needs its own id. Members are kept off lava,
   water and pits (moved to the nearest dry floor); the result warns about any it couldn't place dry.
-- **Key door**: a door with `keyLock` 2 or more needs a key (2 = yellow key ...); place the key pickup somewhere the
-  player has to reach first (a ledge, past a squad).
+- **Key door**: `place_key_door(level, door_type, door_pos, key_pos)` makes a door that needs a coloured key and
+  the key, in a colour no other door of the pack uses (or `colour: "red key"`; `key_level` puts the key in another
+  level). Put the key somewhere the player has to reach first: a ledge, past a squad.
+- **Patrols**: `place_patrol(level, points, loop, squadron)` lays a route of nodes along the points and puts the
+  squadron in patrol mode: a chain is walked there and back, a ring (`loop`) round and round. A squadron walks the
+  route nearest to itself, so keep it beside its route; stock patrols set off when the squadron is activated
+  (`start_at_load` sets off at once). Squads without a patrol stay in their region.
+- **Doors opened by switches** aren't a tool yet: they need a game flag that is safe for packs to use (asked of the
+  decomp). Use squads or keys to lock doors.
 - **Exits**: `connect(from, exit_pos, to, arrive_pos)` makes the exit and the start point it leads to (numbered
   clear of the level's own start points, and of the game level's when it is an edit of one); `arrive_start_point`
   instead arrives at a start point already there. Give every level a way back. An exit's `arg1A` 1 (the default) shows the game's stats screen when it leads into another region.

@@ -70,7 +70,9 @@ def reshaped_mesh():
 # Made-up catalog types (names and numbers are the tests' own).
 TYPES = {0x29: {"name": "Bug", "behaviour": 24, "uses": 3, "examples": [[10, 4]]},
          0x4F: {"name": "Squadron", "behaviour": 70, "uses": 2, "examples": [[10, 2]]},
-         0x1AD: {"name": "Gate", "behaviour": 7, "uses": 1, "examples": [[11, 7]]}}
+         0x1AD: {"name": "Gate", "behaviour": 7, "uses": 1, "examples": [[11, 7]]},
+         0x61: {"name": "Node", "behaviour": 0, "uses": 4, "examples": [[12, 1]]},
+         0x60: {"name": "Link", "behaviour": 0, "uses": 4, "examples": [[12, 2]]}}
 
 
 class FakeCatalog:
@@ -78,6 +80,11 @@ class FakeCatalog:
 
     def levels(self):
         return [{"id": i, "name": f"Place {i}", "world": i // 10, "track": i + 1} for i in range(25)]
+
+    def stock_entry(self, list_id, index):
+        entry = bytearray(0x50)
+        entry[0x24] = 0x13  # a squadron's kind byte: high bits kept, low 4 bits the mode
+        return bytes(entry)
 
 
 class AgentTest(unittest.TestCase):
@@ -397,6 +404,41 @@ class Trial2Findings(AgentTest):
         for m in members:  # the river (water) runs from z 300 to 500
             self.assertFalse(300 <= m["pos"][2] <= 500, m["pos"])
         self.assertFalse([o for o in made if "warning" in o])
+
+
+class Prefabs(AgentTest):
+    def test_key_doors_pick_free_colours(self):
+        self.with_catalog()
+        first = self.s.place_key_door("home", "0x1AD", [0, 0], [200, 0])
+        second = self.s.place_key_door("home", "0x1AD", [0, -300], [200, -300])
+        self.assertEqual((first[0]["fields"]["keyLock"], first[1]["type"]), (2, "stock:objtype/0x258"))
+        self.assertEqual((second[0]["fields"]["keyLock"], second[1]["type"]), (3, "stock:objtype/0x259"))
+        named = self.s.place_key_door("home", "0x1AD", [0, -600], [200, -600], colour="blue key")
+        self.assertEqual(named[1]["type"], "stock:objtype/0x261")
+        with self.assertRaises(agent.AgentError):
+            self.s.place_key_door("home", "0x1AD", [0, 0], [0, 0], colour="pink key")
+        with self.assertRaises(agent.AgentError):
+            self.s.place_key_door("home", "health", [0, 0], [0, 0])  # not a door
+        self.assertFalse([p for p in self.s.validate()["problems"] if p["rule"] == "key"])
+
+    def test_patrol_for_a_squad(self):
+        self.with_catalog()
+        squad = self.s.place_squad("home", [0, -300], "0x29", members=2)
+        sq = next(o["uid"] for o in squad if o.get("schema") == "squadron")
+        made = self.s.place_patrol("home", [[0, -250], [400, -250], [400, -600]], loop=True, squadron=sq,
+                                   start_at_load=True, wait=30)
+        nodes = [o for o in made if o.get("schema") == "patrolpoint"]
+        links = [o for o in made if o.get("schema") == "patrolpath"]
+        self.assertEqual(sorted(n["fields"]["node"] for n in nodes), [1, 2, 3])
+        self.assertEqual(len(links), 3)  # a ring
+        self.assertEqual(sum(n["fields"].get("startAtLoad", 0) for n in nodes), 1)
+        self.assertEqual({n["fields"]["wait"] for n in nodes}, {30})
+        self.assertEqual(next(o for o in made if o.get("uid") == sq)["fields"]["kind"], 0x16)  # 0x13: high bits kept
+        self.assertFalse([p for p in self.s.validate()["problems"] if p["rule"] == "patrol"])
+        chain = self.s.place_patrol("home", [[-500, 0], [-500, 300]])
+        self.assertEqual(sorted(n["fields"]["node"] for n in chain if n.get("schema") == "patrolpoint"), [4, 5])
+        with self.assertRaises(agent.AgentError):
+            self.s.place_patrol("home", [[0, 0]])
 
 
 class Server(AgentTest):

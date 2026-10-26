@@ -34,6 +34,8 @@ FLOOR_KINDS = ("solid", "lava", "hidden")
 LIST_LIMIT = 150  # catalog types listed at once
 NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way back to the game
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
+KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
+PATROL_MODE = 6  # a squadron's kind (low 4 bits) that walks the patrol network (decomp: "Squad patrol network")
 LAVA_FLOOR_DEPTH = 100  # lava needs a solid floor at most this far under it, or Juno falls through
 DOOR_CLEARANCE = 120  # a door placed by [x, z] stands on the lowest floor with this much room above it
 SPREAD_TRIES = 24  # place_squad looks this many places around the centre for a dry spot for each member
@@ -854,6 +856,80 @@ class Session:
                 if self._dry(level, px, pz):
                     return (px, pz)
         return None
+
+    def place_key_door(self, level: str, door_type, door_pos, key_pos, colour=None, facing: float | None = None,
+                       key_level: str | None = None) -> list[dict]:
+        """A door that needs a coloured key, and that key (in `key_level`, this level by default). `colour`: a key's
+        name ("red key") or keyLock number; by default the first colour no door of the pack uses yet."""
+        lv = self._level(level)
+        door_schema = self.schemas["door"]
+        names = door_schema.field("keyLock").enum
+        used = {o.get("fields", {}).get("keyLock") for x in self.p.levels.values() for o in x.objects["objects"]
+                if self._key(o) == "door"}
+        if colour is None:
+            lock = next((n for n in range(2, 2 + len(KEY_IDS)) if n not in used), None)
+            if lock is None:
+                raise AgentError("every key colour is used by a door of the pack already: give colour")
+        elif isinstance(colour, str):
+            lock = next((n for n, label in names.items() if label.lower() == colour.lower() and n >= 2), None)
+            if lock is None:
+                raise AgentError(f"{colour!r} is not a key; keys: {', '.join(v for k, v in names.items() if k >= 2)}")
+        else:
+            lock = _as_int(colour, "colour")
+            if not 2 <= lock < 2 + len(KEY_IDS):
+                raise AgentError(f"keyLock {lock} is not a key (2-{1 + len(KEY_IDS)})")
+        self._level(key_level or level)
+        door = self.place(lv.name, door_type, door_pos, fields={"keyLock": lock}, facing=facing,
+                          name=names[lock] + " door")
+        if door[0].get("schema") != "door":
+            self.undo(lv.name)
+            raise AgentError(f"{door_type!r} is not a door type (behaviour 7)")
+        key = self.place(key_level or level, f"0x{KEY_IDS[lock - 2]:X}", key_pos, name=names[lock])
+        return door + key
+
+    def place_patrol(self, level: str, points: list, loop: bool = False, squadron: str | None = None,
+                     start_at_load: bool = False, wait: int | None = None) -> list[dict]:
+        """A patrol route: nodes on the floor at `points` ([x, z] or [x, y, z]), linked in order both ways (a chain
+        is walked there and back; `loop` joins the last to the first). With `squadron` (a squadron's uid) it is put in
+        patrol mode; it starts from the node nearest to itself, when activated (or at level load with
+        `start_at_load`). `wait`: the wait at each node (stock 15)."""
+        lv = self._level(level)
+        if not isinstance(points, list) or len(points) < 2:
+            raise AgentError("a patrol needs at least two points")
+        node_schema, link_schema = self.schemas["patrolpoint"], self.schemas["patrolpath"]
+        node_ex = self._example(prefabs.PATROL_POINT_ID, node_schema, None)
+        link_ex = self._example(prefabs.PATROL_PATH_ID, link_schema, None)
+        sq = None
+        if squadron is not None:
+            sq = self._object(lv, squadron)
+            if self._key(sq) != "squadron":
+                raise AgentError(f"{squadron!r} is not a squadron of {level}")
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours())
+        nodes = [placer.patrol_point(self._pos(lv, pt, node_schema, True), node_ex) for pt in points]
+        if wait is not None:
+            for n in nodes:
+                n["fields"]["wait"] = self._fields(node_schema, {"wait": wait})["wait"]
+        pairs = list(zip(nodes, nodes[1:], strict=False))
+        if loop and len(nodes) > 2:
+            pairs.append((nodes[-1], nodes[0]))
+        for a, b in pairs:
+            placer.patrol_link(a, b, link_ex)
+        if sq is not None and start_at_load:
+            nearest = min(nodes, key=lambda n: math.dist(n["pos"], sq["pos"]))
+            nearest["fields"]["startAtLoad"] = 1
+        made = self._add(lv, placer.made, "patrol")
+        if sq is not None:
+            kind = sq.get("fields", {}).get("kind")
+            if kind is None and sq.get("stock") and self.catalog() is not None:
+                kind = self._catalog.stock_entry(sq["stock"]["list"], sq["stock"]["entry"])[0x24]
+            self.update_object(lv.name, squadron, fields={"kind": ((kind or 0) & 0xF0) | PATROL_MODE})
+            made.append(self._describe(sq))
+            others = [o for o in lv.objects["objects"] if self._key(o) == "patrolpoint" and o not in nodes]
+            mine = min(math.dist(n["pos"], sq["pos"]) for n in nodes)
+            if others and min(math.dist(o["pos"], sq["pos"]) for o in others) < mine:
+                made.append({"warning": "another patrol's node is nearer the squadron than this route: it starts on "
+                                        "the network nearest to itself. Move the squadron next to this route"})
+        return made
 
     def base_objects(self, level: proj.Level) -> list[dict]:
         """The start points and exits of the game level an edit adds to (read-only, from the player's catalog; never

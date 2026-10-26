@@ -149,6 +149,23 @@ TOOLS = [
            "door": {"type": "string"}, "door_type": _TYPE, "door_pos": _POS, "door_fields": {"type": "object"},
            "spread": {"type": "number"}, "name": {"type": "string"}, "squadron_example": _EXAMPLE,
            "member_example": _EXAMPLE}, ["level", "centre", "member_type"]),
+    _tool("place_key_door", "A door that needs a coloured key, and the key (on the floor at key_pos; in key_level if "
+          "given). The colour is the first one the pack's doors don't use yet, unless colour names one.",
+          lambda s, a: s.place_key_door(a["level"], a["door_type"], a["door_pos"], a["key_pos"], a.get("colour"),
+                                        a.get("facing"), a.get("key_level")),
+          {"level": _LEVEL, "door_type": _TYPE, "door_pos": _POS, "key_pos": _POS,
+           "colour": {"type": ["string", "integer"], "description": "a key's name (\"red key\") or keyLock number"},
+           "facing": _FACING, "key_level": _LEVEL}, ["level", "door_type", "door_pos", "key_pos"]),
+    _tool("place_patrol", "A patrol route for squads: nodes at points, linked in order both ways (a chain is walked "
+          "there and back; loop joins the ends into a ring). With squadron (its uid) the squadron patrols it: it "
+          "starts from the node nearest to itself, so keep it next to the route.",
+          lambda s, a: s.place_patrol(a["level"], a["points"], a.get("loop", False), a.get("squadron"),
+                                      a.get("start_at_load", False), a.get("wait")),
+          {"level": _LEVEL, "points": {"type": "array", "items": _POS, "minItems": 2},
+           "loop": {"type": "boolean"}, "squadron": {"type": "string"},
+           "start_at_load": {"type": "boolean", "description": "set off at level load (stock patrols wait for the "
+                                                                "squadron to be activated)"},
+           "wait": {"type": "integer", "description": "wait at each node (stock 15)"}}, ["level", "points"]),
     _tool("connect", "An exit in one level and the start point it brings the player to in another: a new one at "
           "arrive_pos (numbered clear of the level's own and, for an edit of a game level, the game level's), or an "
           "existing one with arrive_start_point.",
