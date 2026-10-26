@@ -10,6 +10,7 @@
   "behaviour": {"type": "integer", "minimum": 0, "maximum": 32767, "description": "definition +0x1C; none = the base's"},
   "model": {"type": "integer", "minimum": 0, "maximum": 32767, "description": "the model every model slot shows (flag bits kept); none = the base's"},
   "copyModel": {"type": "boolean", "description": "the type draws its own copy of its model, with no animations (a model that lists animations but has no joints crashes the game's animation code: the AntTank's, 0x73)"},
+  "bakeJoints": {"type": "boolean", "description": "with copyModel: the copy's parts put where its joints hold them and its skeleton dropped, by the port as it makes the copy (a model with joints but no animations draws its parts piled at the origin: the cut piston's)"},
   "rotate": {"enum": [90, 180, 270], "description": "with copyModel: the copy turned about the vertical by this many degrees (one quarter turn: (x, z) -> (z, -x), as facing degrees), by the port when it makes the copy from the player's ROM (rotateY)"},
   "scale": {"type": "number", "exclusiveMinimum": 0, "maximum": 100, "description": "times the base's definition scale"}
  }

@@ -2123,7 +2123,7 @@ class Session:
 
     def make_object_type(self, name: str, base, display_name: str | None = None, behaviour: int | None = None,
                          model: int | None = None, scale: float | None = None, copy_model: bool = False,
-                         rotate: int | None = None) -> dict:
+                         rotate: int | None = None, bake_joints: bool = False) -> dict:
         """An object type of the pack's own (objtypes/<name>.json): the stock type `base`'s definition with its
         behaviour, model (every model slot) and scale changed. Placed as pack:objtype/<name>, and by packs that
         depend on this one as <mod id>:objtype/<name>."""
@@ -2156,6 +2156,10 @@ class Session:
             if rotate not in (90, 180, 270):
                 raise AgentError("rotate is 90, 180 or 270 (degrees, as facing: a quarter turn takes x to z)")
             doc["rotate"] = rotate
+        if bake_joints:
+            if not copy_model:
+                raise AgentError("bake_joints changes the type's own copy of its model: give copy_model too")
+            doc["bakeJoints"] = True
         errors = list(jsonschema.Draft202012Validator(proj._SCHEMAS["objtype"]).iter_errors(doc))
         if errors:
             raise AgentError("; ".join(e.message for e in errors))

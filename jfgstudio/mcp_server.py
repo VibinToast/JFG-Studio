@@ -324,7 +324,7 @@ TOOLS = [
           "one place it as <mod id>:objtype/<name>.",
           lambda s, a: s.make_object_type(a["name"], a["base"], a.get("display_name"), a.get("behaviour"),
                                           a.get("model"), a.get("scale"), a.get("copy_model", False),
-                                          a.get("rotate")),
+                                          a.get("rotate"), a.get("bake_joints", False)),
           {"name": {"type": "string", "description": "lower case file name"},
            "base": {"description": "the stock type it copies (\"0x171\" or a schema key)"},
            "display_name": {"type": "string"}, "behaviour": {"type": "integer", "description": "none = the base's"},
@@ -333,7 +333,9 @@ TOOLS = [
            "copy_model": {"type": "boolean", "description": "its own copy of the model, drawn without animations "
                           "(needed for a model with animations but no joints: the AntTank's)"},
            "rotate": {"type": "integer", "enum": [90, 180, 270], "description": "with copy_model: the copy turned "
-                      "about the vertical (the port turns it), for a type whose entry has no facing"}},
+                      "about the vertical (the port turns it), for a type whose entry has no facing"},
+           "bake_joints": {"type": "boolean", "description": "with copy_model: the copy's parts put where its joints "
+                           "hold them, skeleton dropped (a model with joints but no animations, the piston's)"}},
           ["name", "base"]),
     _tool("remove_dependency", "Drop a dependency.", lambda s, a: s.remove_dependency(a["id"]),
           {"id": {"type": "string"}}, ["id"]),
