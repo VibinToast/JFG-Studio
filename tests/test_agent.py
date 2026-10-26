@@ -198,6 +198,8 @@ class Placing(AgentTest):
         self.assertEqual(squadron["fields"]["doorId"], door["fields"]["doorId"])
 
     def test_connect_and_edit(self):
+        with self.assertRaises(agent.AgentError):  # into its own level: a reload, a hidden teleport
+            self.s.connect("home", [200, 0], "home", [0, 100])
         made = self.s.connect("home", [200, 0], "gemini", [0, 100], arrive_yaw=180)
         exit_, start = made
         self.assertEqual(exit_["target"], "pack:level/gemini")

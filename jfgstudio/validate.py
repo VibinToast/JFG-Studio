@@ -157,6 +157,12 @@ def _check_arrivals(project: Project, schemas) -> list[Problem]:
     for level in project.levels.values():
         objs = level.objects["objects"]
         exits = [o for o in objs if _key(o, schemas) == "exit" and o.get("fields", {}).get("radius", 0) >= 5]
+        for e in exits:
+            if e.get("target") == f"pack:level/{level.name}":
+                out.append(Problem(WARNING, "exit-self", f"levels/{level.name}/objects.json",
+                                   "the exit leads back into its own level: taking it reloads the level (its enemies "
+                                   "and pickups come back), a hidden teleport to the player (play-tested). Join a "
+                                   "level's areas by passages; exits leave for another level", e["uid"]))
         for s in (o for o in objs if _key(o, schemas) == "startpoint"):
             for e in exits:
                 d = ((s["pos"][0] - e["pos"][0]) ** 2 + (s["pos"][2] - e["pos"][2]) ** 2) ** 0.5

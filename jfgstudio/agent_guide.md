@@ -298,7 +298,9 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   other.
 - **Exits**: `connect(from, exit_pos, to, arrive_pos)` makes the exit and the start point it leads to (numbered
   clear of the level's own start points, and of the game level's when it is an edit of one); `arrive_start_point`
-  instead arrives at a start point already there. Give every level a way back. An exit's `arg1A` 1 (the default) shows the game's stats screen when it leads into another region.
+  instead arrives at a start point already there. Give every level a way back. An exit is a level change, so it
+  goes where the player expects to leave (the end of a passage, a doorway, a lift), never into its own level: that
+  reloads the level and seems a hidden teleport (play-tested; `connect` refuses it). An exit's `arg1A` 1 (the default) shows the game's stats screen when it leads into another region.
 - **Planets**: a level's `planet` puts it in that planet's region (at most 32 levels per planet; the port has room
   for 9 mod regions in all). The planet's `entryLevel` is where the map starts it.
 - **Reskinned enemies (kinds)**: a pack's own enemy type is one of the game's with new textures and a new size; its

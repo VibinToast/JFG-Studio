@@ -1664,6 +1664,10 @@ class Session:
         or with `arrive_start_point` one that is already there. `arrive_yaw` is the facing in degrees (0 = towards
         -z)."""
         src, dst = self._level(from_level), self._level(to_level)
+        if src is dst:
+            raise AgentError("an exit into its own level reloads the level (its enemies and pickups come back) and "
+                             "looks like a hidden teleport: join areas of a level by passages, and use exits to leave "
+                             "for another level")
         st = self.schemas["startpoint"]
         dst_placer = prefabs.Placer(dst, self.schemas, self._behaviours())
         mine = {o.get("fields", {}).get("startPoint") for o in dst.objects["objects"] if self._key(o) == "startpoint"}
