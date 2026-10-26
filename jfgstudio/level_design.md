@@ -139,7 +139,8 @@ Play-tested lessons (a test valley got all of these wrong):
   doesn't close its opening.
 - **Crates and drums keep off walls** and stay the game's size (crates 39, drums 24: the defaults). A crate against
   a level's outer wall clipped into it (play-tested); `check_placement` says "clipping into geometry".
-- **Rocks for cover are big** (radius 90+, about 100 tall); radius-60 rocks are landmarks. Keep squad regions to 4
+- **Rocks for cover are big** (radius 90+, about 100 tall) and modelled: crate objects aren't cover. Radius-60
+  rocks are landmarks. Keep squad regions to 4
   corners.
 
 - **Start:** a quiet start area with no enemy in view, facing the way to go, with a landmark ahead.

@@ -25,7 +25,7 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender, **version 0.5.3 or newer** (`jfg64.__version__`): it knows the game's
+The jfg64 add-on is **required** in Blender, **version 0.5.4 or newer** (`jfg64.__version__`): it knows the game's
 surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
 Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
 Through a Blender MCP server, run Python in Blender and use it rather than writing your own. With no Blender
@@ -63,11 +63,17 @@ cover = jfg64.rock("cover", radius=95, squash=1.2, location=(x, y, jfg64.ground_
   and makes no hole for them).
 - **A door in a passage** goes in a doorway smaller than the door, as the game's own do: the door overlaps the
   frame and hides its edges. Give the link `"door": "from"` (or `"to"`, `"both"`): it builds a level landing with
-  a 160 x 180 doorway frame (for the game's 198 x 199 doors), and `jfg64.door_spots(level)` gives each door's
-  `pos` and `facing` for `place` / `place_key_door`. Never a door in a room's mouth (wider: the player walks round
+  a 160 x 180 doorway frame, and `jfg64.door_spots(level)` gives each door's `pos` and `facing` for `place` /
+  `place_key_door`. The door types are the behaviour-7 ones: `describe_type door` lists them with their model sizes
+  (0x1AC, a wooden door, is 198 x 199). Pick one that suits the theme and is bigger than the frame both ways; for
+  a smaller door give the link's door `{"end": "from", "width": w, "height": h}` about 40 under the door's size. Never a door in a room's mouth (wider: the player walks round
   it) or one as wide as its tunnel (gaps show round it, play-tested). `check_placement` says when a door doesn't
   close its opening or stands on a slope.
 
+- **Budgets**: `budgets` counts triangles as exported (`modelled`: before the cuts that textures which don't repeat
+  need). Prefer `game_textures(repeats="both")` for big surfaces; the cuts can also split a ledge's edge.
+- **Indoor light**: `bake_light` lights a whole mesh with one sun; for darker roofed rooms in a `layout`, give them
+  their own materials and scale those faces' `Col` colours after the bake.
 - **Colour**: the game draws only the vertex colours (the `Col` layer the bake writes), never a material's colour.
   Bake with `tint=True` to carry each material's Base Color in; untextured geometry is otherwise grey.
 - **Spaces**: Blender's own (Z up). `sun_dir` is the direction the light travels ((0, 0, -1) = straight down);
@@ -140,7 +146,7 @@ How to do it:
 4. **Compare**: `level_layout(level)` measures yours the same way. Aim for the game's ranges, not a copy of one
    level.
 5. **Dress it**:
-   - **Cover**: `jfg64.rock`, pillars and crates where squads fight (`add_cover` makes them holes).
+   - **Cover**: big `jfg64.rock`s, pillars and blocks modelled where squads fight (`add_cover` makes them holes).
    - **A landmark** seen from the start.
    - **Height**: ledges to climb (Ledge surfaces).
    - **Fuel**: refuel pads by climbs.
@@ -154,7 +160,7 @@ Describe things by what they do; the catalog's names are the player's (never wri
 |---|---|---|
 | Ammo | `place` `ammo` (0xE8 full, 0xCF extra, 0x17E clip) | `weapon`: taken only by a hero who has that weapon (numbers below) |
 | Health | `place` `health` (0xA9) | `amount` 0 small, 1 medium, 2 full; after fights |
-| Health upgrade | `place` `health` 0xE9 | a reward for exploring; `place` gives it its own `upgrade` number (saved as game flag 0x2F + n, a pack's 56-80) |
+| Health upgrade | `place` `health` 0xE9 | a reward for exploring; `place` gives it its own `upgrade` number (n 56-80, saved as game flags 103-127; it skips flags switches use) |
 | Jetpack fuel | `place` `refuel` (0xB9) | its cylinder (`radius`, `bottom`, `top`) and `maxFuel`; by climbs and gaps |
 | Crates, barrels | `place` `damagecrate` (0x135 crate, 0x168 explosive drum) | breakable; rests on the floor; drums explode |
 | Scenery | `place` a `staticprop` type (behaviour 54: `object_types` behaviour=54) | crates, trees, torches, huts, crystals: solid |
@@ -259,8 +265,8 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   Members walk only inside their region and only notice a hero who is inside a region too, so make the region
   cover the floor they fight on and where the player comes from. Smart squads move only to **cover**: the corners
   of holes (obstacles cut out of the region) and inward corners of the region, where the hero can't see them. In a
-  rectangle over open floor they stand and fire. `place_squad` makes every block, crate or pillar inside the region
-  a hole (`add_cover` does it for a squad made before; `validate` warns: `squad-cover`); members also keep out of
+  rectangle over open floor they stand and fire. `place_squad` makes every block, rock or pillar of the level's
+  geometry inside the region a hole (crate objects don't count: model the cover) (`add_cover` does it for a squad made before; `validate` warns: `squad-cover`); members also keep out of
   holes. So give a squad's area things to hide behind (about 100 tall and 80 across: smaller ones get no hole), and
   keep obstacles off the region's edge. Keep a region to **4 corners**: only those are play-tested (`validate`
   notes others), so move an edge clear of an obstacle rather than cutting round it. Each obstacle gets one hole, and
@@ -292,7 +298,9 @@ doesn't write). Use ramps, ledges and the jetpack instead.
 - **Switch doors**: `place_switch_door(level, switch_pos, door="new", door_type, door_pos)` (or `door`: a door's
   uid) places the game's shootable switch: it keeps the door locked until the player shoots it, then opens it and
   sets a game flag so it stays open after a reload (`saved` false: it locks again). Put the switch where the player
-  sees it, often on a wall beside the door (`switch_lift`) or across a gap from it.
+  sees it, often on a wall beside the door (`switch_lift`) or across a gap from it. Turn it to face the player:
+  `switch_facing` [x, z] of where they stand to shoot it (on a wall, a point out in the room). Untested in game:
+  ask the player to check it.
 - **Game flags** are the player's saved progress, shared by the whole save file: a pack sets only its own, 103-127
   (301-351 if it needs more and adds no ammo capacity upgrades). The tools hand them out; `validate` stops any
   other.

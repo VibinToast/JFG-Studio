@@ -587,7 +587,8 @@ class Session:
         return out
 
     def _glb_images(self, name: str) -> dict[str, tuple[int, int]]:
-        """The images the materials of a level's (or geometry file's) .glb use: name -> (width, height)."""
+        """The new images the materials of a level's (or geometry file's) .glb use: name -> (width, height). The
+        game's own level textures aren't counted: the pack names them by number."""
         track = self.p.levels[name].level.get("track", "") if name in self.p.levels else f"pack:track/{name}"
         if not track.startswith("pack:track/"):
             return {}
@@ -602,13 +603,19 @@ class Session:
             t = ((m.get("pbrMetallicRoughness") or {}).get("baseColorTexture") or {}).get("index")
             if t is not None and t < len(doc.get("textures", [])) and "source" in doc["textures"][t]:
                 used.add(doc["textures"][t]["source"])
+        try:
+            library = self._library()
+        except AgentError:
+            library = None
         out = {}
         for i in sorted(used):
             img = doc["images"][i]
             data = b""
             if "bufferView" in img:
                 v = doc["bufferViews"][img["bufferView"]]
-                data = bytes(blob[v.get("byteOffset", 0):v.get("byteOffset", 0) + 24])
+                data = bytes(blob[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]])
+            if library is not None and data and library.level_texture(data) is not None:
+                continue  # a game texture: named by number, at the game's own size (never shrunk, never carried)
             size = (int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")) \
                 if data[:8] == b"\x89PNG\r\n\x1a\n" else (0, 0)
             out[img.get("name") or f"image{i}"] = size
