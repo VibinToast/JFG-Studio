@@ -60,6 +60,23 @@ class PackTypes(unittest.TestCase):
         self.assertEqual(packtypes.example(TYPES, 0x283, 49), [5, 6])  # the most placed type of its behaviour
         self.assertIsNone(packtypes.example(TYPES, 0x283, 99))
 
+    def test_squad_of_a_dependency_type(self):
+        # A squadron whose enemy is a dependency's type: the project loads, and the build names the type with its mod
+        from jfgstudio import build
+        from jfgstudio import objects as obj
+        hub = proj.load(self.hub.path)
+        level = proj.new_level(hub, "room", "Room", "stock:track/1")
+        sq = {"uid": "sq", "type": "stock:objtype/0x4F", "schema": "squadron", "pos": [0, 0, 0], "size": 0x44,
+              "fields": {"baddyType": 0xB9}, "kindFields": {"baddyType": "someone_library:objtype/pad"}}
+        level.objects["objects"].append(sq)
+        hub.save()
+        hub = proj.load(self.hub.path)
+        b = object.__new__(build._Builder)
+        b.p, b.schemas = hub, obj.load_schemas()
+        fixups = b.entry_fixups(sq, 0)
+        offset = b.schemas["squadron"].field("baddyType").offset
+        self.assertEqual(fixups, [{"at": offset, "type": "u16", "ref": "someone_library:objtype_pad"}])
+
     def test_validate(self):
         hub = proj.load(self.hub.path)
         level = proj.new_level(hub, "room", "Room", "stock:track/1")

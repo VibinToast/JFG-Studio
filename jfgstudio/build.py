@@ -145,7 +145,7 @@ class _Builder:
             n = self.level_number(o["target"])
             fields.update({"levelLow": n & 0xFF, "levelHigh": 0xFF if n < 0x100 else n >> 8})
         kind_ref = (o.get("kindFields") or {}).get("baddyType")
-        if schema and schema.key == "squadron" and kind_ref:
+        if schema and schema.key == "squadron" and kind_ref and refs.parse(kind_ref).category == "kind":
             # Squad members are drawn at their squadron's size, not their definition's scale: a kind's Size goes there.
             kind = self.p.kinds.get(refs.parse(kind_ref, "kind").name, {})
             if kind.get("scale", 1.0) != 1.0:
@@ -172,7 +172,10 @@ class _Builder:
             f = schema.field(field_name) if schema else None
             if f is None or f.type not in ("u16", "s16"):
                 raise BuildError([f"[{o['uid']}]: kindFields: {field_name} is not a 16-bit field of {o['type']}"])
-            out.append({"at": at + f.offset, "type": "u16", "ref": f"objtype_{refs.parse(ref, 'kind').name}"})
+            r = refs.parse(ref)
+            # A kind's id, or an object type's (the pack's own or a dependency's, which names the dependency)
+            fix = packtypes.resolve(self.p, ref)["fixup"] if r.category == "objtype" else f"objtype_{r.name}"
+            out.append({"at": at + f.offset, "type": "u16", "ref": fix})
         return out
 
     def own_types(self) -> tuple[list[dict], list[dict]]:
