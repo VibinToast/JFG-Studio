@@ -686,7 +686,8 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("mod.json", json.dumps(manifest, indent=4, sort_keys=True))
-        if entries or level_patches or objtypes or regions or project.baddies:  # a pack with no levels too
+        if (entries or level_patches or objtypes or regions or project.baddies  # a pack with no levels too
+                or any(lv.level.get("playerBodies") for lv in project.levels.values())):
             doc = {"entries": entries}
             if project.baddies:
                 doc["baddies"] = project.baddies
@@ -696,6 +697,11 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
                 doc["objtypes"], doc["animRows"] = objtypes, animrows
             if regions:
                 doc["regions"] = regions
+            # A level of the pack's own by its name; a stock level the pack edits by its number
+            bodies = [{"level": f"level_{name}" if lv.base is None else lv.base, **lv.level["playerBodies"]}
+                      for name, lv in sorted(project.levels.items()) if lv.level.get("playerBodies")]
+            if bodies:
+                doc["playerBodies"] = bodies
             z.writestr("jfg_assets.json", json.dumps(doc, indent=1))
         if music["tracks"]:
             z.writestr("jfg_music.json", json.dumps(music, indent=1, sort_keys=True))

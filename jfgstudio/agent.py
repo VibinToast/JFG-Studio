@@ -30,7 +30,7 @@ from jfgstudio import validate as val
 
 SQUADRON_ID = prefabs.SQUADRON_ID
 DOOR_LOCKED = 1  # a door's keyLock: locked until its squadrons are dead (or a switch opens it)
-LEVEL_KEYS = ("name", "track", "sky", "music", "planet", "ambient", "header")
+LEVEL_KEYS = ("name", "track", "sky", "music", "planet", "ambient", "header", "playerBodies")
 SURFACES = ("solid", "ledge", "lava", "hidden", "water", "kill", "nocollide")  # TrackMesh's kinds; 4 are floor
 FLOOR_KINDS = ("solid", "ledge", "lava", "hidden")
 LIST_LIMIT = 150  # catalog types listed at once
@@ -964,7 +964,8 @@ class Session:
                 "next": "place objects in it like any level (its own objects stay); connect an exit to the pack"}
 
     def set_level(self, name: str, values: dict) -> dict:
-        """Level settings: name, track, sky, music, planet, ambient, and header fields (merged by name)."""
+        """Level settings: name, track, sky, music, planet, ambient, playerBodies ({"juno": object id, "vela": ...}: the
+        heroes in another body here), and header fields (merged by name)."""
         level = self._level(name)
         if not isinstance(values, dict):
             raise AgentError("values is an object of level settings")
