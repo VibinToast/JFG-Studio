@@ -111,7 +111,8 @@ class StandIn(unittest.TestCase):
         self.assertEqual((fly[0], fly[1], fly[2]), ((12, 0), None, 0x40))  # a flyer: its squadron spawns its own
         self.assertIsNone(squads.stand_in(self.SQUADS, 0x52, self.MOVES.get))  # not a baddy
 
-    def test_native_size(self):
-        self.assertEqual(squads.native_size(0.4), 40)
-        self.assertEqual(squads.native_size(None), 100)
-        self.assertEqual(squads.native_size(9.0), 255)
+    def test_size(self):
+        self.assertEqual(squads.stand_in_size(0x1E5, 40, (145, 190, 215), (116, 133, 53)), 26)  # play-tested
+        self.assertEqual(squads.stand_in_size(0x50, 40, (100, 200, 100), (50, 100, 50)), 80)  # as large as the template
+        self.assertEqual(squads.stand_in_size(0x50, 0, None, None), 100)  # 0 is 1.0
+        self.assertEqual(squads.stand_in_size(0x50, 200, (500,), (10,)), 255)

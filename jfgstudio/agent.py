@@ -1186,7 +1186,12 @@ class Session:
             stand = squads.stand_in(self._squad_index(), m_oid, self._move_type)
             if stand is not None:
                 matched = stand[:2]
-                native = squads.native_size((self._types or {}).get(m_oid, {}).get("scale"))
+
+                def dims(oid):
+                    m = self.model_size(oid)
+                    return (m["x"], m["y"], m["z"]) if m else None
+                native = squads.stand_in_size(m_oid, self._catalog.stock_entry(*matched[0])[0x15], dims(stand[2]),
+                                              dims(m_oid))
         sq_ex = self._example(SQUADRON_ID, sq_schema, squadron_example if matched is None else list(matched[0]))
         # Flying enemies and some others have no member entries in the game's lists: their squadron spawns its own
         # members (count of them) round itself. Such a squad is the squadron alone.

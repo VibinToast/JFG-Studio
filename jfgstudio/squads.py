@@ -79,10 +79,21 @@ def stand_in(squads: dict, member_oid: int, move_type) -> tuple | None:
     return (*best[1], best[2]) if best else None
 
 
-def native_size(scale: float | None) -> int:
-    """A squadron's size field (hundredths; it replaces the members' definition scale) that draws an enemy at its
-    own definition's scale."""
-    return max(1, min(255, round((scale or 1.0) * 100)))
+# Member sizes (squadron +0x15, hundredths of the model) play-tested for enemies the game never puts in a squad: the
+# green alien villager-sized (its model is 133 tall), the sand worm as the enemy test hub showed them (2026-10-26).
+PLAYTESTED_SIZES = {0x1E5: 26, 0x166: 75}
+
+
+def stand_in_size(member_oid: int, template_size: int, template_dims, own_dims) -> int:
+    """A squadron size (+0x15: the member's model x this / 100, replacing the definition's scale, which is 1.0 for
+    every enemy) for an enemy copied from another's squad: a play-tested one, else the size that draws it as large
+    as the template's members (their longest side)."""
+    if member_oid in PLAYTESTED_SIZES:
+        return PLAYTESTED_SIZES[member_oid]
+    size = template_size or 100
+    if template_dims and own_dims and max(own_dims) > 0:
+        size = size * max(template_dims) / max(own_dims)
+    return max(1, min(255, round(size)))
 
 
 def fix(level, sq: dict, squads: dict, key, mode: int | None = None) -> tuple[list[edit.Change], dict]:

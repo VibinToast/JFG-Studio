@@ -390,7 +390,8 @@ whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `
   change that makes that worse, and the build refuses a set the pack leaves over 16 (the stock Termite, row 17, has
   23 on action 1: move 7 of them, anims 16-22, in one call).
 - `place_squad` of an enemy the game never puts in a squad (a cut one) copies a squad of an enemy that moves the same
-  way (walks or flies) and sets `size` to the enemy's own scale; `squadron_example` picks one yourself. The
+  way (walks or flies) and sets `size` (hundredths of the model; every enemy's definition says 1.0, so the squad
+  decides) to a play-tested one (the green alien 26, the sand worm 75) or one as large as the copied squad's members; `squadron_example` picks one yourself. The
   squadron's settings are named (sight range, view cone, hearing, trigger zone, spawn interval, mission timing, wake
   range ...): `describe_type squadron`. Its `trigger` 0, 2 and 4 read stale data in the game: use 1, 3, 5 or 6.
 - `make_object_type(name, base, behaviour, model, scale)` makes an object type of the pack's own from a stock one's
