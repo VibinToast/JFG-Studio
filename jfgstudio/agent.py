@@ -68,6 +68,7 @@ class Session:
         self._sizes: dict[int, dict | None] = {}
         self._slots: dict[int, list] = {}
         self._lost: dict[tuple, int] = {}
+        self._squads: dict | None = None  # enemy -> the best stock squad of it (squad_examples)
         self._notes: list[str] = []  # what placing chose where there was a choice; added to the call's result
         self._model_data = None
         if path is not None:
@@ -855,8 +856,10 @@ class Session:
         m_oid, m_schema, m_kind = self._type(member_type)
         placer = prefabs.Placer(lv, self.schemas, self._behaviours())
         sq_schema = self.schemas["squadron"]
-        sq_ex = self._example(SQUADRON_ID, sq_schema, squadron_example)
-        m_ex = self._example(m_oid, None, member_example)
+        matched = self.squad_examples(m_oid) if squadron_example is None else None
+        sq_ex = self._example(SQUADRON_ID, sq_schema, squadron_example if matched is None else list(matched[0]))
+        m_ex = self._example(m_oid, None, member_example if member_example is not None or matched is None
+                             or matched[1] is None else list(matched[1]))
         squadron_id = placer.free("squadron", "squadronId")
         door_id, existing = 0, None
         if door == "new":
@@ -912,6 +915,9 @@ class Session:
                 h.set_value(existing["uid"], ("fields", "keyLock"), DOOR_LOCKED, "lock door")
             self._save()
             made.append(self._describe(existing))
+        if squadron_example is None and matched is None:
+            made.append({"warning": f"the game has no squad of 0x{m_oid:X}: the squadron's unknown bytes (behaviour, "
+                                    "missions) come from another enemy's squad, so it may not move or fight right"})
         if wet:
             made.append({"warning": f"{len(wet)} member(s) found no dry floor near their place (lava, water, a pit "
                                     "or no floor there): move them (surface_at, find_flat)"})
@@ -1209,6 +1215,80 @@ class Session:
                                         "the network nearest to itself. Move the squadron next to this route"})
         return made
 
+    def squad_examples(self, member_oid: int):
+        """(squadron entry, member entry) of a stock squad of `member_oid`, [list, entry] each (the member None when
+        its members aren't list entries): a squadron's unnamed bytes (behaviour, missions, hearing ...) must come from
+        a squadron of the same enemy (decomp MSR, "Squadron entry"). One that moves and isn't on a patrol is picked.
+        None when the game has no squad of that enemy or there is no catalog."""
+        if self.catalog() is None:
+            return None
+        if self._squads is None:
+            import struct
+            self._squads = {}
+            try:
+                lv = self._catalog.levels_mod
+                lists = self._catalog.pair(lv.OBJLIST_TABLE, lv.OBJLIST_DATA)
+            except Exception:  # noqa: BLE001 (no lists to read: no matches)
+                lists = []
+            for n, raw in enumerate(lists):
+                entries = lv.objlist_entries(raw)
+                for i, e in enumerate(entries):
+                    if not e or e[0] != SQUADRON_ID or len(e[1]) < 0x40:
+                        continue
+                    data = e[1]
+                    baddy, sid = struct.unpack_from(">H", data, 0x36)[0], data[0x2D]
+                    member = next((j for j, m in enumerate(entries) if m and m[0] == baddy and len(m[1]) > 0x11
+                                   and m[1][0x11] == sid), None)
+                    moves = struct.unpack_from(">b", data, 0x38)[0] > 0 and data[0x24] & 0xF != PATROL_MODE
+                    score = (moves, member is not None)
+                    best = self._squads.get(baddy)
+                    if best is None or score > best[0]:
+                        self._squads[baddy] = (score, (n, i), (n, member) if member is not None else None)
+        found = self._squads.get(member_oid)
+        return None if found is None else found[1:]
+
+    def fix_squad(self, level: str, uid: str) -> dict:
+        """Points a squadron (and its members) at a stock squad of its own enemy, keeping every field set: for squads
+        made before place_squad picked one, which stand still or behave like another enemy."""
+        lv = self._level(level)
+        sq = self._object(lv, uid)
+        if self._key(sq) != "squadron":
+            raise AgentError(f"{uid!r} is not a squadron of {level}")
+        oid = sq.get("fields", {}).get("baddyType")
+        matched = self.squad_examples(oid) if oid is not None else None
+        if matched is None:
+            raise AgentError(f"the game has no squad of 0x{oid or 0:X} to copy from")
+        changes = [edit.Change(uid, ("stock",), copy.deepcopy(sq.get("stock")),
+                               {"list": matched[0][0], "entry": matched[0][1]})]
+        members = [o for o in lv.objects["objects"] if self._key(o) == "squadmember"
+                   and o.get("fields", {}).get("squadron") == sq["fields"].get("squadronId")]
+        if matched[1] is not None:
+            changes += [edit.Change(m["uid"], ("stock",), copy.deepcopy(m.get("stock")),
+                                    {"list": matched[1][0], "entry": matched[1][1]}) for m in members]
+        self._history(lv).do(edit.Command(f"fix squad {uid}", changes))
+        self._save()
+        return {"squadron": uid, "stock": changes[0].new, "members": len(members) if matched[1] is not None else 0}
+
+    def mismatched_squads(self) -> list[tuple[str, str, int, int]]:
+        """(level, uid, the squad's enemy, the copied stock squadron's enemy) for squadrons copying another enemy's."""
+        if self.catalog() is None:
+            return []
+        import struct
+        out = []
+        for lv in self.p.levels.values():
+            for o in lv.objects["objects"]:
+                if self._key(o) != "squadron" or not o.get("stock"):
+                    continue
+                try:
+                    e = self._catalog.stock_entry(o["stock"]["list"], o["stock"]["entry"])
+                except Exception:  # noqa: BLE001 (the build reports a bad stock entry)
+                    continue
+                stock_baddy = struct.unpack_from(">H", e, 0x36)[0] if len(e) >= 0x38 else None
+                ours = o.get("fields", {}).get("baddyType", stock_baddy)
+                if stock_baddy is not None and ours != stock_baddy and self.squad_examples(ours) is not None:
+                    out.append((lv.name, o["uid"], ours, stock_baddy))
+        return out
+
     def base_objects(self, level: proj.Level) -> list[dict]:
         """The start points and exits of the game level an edit adds to (read-only, from the player's catalog; never
         written into the project). Empty for a level of the pack's own or without a catalog."""
@@ -1406,6 +1486,11 @@ class Session:
                                                 + ": Juno isn't held up by lava (he passes through it, unhurt) and "
                                                 f"falls through. Put a solid floor at most {LAVA_FLOOR_DEPTH} under "
                                                 "every lava surface"))
+        for name, uid, ours, theirs in self.mismatched_squads():
+            problems.append(val.Problem(val.WARNING, "squad-stock", f"levels/{name}/objects.json",
+                                        f"the squadron copies a stock squad of 0x{theirs:X} for its 0x{ours:X} "
+                                        "members: its behaviour bytes don't fit them (they may stand still). "
+                                        "fix_squad points it at a squad of their own enemy", uid))
         for lv in self.p.levels.values():  # an edit's start points against the game level's own
             base = self._base_starts(lv)
             for o in lv.objects["objects"]:
@@ -1443,6 +1528,9 @@ class Session:
             raise AgentError("the build failed:\n" + "\n".join(e.problems)) from e
         except (testrun.TestRunError, formats.FormatsUnavailable, rom.RomError, ValueError) as e:
             raise AgentError(str(e)) from e
+        except PermissionError as e:
+            raise AgentError(f"{e.filename} is in use: the game is probably running with the pack loaded. Ask the "
+                             "player to close it, then try again") from e
         return {"installed": str(installed), "log": lines}
 
 

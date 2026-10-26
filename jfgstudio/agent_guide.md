@@ -118,7 +118,10 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
 - **Squad**: a squadron, its members and a region (a polygon of region points, corners in order) they keep to.
   `place_squad` makes all of it. With `door`, the squadron keeps that door locked until all its members are dead:
   the door's `doorId` matches the squadron's, and each locked door needs its own id. Members are kept off lava,
-  water and pits (moved to the nearest dry floor); the result warns about any it couldn't place dry.
+  water and pits (moved to the nearest dry floor); the result warns about any it couldn't place dry. A squadron's
+  behaviour (moving, chasing, missions) is in bytes not decoded yet, copied from a stock squad: `place_squad` copies
+  one of the same enemy (a kind's base); a squad copying another enemy's stands still (play-tested). `validate`
+  warns about such squads (`squad-stock`) and `fix_squad` mends one.
 - **Key door**: `place_key_door(level, door_type, door_pos, key_pos)` makes a door that needs a coloured key and
   the key, in a colour no other door of the pack uses (or `colour: "red key"`; `key_level` puts the key in another
   level). Put the key somewhere the player has to reach first: a ledge, past a squad.

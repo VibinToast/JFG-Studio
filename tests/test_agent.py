@@ -84,6 +84,7 @@ class FakeCatalog:
     def stock_entry(self, list_id, index):
         entry = bytearray(0x50)
         entry[0x24] = 0x13  # a squadron's kind byte: high bits kept, low 4 bits the mode
+        entry[0x36:0x38] = (0x29 if (list_id, index) == (10, 2) else 0x11F).to_bytes(2, "big")  # its enemy
         return bytes(entry)
 
 
@@ -108,6 +109,7 @@ class AgentTest(unittest.TestCase):
 
     def with_catalog(self):
         self.s._catalog, self.s._catalog_error, self.s._types = FakeCatalog(), None, TYPES
+        self.s._squads = {0x29: ((True, True), (10, 2), (10, 4))}  # a made-up stock squad of 0x29 and its member
 
     def errors(self):
         return [p for p in val.validate(self.s.p) if p.severity == val.ERROR]
@@ -434,6 +436,21 @@ class Prefabs(AgentTest):
             self.assertEqual((after[uid][0] - pos[0], after[uid][2] - pos[2]), (800, 300))
         moved = self.s.update_object("home", sq["uid"], pos=[350, -150])  # [x, z]: onto the floor by default
         self.assertEqual(moved["pos"], [350, 8, -150])
+
+    def test_squads_copy_a_squad_of_their_own_enemy(self):
+        self.with_catalog()
+        made = self.s.place_squad("home", [0, -300], "0x29", members=2)
+        sq = next(o for o in made if o.get("schema") == "squadron")
+        self.assertEqual(sq["stock"], {"list": 10, "entry": 2})  # the stock squad of 0x29, not the first one
+        self.assertEqual({o["stock"]["entry"] for o in made if o.get("schema") == "squadmember"}, {4})
+        old = self.s.place_squad("home", [300, -600], "0x29", members=2, squadron_example=[11, 7],  # another enemy's
+                                 region=[[100, -800], [500, -800], [500, -400], [100, -400]])
+        old_sq = next(o["uid"] for o in old if o.get("schema") == "squadron")
+        warned = [p.get("uid") for p in self.s.validate()["problems"] if p["rule"] == "squad-stock"]
+        self.assertEqual(warned, [old_sq])
+        fixed = self.s.fix_squad("home", old_sq)
+        self.assertEqual((fixed["stock"], fixed["members"]), ({"list": 10, "entry": 2}, 2))
+        self.assertFalse([p for p in self.s.validate()["problems"] if p["rule"] == "squad-stock"])
 
     def test_switch_doors(self):
         self.with_catalog()

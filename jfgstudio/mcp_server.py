@@ -200,6 +200,10 @@ TOOLS = [
            "start_at_load": {"type": "boolean", "description": "set off at level load (stock patrols wait for the "
                                                                 "squadron to be activated)"},
            "wait": {"type": "integer", "description": "wait at each node (stock 15)"}}, ["level", "points"]),
+    _tool("fix_squad", "Point a squadron (and its members) at a stock squad of its own enemy, keeping its fields: "
+          "squads that copy another enemy's stand still or behave wrong (validate warns: squad-stock).",
+          lambda s, a: s.fix_squad(a["level"], a["uid"]), {"level": _LEVEL, "uid": {"type": "string"}},
+          ["level", "uid"]),
     _tool("connect", "An exit in one level and the start point it brings the player to in another: a new one at "
           "arrive_pos (numbered clear of the level's own and, for an edit of a game level, the game level's), or an "
           "existing one with arrive_start_point.",
