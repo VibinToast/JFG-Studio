@@ -83,7 +83,7 @@ class FakeCatalog:
 
     def stock_entry(self, list_id, index):
         entry = bytearray(0x50)
-        entry[0x24] = 0x13  # a squadron's kind byte: high bits kept, low 4 bits the mode
+        entry[0x24] = 0x12 if (list_id, index) == (10, 2) else 0x11  # kind: low 4 bits the mode (2 usual)
         entry[0x36:0x38] = (0x29 if (list_id, index) == (10, 2) else 0x11F).to_bytes(2, "big")  # its enemy
         return bytes(entry)
 
@@ -109,7 +109,7 @@ class AgentTest(unittest.TestCase):
 
     def with_catalog(self):
         self.s._catalog, self.s._catalog_error, self.s._types = FakeCatalog(), None, TYPES
-        self.s._squads = {0x29: ((True, True), (10, 2), (10, 4))}  # a made-up stock squad of 0x29 and its member
+        self.s._squads = {0x29: [(2, True, 4, (10, 2)), (1, True, 5, (13, 3))]}  # made-up stock squads of 0x29
 
     def errors(self):
         return [p for p in val.validate(self.s.p) if p.severity == val.ERROR]
@@ -489,7 +489,10 @@ class Prefabs(AgentTest):
         self.assertEqual(len(links), 3)  # a ring
         self.assertEqual(sum(n["fields"].get("startAtLoad", 0) for n in nodes), 1)
         self.assertEqual({n["fields"]["wait"] for n in nodes}, {30})
-        self.assertEqual(next(o for o in made if o.get("uid") == sq)["fields"]["kind"], 0x16)  # 0x13: high bits kept
+        self.assertEqual(next(o for o in made if o.get("uid") == sq)["fields"]["kind"], 0x16)  # 0x12: high bits kept
+        self.assertEqual(self.s.squad_examples(0x29), ((10, 2), (10, 4)))  # the usual mode (2), not the rare 1
+        self.assertEqual(self.s.squad_examples(0x29, 1), ((13, 3), (13, 5)))
+        self.assertIsNone(self.s.squad_examples(0x29, 6))  # no stock patrol squad of it: the squad keeps its own
         self.assertFalse([p for p in self.s.validate()["problems"] if p["rule"] == "patrol"])
         chain = self.s.place_patrol("home", [[-500, 0], [-500, 300]])
         self.assertEqual(sorted(n["fields"]["node"] for n in chain if n.get("schema") == "patrolpoint"), [4, 5])

@@ -120,7 +120,9 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   the door's `doorId` matches the squadron's, and each locked door needs its own id. Members are kept off lava,
   water and pits (moved to the nearest dry floor); the result warns about any it couldn't place dry. A squadron's
   behaviour (moving, chasing, missions) is in bytes not decoded yet, copied from a stock squad: `place_squad` copies
-  one of the same enemy (a kind's base); a squad copying another enemy's stands still (play-tested). `validate`
+  one of the same enemy (a kind's base) in the mode it runs in (2, the game's usual fighting mode, or 6 for a
+  patrol); a squad copying another enemy's, or a rare mode (1), ran into place and crouched without firing
+  (play-tested). `validate`
   warns about such squads (`squad-stock`) and `fix_squad` mends one.
 - **Key door**: `place_key_door(level, door_type, door_pos, key_pos)` makes a door that needs a coloured key and
   the key, in a colour no other door of the pack uses (or `colour: "red key"`; `key_level` puts the key in another

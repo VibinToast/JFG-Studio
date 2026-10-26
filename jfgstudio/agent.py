@@ -15,6 +15,7 @@ import copy
 import itertools
 import json
 import math
+from collections import Counter
 from importlib import resources
 from pathlib import Path
 
@@ -1207,6 +1208,8 @@ class Session:
             if kind is None and sq.get("stock") and self.catalog() is not None:
                 kind = self._catalog.stock_entry(sq["stock"]["list"], sq["stock"]["entry"])[0x24]
             self.update_object(lv.name, squadron, fields={"kind": ((kind or 0) & 0xF0) | PATROL_MODE})
+            if self.squad_examples(sq["fields"].get("baddyType", -1), PATROL_MODE) is not None:
+                self.fix_squad(lv.name, squadron)  # the game's own patrol squad of this enemy: its other bytes fit
             made.append(self._describe(sq))
             others = [o for o in lv.objects["objects"] if self._key(o) == "patrolpoint" and o not in nodes]
             mine = min(math.dist(n["pos"], sq["pos"]) for n in nodes)
@@ -1215,13 +1218,8 @@ class Session:
                                         "the network nearest to itself. Move the squadron next to this route"})
         return made
 
-    def squad_examples(self, member_oid: int):
-        """(squadron entry, member entry) of a stock squad of `member_oid`, [list, entry] each (the member None when
-        its members aren't list entries): a squadron's unnamed bytes (behaviour, missions, hearing ...) must come from
-        a squadron of the same enemy (decomp MSR, "Squadron entry"). One that moves and isn't on a patrol is picked.
-        None when the game has no squad of that enemy or there is no catalog."""
-        if self.catalog() is None:
-            return None
+    def _squad_index(self) -> dict:
+        """Every stock squadron by its enemy: [(mode, moves, member entry or None, (list, entry))]."""
         if self._squads is None:
             import struct
             self._squads = {}
@@ -1239,13 +1237,29 @@ class Session:
                     baddy, sid = struct.unpack_from(">H", data, 0x36)[0], data[0x2D]
                     member = next((j for j, m in enumerate(entries) if m and m[0] == baddy and len(m[1]) > 0x11
                                    and m[1][0x11] == sid), None)
-                    moves = struct.unpack_from(">b", data, 0x38)[0] > 0 and data[0x24] & 0xF != PATROL_MODE
-                    score = (moves, member is not None)
-                    best = self._squads.get(baddy)
-                    if best is None or score > best[0]:
-                        self._squads[baddy] = (score, (n, i), (n, member) if member is not None else None)
-        found = self._squads.get(member_oid)
-        return None if found is None else found[1:]
+                    moves = struct.unpack_from(">b", data, 0x38)[0] > 0
+                    self._squads.setdefault(baddy, []).append((data[0x24] & 0xF, moves, member, (n, i)))
+        return self._squads
+
+    def squad_examples(self, member_oid: int, mode: int | None = None):
+        """(squadron entry, member entry) of a stock squad of `member_oid`, [list, entry] each (the member None when
+        its members aren't list entries). A squadron's unnamed bytes (behaviour, missions, hearing ...) must come from
+        a squadron of the same enemy (decomp MSR, "Squadron entry"), and in the mode it is used in: `mode` (kind's low
+        4 bits: 6 patrol), else the enemy's usual one (2 in 893 of the game's 924 squads; a squad copied from a rare
+        mode-1 one ran into place and crouched without firing, play-tested). None when the game has no squad of that
+        enemy in that mode, or there is no catalog."""
+        if self.catalog() is None:
+            return None
+        found = self._squad_index().get(member_oid, [])
+        if not found:
+            return None
+        if mode is None:
+            mode = Counter(f[0] for f in found).most_common(1)[0][0]
+        same = [f for f in found if f[0] == mode]
+        if not same:
+            return None
+        best = max(same, key=lambda f: (f[1], f[2] is not None))
+        return best[3], (best[3][0], best[2]) if best[2] is not None else None
 
     def fix_squad(self, level: str, uid: str) -> dict:
         """Points a squadron (and its members) at a stock squad of its own enemy, keeping every field set: for squads
@@ -1255,7 +1269,10 @@ class Session:
         if self._key(sq) != "squadron":
             raise AgentError(f"{uid!r} is not a squadron of {level}")
         oid = sq.get("fields", {}).get("baddyType")
-        matched = self.squad_examples(oid) if oid is not None else None
+        kind = sq.get("fields", {}).get("kind")
+        matched = self.squad_examples(oid, kind & 0xF if kind is not None else None) if oid is not None else None
+        if matched is None and kind is not None and oid is not None:
+            matched = self.squad_examples(oid)  # no stock squad in its mode (a patrol): its enemy's usual one
         if matched is None:
             raise AgentError(f"the game has no squad of 0x{oid or 0:X} to copy from")
         changes = [edit.Change(uid, ("stock",), copy.deepcopy(sq.get("stock")),
@@ -1285,7 +1302,14 @@ class Session:
                     continue
                 stock_baddy = struct.unpack_from(">H", e, 0x36)[0] if len(e) >= 0x38 else None
                 ours = o.get("fields", {}).get("baddyType", stock_baddy)
-                if stock_baddy is not None and ours != stock_baddy and self.squad_examples(ours) is not None:
+                kind = o.get("fields", {}).get("kind")
+                found = self._squad_index().get(ours, [])
+                if not found or len(e) <= 0x24:
+                    continue
+                # the mode it runs in: its own kind, else its enemy's usual one; the copied squad should be in it
+                runs = kind & 0xF if kind is not None else Counter(f[0] for f in found).most_common(1)[0][0]
+                fits = self.squad_examples(ours, runs) is not None
+                if stock_baddy is not None and (ours != stock_baddy or (fits and e[0x24] & 0xF != runs)):
                     out.append((lv.name, o["uid"], ours, stock_baddy))
         return out
 
@@ -1488,9 +1512,9 @@ class Session:
                                                 "every lava surface"))
         for name, uid, ours, theirs in self.mismatched_squads():
             problems.append(val.Problem(val.WARNING, "squad-stock", f"levels/{name}/objects.json",
-                                        f"the squadron copies a stock squad of 0x{theirs:X} for its 0x{ours:X} "
-                                        "members: its behaviour bytes don't fit them (they may stand still). "
-                                        "fix_squad points it at a squad of their own enemy", uid))
+                                        f"the squadron copies a stock squad (of 0x{theirs:X}) that doesn't fit its "
+                                        f"0x{ours:X} members or its mode: they may stand still or not fight. "
+                                        "fix_squad points it at a fitting squad of their own enemy", uid))
         for lv in self.p.levels.values():  # an edit's start points against the game level's own
             base = self._base_starts(lv)
             for o in lv.objects["objects"]:
