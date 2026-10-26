@@ -311,9 +311,24 @@ TOOLS = [
            "set": {"type": "object", "description": "fields: action, altAction (0-255), weight (0-31), stance (0-7), "
                    "fireSet (0-126, null = none), loops (0-15)"}}, ["object", "anim", "set"]),
     _tool("add_dependency", "Make the pack need another (mod.json dependencies): a library pack such as restored "
-          "content. Replaces the version if it is already there.",
-          lambda s, a: s.add_dependency(a["id"], a["version"]),
-          {"id": {"type": "string"}, "version": {"type": "string", "description": "1.2.3"}}, ["id", "version"]),
+          "content. Replaces the version if it is already there. With its project folder, its object types can be "
+          "placed here as <id>:objtype/<name>.",
+          lambda s, a: s.add_dependency(a["id"], a["version"], a.get("project")),
+          {"id": {"type": "string"}, "version": {"type": "string", "description": "1.2.3"},
+           "project": {"type": "string", "description": "its .jfgproj folder (absolute, or relative to this one)"}},
+          ["id", "version"]),
+    _tool("make_object_type", "An object type of the pack's own (objtypes/<name>.json): a stock type's definition "
+          "with its behaviour, model and scale changed (a working refuel pad that looks like the bomb pad: base 0xB9, "
+          "RefuelPoint, model 0x17B; behaviour 0 for a static prop; the AntTank 0x283 made solid: behaviour 49). "
+          "Place it as pack:objtype/<name>; packs that depend on this "
+          "one place it as <mod id>:objtype/<name>.",
+          lambda s, a: s.make_object_type(a["name"], a["base"], a.get("display_name"), a.get("behaviour"),
+                                          a.get("model"), a.get("scale")),
+          {"name": {"type": "string", "description": "lower case file name"},
+           "base": {"description": "the stock type it copies (\"0x171\" or a schema key)"},
+           "display_name": {"type": "string"}, "behaviour": {"type": "integer", "description": "none = the base's"},
+           "model": {"type": "integer", "description": "a model id every model slot shows; none = the base's"},
+           "scale": {"type": "number", "description": "times the base's size"}}, ["name", "base"]),
     _tool("remove_dependency", "Drop a dependency.", lambda s, a: s.remove_dependency(a["id"]),
           {"id": {"type": "string"}}, ["id"]),
     _tool("undo", "Undo a level's last change.", lambda s, a: s.undo(a["level"]), {"level": _LEVEL}, ["level"]),

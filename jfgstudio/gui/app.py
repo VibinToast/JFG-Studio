@@ -704,6 +704,12 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
         else:
             # a hidden type (the game draws nothing for it) shows only as its shape, if it has one
             path = None if schema and schema.hidden else S.model_path(oid)
+            own = kind_tools.pack_model(o)
+            if own is not None and S.catalog() is not None:  # a pack type with a model of its own
+                try:
+                    path = str(S.cat.model_glb(own))
+                except Exception:  # noqa: BLE001 (drawn as its base)
+                    pass
             sprite = None if path or (schema and schema.hidden) else S.sprite(
                 oid, schema.env_colour(S.fields(o, schema)) if schema else None)
             if sprite:  # the game's sprite, turned to face the camera

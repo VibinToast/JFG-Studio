@@ -9,6 +9,7 @@
     music/<name>.ogg                music (pack:music/<name>)
     kinds/<name>.json, kinds/<name>/  object types made from stock ones, with their textures (pack:kind/<name>)
     baddies.json                    patches of the game's enemy animation tables (baddy_patches.py), optional
+    objtypes/<name>.json            object types made from a stock definition (packtypes.py; pack:objtype/<name>)
 
 Files are saved deterministically (sorted keys, one-space indent, LF, a final newline), so a load followed by a save
 gives the same bytes and projects diff cleanly in git.
@@ -40,7 +41,8 @@ def _schema(name: str) -> dict:
                       .read_text(encoding="utf-8"))
 
 
-_SCHEMAS = {name: _schema(name) for name in ("project", "level", "objects", "planet", "kind", "galaxy", "baddies")}
+_SCHEMAS = {name: _schema(name) for name in ("project", "level", "objects", "planet", "kind", "galaxy", "baddies",
+                                                 "objtype")}
 
 
 def dumps(doc: dict) -> str:
@@ -81,6 +83,7 @@ class Project:
     kinds: dict[str, dict] = field(default_factory=dict)
     galaxies: dict[str, dict] = field(default_factory=dict)
     baddies: list[dict] = field(default_factory=list)  # baddies.json
+    objtypes: dict[str, dict] = field(default_factory=dict)  # objtypes/<name>.json
 
     @property
     def id(self) -> str:
@@ -109,6 +112,8 @@ class Project:
             write_json(self.path / "kinds" / f"{name}.json", kind)
         for name, galaxy in self.galaxies.items():
             write_json(self.path / "galaxies" / f"{name}.json", galaxy)
+        for name, t in self.objtypes.items():
+            write_json(self.path / "objtypes" / f"{name}.json", t)
         if self.baddies:
             write_json(self.path / "baddies.json", self.baddies)
         elif (self.path / "baddies.json").exists():  # every patch removed
@@ -183,12 +188,21 @@ def load(path: Path | str) -> Project:
             galaxy = _read(f, "galaxy", problems)
             if galaxy is not None:
                 galaxies[f.stem] = galaxy
+    objtypes = {}
+    if (path / "objtypes").is_dir():
+        for f in sorted((path / "objtypes").glob("*.json")):
+            if not NAME_RE.match(f.stem):
+                problems.append(f"{f}: object type file names use lower case letters, digits, _ and -")
+                continue
+            t = _read(f, "objtype", problems)
+            if t is not None:
+                objtypes[f.stem] = t
     baddies = []
     if (path / "baddies.json").exists():
         baddies = _read(path / "baddies.json", "baddies", problems) or []
     if problems:
         raise ProjectError(problems)
-    return Project(path, meta, levels, planets, kinds, galaxies, baddies)
+    return Project(path, meta, levels, planets, kinds, galaxies, baddies, objtypes)
 
 
 def create(path: Path | str, mod_id: str, name: str, author: str = "") -> Project:

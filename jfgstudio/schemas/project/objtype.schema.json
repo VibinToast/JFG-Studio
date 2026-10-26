@@ -1,0 +1,14 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "objtypes/<name>.json: an object type of the pack's own, made from a stock definition (packtypes.py)",
+ "type": "object",
+ "required": ["name", "base"],
+ "additionalProperties": false,
+ "properties": {
+  "name": {"type": "string", "minLength": 1, "description": "shown in Studio"},
+  "base": {"type": "string", "pattern": "^stock:objtype/(0x[0-9A-Fa-f]+|[0-9]+)$", "description": "the stock object type whose definition it copies"},
+  "behaviour": {"type": "integer", "minimum": 0, "maximum": 32767, "description": "definition +0x1C; none = the base's"},
+  "model": {"type": "integer", "minimum": 0, "maximum": 32767, "description": "the model every model slot shows (flag bits kept); none = the base's"},
+  "scale": {"type": "number", "exclusiveMinimum": 0, "maximum": 100, "description": "times the base's definition scale"}
+ }
+}

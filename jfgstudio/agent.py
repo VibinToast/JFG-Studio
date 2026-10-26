@@ -15,6 +15,7 @@ import copy
 import itertools
 import json
 import math
+import os
 from collections import Counter
 from importlib import resources
 from pathlib import Path
@@ -398,6 +399,16 @@ class Session:
                 if k is None:
                     raise AgentError(f"no kind {name!r} in the project (kinds: {', '.join(self.p.kinds) or 'none'})")
                 kind, t = t, k["base"]
+            from jfgstudio import packtypes
+            if packtypes.is_pack_type(t):
+                try:
+                    info = packtypes.resolve(self.p, t)
+                except packtypes.PackTypeError as e:
+                    raise AgentError(str(e)) from None
+                beh = info["behaviour"]
+                if beh is None:
+                    return info["base"], obj.schema_for_id(info["base"], self.schemas, self._behaviours()), t
+                return info["base"], next((s for s in self.schemas.values() if s.behaviour == beh), None), t
             if t.startswith("stock:objtype/"):
                 t = t.split("/", 1)[1]
             if t in self.schemas:
@@ -1091,12 +1102,30 @@ class Session:
         at = self._pos(lv, pos, schema, on_floor, lift)
         if facing is not None:
             checked.update([self._facing(schema, facing, (at[0], at[2]))])
-        ex = self._example(oid, schema, example)
+        from jfgstudio import packtypes
+        plain = False
+        if example is None and kind and packtypes.is_pack_type(kind) and self.catalog() is not None:
+            info = packtypes.resolve(self.p, kind)
+            beh = info["behaviour"] if info["behaviour"] is not None else self._types[info["base"]]["behaviour"]
+            example = None if beh == 0 else packtypes.example(self._types, info["base"], beh)
+            # No code (behaviour 0), or a behaviour no stock list places (hitanim 49 comes from animation paths):
+            # the plain entry, its header alone (decomp MSR "Unused props for the enemy test hub")
+            plain = example is None and not (schema and schema.status == "decoded")
         placer = prefabs.Placer(lv, self.schemas, self._behaviours())
-        try:
-            o = placer.single(oid, at, ex, name=name, fields=checked or None)
-        except ValueError as e:
-            raise AgentError(str(e)) from e
+        if plain:
+            if checked:
+                raise AgentError(f"{kind} is placed with the plain entry (no fields): leave fields out")
+            o = {"uid": placer.uid(name or kind.rsplit("/", 1)[1]), "type": f"stock:objtype/0x{oid:X}",
+                 "pos": [round(float(v)) for v in at], "size": packtypes.PLAIN_ENTRY}
+            if name:
+                o["name"] = name
+            placer.made.append(o)
+        else:
+            ex = self._example(oid, schema, example)
+            try:
+                o = placer.single(oid, at, ex, name=name, fields=checked or None)
+            except ValueError as e:
+                raise AgentError(str(e)) from e
         if kind:
             o["type"] = kind  # schema_for can't follow a kind to its base: name the schema
             if schema is not None:
@@ -2042,8 +2071,9 @@ class Session:
                               f"{', '.join(map(str, sorted(after)))}: the build refuses it until fixed")
         return out
 
-    def add_dependency(self, id: str, version: str) -> dict:
-        """Another pack this one needs (mod.json "dependencies"): a library such as restored content."""
+    def add_dependency(self, id: str, version: str, project: str | None = None) -> dict:
+        """Another pack this one needs (mod.json "dependencies"): a library such as restored content. `project`: its
+        project folder, so its object types can be placed here (<id>:objtype/<name>)."""
         import re
         if not proj.DEPENDABLE_ID_RE.match(id or ""):
             raise AgentError(f"{id!r} can't be a dependency: the game's mod loader takes only letters, digits and _ "
@@ -2053,10 +2083,56 @@ class Session:
             raise AgentError(f"{version!r} is not a version (1.2.3)")
         if id == self.p.id:
             raise AgentError("a pack can't depend on itself")
-        deps = [d for d in self.p.meta.get("dependencies", []) if d["id"] != id] + [{"id": id, "version": version}]
+        dep = {"id": id, "version": version}
+        if project:
+            folder = Path(project) if Path(project).is_absolute() else Path(self.p.path) / project
+            try:
+                other = proj.load(folder)
+            except proj.ProjectError as e:
+                raise AgentError(f"{project}: not a project that loads ({e})") from None
+            if other.id != id:
+                raise AgentError(f"{project} is the project of {other.id}, not {id}")
+            dep["project"] = Path(os.path.relpath(folder.resolve(), Path(self.p.path).resolve())).as_posix()
+        deps = [d for d in self.p.meta.get("dependencies", []) if d["id"] != id] + [dep]
         self.p.meta["dependencies"] = deps
         self._save()
         return {"dependencies": deps}
+
+    def make_object_type(self, name: str, base, display_name: str | None = None, behaviour: int | None = None,
+                         model: int | None = None, scale: float | None = None) -> dict:
+        """An object type of the pack's own (objtypes/<name>.json): the stock type `base`'s definition with its
+        behaviour, model (every model slot) and scale changed. Placed as pack:objtype/<name>, and by packs that
+        depend on this one as <mod id>:objtype/<name>."""
+        if not proj.NAME_RE.match(name or ""):
+            raise AgentError(f"{name!r}: object type names use lower case letters, digits, _ and -")
+        oid = self._type(base)[0]
+        if self.catalog() is None or oid not in (self._types or {}):
+            raise AgentError(f"0x{oid:X} is not an object type of the game (or the catalog is not available)")
+        t = self._types[oid]
+        doc = {"name": display_name or name.replace("_", " "), "base": f"stock:objtype/0x{oid:X}"}
+        if behaviour is not None:
+            doc["behaviour"] = _as_int(behaviour, "behaviour")
+        if model is not None:
+            if t["kind"] != "models":
+                raise AgentError(f"0x{oid:X} is drawn as {t['kind']}: it has no model slots to change")
+            doc["model"] = _as_int(model, "model")
+            try:
+                self._catalog.model_glb(doc["model"])
+            except Exception as e:  # noqa: BLE001 (jfgformats' reason)
+                raise AgentError(f"model 0x{doc['model']:X} doesn't read: {e}") from None
+        if scale is not None:
+            doc["scale"] = float(scale)
+        errors = list(jsonschema.Draft202012Validator(proj._SCHEMAS["objtype"]).iter_errors(doc))
+        if errors:
+            raise AgentError("; ".join(e.message for e in errors))
+        self.p.objtypes[name] = doc
+        self._save()
+        beh = doc.get("behaviour", t["behaviour"])
+        from jfgstudio import packtypes
+        out = {"type": f"pack:objtype/{name}", **doc, "dependents": f"{self.p.id}:objtype/{name}"}
+        if packtypes.example(self._types, oid, beh) is None:
+            out["warning"] = f"no stock object has behaviour {beh}: there is no entry to place one from"
+        return out
 
     def remove_dependency(self, id: str) -> dict:
         deps = [d for d in self.p.meta.get("dependencies", []) if d["id"] != id]

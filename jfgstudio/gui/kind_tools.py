@@ -33,7 +33,25 @@ def base_oid(o: dict) -> int | None:
             return int(t.split("/", 1)[1], 0)
         except ValueError:
             return None
+    from jfgstudio import packtypes
+    if packtypes.is_pack_type(t) and S.project:  # the pack's own type, or a dependency's: its base
+        try:
+            return packtypes.resolve(S.project, t)["base"]
+        except packtypes.PackTypeError:
+            return None
     return None
+
+
+def pack_model(o: dict) -> int | None:
+    """The model an object of the pack's own type (or a dependency's) shows in place of its base's, if it sets one."""
+    from jfgstudio import packtypes
+    S = _app().S
+    if not packtypes.is_pack_type(o.get("type", "")) or not S.project:
+        return None
+    try:
+        return packtypes.resolve(S.project, o["type"])["model"]
+    except packtypes.PackTypeError:
+        return None
 
 
 def model_textures(oid: int) -> list[tuple[int, int, int]]:

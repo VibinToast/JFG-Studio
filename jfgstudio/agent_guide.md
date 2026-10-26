@@ -393,6 +393,13 @@ whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `
   way (walks or flies) and sets `size` to the enemy's own scale; `squadron_example` picks one yourself. The
   squadron's settings are named (sight range, view cone, hearing, trigger zone, spawn interval, mission timing, wake
   range ...): `describe_type squadron`. Its `trigger` 0, 2 and 4 read stale data in the game: use 1, 3, 5 or 6.
+- `make_object_type(name, base, behaviour, model, scale)` makes an object type of the pack's own from a stock one's
+  definition (objtypes/<name>.json): a working refuel pad wearing the bomb pad mesh is base 0xB9 (RefuelPoint) with
+  model 0x17B; behaviour 0 makes it a static prop; the AntTank (0x283) made solid is behaviour 49. Place it with
+  `place` as pack:objtype/<name>. A type no stock list places (behaviour 0, or 49 which comes from animation paths)
+  gets the plain 10-byte entry and takes no fields.
+- A pack that depends on a library places the library's types as <mod id>:objtype/<name>: `add_dependency` with
+  the library's `project` folder, so Studio can read them.
 - A pack can be a library: no levels, only patches (or kinds). Another pack names it with
   `add_dependency(id, version)` (mod.json "dependencies"); `remove_dependency(id)` drops it.
 

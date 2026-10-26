@@ -368,6 +368,12 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
         t = _ref(o["type"], None, of, uid, out)
         if t and t.category not in ("objtype", "kind"):
             out.append(Problem(ERROR, "type", of, f"{o['type']}: an object's type is an objtype or a kind", uid))
+        elif t and t.category == "objtype" and not t.is_stock:
+            from jfgstudio import packtypes
+            try:
+                packtypes.resolve(project, o["type"])
+            except (packtypes.PackTypeError, ValueError) as e:
+                out.append(Problem(ERROR, "type", of, f"{o['type']}: {e}", uid))
         schema = obj.schema_for(o, schemas)
         if o.get("schema") and schema is None:
             out.append(Problem(ERROR, "schema", of, f"unknown schema {o['schema']!r}", uid))

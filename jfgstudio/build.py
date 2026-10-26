@@ -22,7 +22,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from jfgstudio import bps, formats, prefabs, refs, rom, stock_edit
+from jfgstudio import bps, formats, packtypes, prefabs, refs, rom, stock_edit
 from jfgstudio import objects as obj
 from jfgstudio import validate as val
 from jfgstudio.catalog import Catalog
@@ -121,7 +121,12 @@ class _Builder:
     # objects
     def entry(self, o: dict, level_name: str) -> bytes:
         t = refs.parse(o["type"])
-        if t.is_pack and t.category == "kind":
+        if t.category == "objtype" and not t.is_stock:  # written as its base; a fixup gives it its own id
+            try:
+                t = refs.parse(f"stock:objtype/0x{packtypes.resolve(self.p, o['type'])['base']:X}")
+            except packtypes.PackTypeError as e:
+                raise BuildError([f"levels/{level_name} [{o['uid']}]: {e}"]) from e
+        elif t.is_pack and t.category == "kind":
             kind = self.p.kinds.get(t.name)
             if kind is None:
                 raise BuildError([f"levels/{level_name} [{o['uid']}]: {o['type']}: the project has no kind {t.name}"])
@@ -159,6 +164,8 @@ class _Builder:
         t = refs.parse(o["type"])
         if t.is_pack and t.category == "kind":
             out.append({"at": at, "type": "u16", "ref": f"objtype_{t.name}"})
+        elif t.category == "objtype" and not t.is_stock:  # the pack's own type, or a dependency's
+            out.append({"at": at, "type": "u16", "ref": packtypes.resolve(self.p, o["type"])["fixup"]})
         schema = obj.schema_for(o, self.schemas)
         for field_name, ref in (o.get("kindFields") or {}).items():
             f = schema.field(field_name) if schema else None
@@ -166,6 +173,44 @@ class _Builder:
                 raise BuildError([f"[{o['uid']}]: kindFields: {field_name} is not a 16-bit field of {o['type']}"])
             out.append({"at": at + f.offset, "type": "u16", "ref": f"objtype_{refs.parse(ref, 'kind').name}"})
         return out
+
+    def own_types(self) -> tuple[list[dict], list[dict]]:
+        """The pack's object types (packtypes.py) as the port builds them from the player's own data: (entries,
+        objtypes). Each copies its base's definition with its behaviour, models and scale set."""
+        entries, objtypes = [], []
+        if not self.p.objtypes:
+            return entries, objtypes
+        types = self.catalog.objtypes()
+        defs_table, _ = self.jf.read_table(self.catalog.assets.section(OBJDEF_TABLE))
+        defs_data = self.catalog.assets.section(OBJDEF_DATA)
+        for name, doc in sorted(self.p.objtypes.items()):
+            base = refs.parse(doc["base"], "objtype").number()
+            t = types.get(base)
+            if t is None:
+                raise BuildError([f"objtypes/{name}.json: {doc['base']} is not an object type of the game"])
+            d = t["def"]
+            raw = defs_data[defs_table[d]:defs_table[d + 1]]
+            sets = []
+            if doc.get("scale", 1.0) != 1.0:
+                sets.append({"at": 0, "hex": struct.pack(">f", struct.unpack_from(">f", raw, 0)[0]
+                                                         * float(doc["scale"])).hex()})
+            if doc.get("behaviour") is not None:
+                sets.append({"at": 0x1C, "hex": struct.pack(">h", doc["behaviour"]).hex()})
+            if doc.get("model") is not None:
+                if raw[0x1E] != 0 or raw[0x1F] == 0:
+                    raise BuildError([f"objtypes/{name}.json: {doc['base']} has no models to replace (it is drawn "
+                                      f"as {t['kind']})"])
+                arr = struct.unpack_from(">i", raw, 0x30)[0]
+                for i in range(raw[0x1F]):  # every slot (LODs) shows the model; each keeps its flag bits
+                    old = struct.unpack_from(">I", raw, arr + 4 * i)[0]
+                    sets.append({"at": arr + 4 * i, "hex": struct.pack(">I", (old & ~0x7FFF) | doc["model"]).hex()})
+            entries.append({"table": OBJDEF_TABLE, "data": OBJDEF_DATA, "what": "objdef", "index": None, "raw": None,
+                            "append": f"objdef_{name}", "copyOf": d, "set": sets})
+            objtypes.append({"append": f"objtype_{name}", "def": f"objdef_{name}", "like": base})
+            self.log(f"object type {name}: {doc['name']}, made from {t['name']} (0x{base:X})"
+                     + (f", behaviour {doc['behaviour']}" if doc.get("behaviour") is not None else "")
+                     + (f", model 0x{doc['model']:X}" if doc.get("model") is not None else ""))
+        return entries, objtypes
 
     def kinds(self) -> tuple[list[dict], list[dict], list[dict]]:
         """The pack's kinds as the port builds them from the player's own data: (entries, objtypes, animRows). Each
@@ -536,6 +581,9 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     try:
         changes = b.assets()
         kind_entries, objtypes, animrows = b.kinds()
+        type_entries, own_types = b.own_types()
+        kind_entries += type_entries
+        objtypes += own_types
         level_patches = b.patches()
         regions = b.regions()
         patched = b.map_image()
