@@ -233,10 +233,25 @@ class TrackMesh:
 
 def floor_of(t: np.ndarray, x: float, z: float, below: float | None = None) -> float | None:
     """The highest of the triangles (n, 3, 3) straight under or over (x, z) (at or below `below` when given)."""
+    ys = heights_at(t, x, z)
+    if below is not None:
+        ys = ys[ys <= below + 1.0]
+    return float(ys.max()) if len(ys) else None
+
+
+def heights_at(t: np.ndarray, x: float, z: float, facing: int = 0) -> np.ndarray:
+    """The heights of all the triangles (n, 3, 3) straight under or over (x, z); `facing` 1 / -1: only those facing
+    up / down (counter-clockwise seen from the front, as glTF and the game's tracks wind them)."""
     if not len(t):
-        return None
+        return np.zeros(0)
+    if facing:
+        e1, e2 = t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]
+        ny = e1[:, 2] * e2[:, 0] - e1[:, 0] * e2[:, 2]  # the y of (b - a) x (c - a)
+        t = t[ny * facing > 0]
+        if not len(t):
+            return np.zeros(0)
     a, b, c = t[:, 0], t[:, 1], t[:, 2]
-        # Barycentric test in the xz plane.
+    # Barycentric test in the xz plane.
     v0x, v0z = c[:, 0] - a[:, 0], c[:, 2] - a[:, 2]
     v1x, v1z = b[:, 0] - a[:, 0], b[:, 2] - a[:, 2]
     v2x, v2z = x - a[:, 0], z - a[:, 2]
@@ -246,13 +261,8 @@ def floor_of(t: np.ndarray, x: float, z: float, below: float | None = None) -> f
     u = (v2x * v1z - v1x * v2z) / den
     v = (v0x * v2z - v2x * v0z) / den
     inside = ok & (u >= 0) & (v >= 0) & (u + v <= 1)
-    if not inside.any():
-        return None
     y = a[:, 1] + u * (c[:, 1] - a[:, 1]) + v * (b[:, 1] - a[:, 1])
-    ys = y[inside]
-    if below is not None:
-        ys = ys[ys <= below + 1.0]
-    return float(ys.max()) if len(ys) else None
+    return y[inside]
 
 
 def raycast(triangles: np.ndarray, origin, direction) -> float | None:

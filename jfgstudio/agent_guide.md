@@ -8,7 +8,8 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 1. `open_project` (or `new_project`), then `project_summary`.
 2. Geometry: model in Blender with the jfg64 add-on (below), then `import_geometry`. Check `geometry_info` against
    the limits.
-3. `add_level` on the geometry; `set_level` for fog, sky, music and planet.
+3. `add_level` on the geometry, then `set_level` for fog, sky and music. For a planet: `add_level` without one,
+   `set_planet` (it names an entry level, which must exist), then `set_level {"planet": ...}` on each level.
 4. A start point first: type `startpoint`, fields `startPoint` 0, `player` 0. Exits into a level arrive at one of its
    start points, by number, for player 0.
 5. Lay out the play: `surface_at` and `find_flat` tell you where the floor is; `place` puts objects on it.
@@ -21,7 +22,9 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender: it knows the game's surfaces and limits and exports what Studio reads.
+The jfg64 add-on is **required** in Blender, **version 0.3.0 or newer** (`jfg64.__version__`): it knows the game's
+surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
+Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
 Through a Blender MCP server, run Python in Blender and use it rather than writing your own:
 
 ```python
@@ -71,10 +74,10 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
     a door lets the hero through; walls must be well over 250 high and gaps well over 300 across, or end in a kill
     floor. Slopes over 45 degrees (55 tested) can't be walked up: use them for walls the player shouldn't climb.
   - **Ledges** the hero can grab (play-tested): only where you make them. In Blender, give a block's top the
-    `ledge` surface and its walls `ledgewall` (`jfg64.set_surface`); the walls' top edges must sit exactly on the
-    top's corners. The hero catches the edge while falling past it (walking off, or dropping beside a jump). Plain
-    geometry has no ledges at all. Keep a ledge block small and in one place: where the importer happens to cut
-    the level into pieces along a ledge's edge, that edge loses its ledge (a warning for it is coming).
+    `ledge` surface (`jfg64.set_surface`); the walls under its edges need nothing, as long as their top edges sit
+    exactly on the top's corners: the importer finds them. The hero catches the edge while falling past it (walking
+    off, or dropping beside a jump). Plain geometry has no ledges at all. The import report counts ledge edges per
+    segment and names top edges with no wall below them.
 - **Facing**: `place`, `update_object` and `connect` take degrees (0 = towards -z, the way a start point at yaw 0
   faces). Types store it in their own steps: `describe_type` gives each angle field's `perTurn` (64 for angle10,
   256 for angle8, 65536 for angle16).
@@ -97,16 +100,22 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
 
 - **Squad**: a squadron, its members and a region (a polygon of region points, corners in order) they keep to.
   `place_squad` makes all of it. With `door`, the squadron keeps that door locked until all its members are dead:
-  the door's `doorId` matches the squadron's, and each locked door needs its own id.
+  the door's `doorId` matches the squadron's, and each locked door needs its own id. Members are kept off lava,
+  water and pits (moved to the nearest dry floor); the result warns about any it couldn't place dry.
 - **Key door**: a door with `keyLock` 2 or more needs a key (2 = yellow key ...); place the key pickup somewhere the
   player has to reach first (a ledge, past a squad).
-- **Exits**: `connect(from, exit_pos, to, arrive_pos)` makes the exit and the start point it leads to. Give every
-  level a way back. An exit's `arg1A` 1 (the default) shows the game's stats screen when it leads into another region.
+- **Exits**: `connect(from, exit_pos, to, arrive_pos)` makes the exit and the start point it leads to (numbered
+  clear of the level's own start points, and of the game level's when it is an edit of one); `arrive_start_point`
+  instead arrives at a start point already there. Give every level a way back. An exit's `arg1A` 1 (the default) shows the game's stats screen when it leads into another region.
 - **Planets**: a level's `planet` puts it in that planet's region (at most 32 levels per planet; the port has room
   for 9 mod regions in all). The planet's `entryLevel` is where the map starts it.
 - **Mood**: `fogzone`, `light`, `glow`, and the level header's fog colour and distances (see Fog); music per level.
-- **The game's own levels**: `stock_levels` lists them (`stock:level/<id>`); it marks where a new game starts, the
-  usual way back to the game.
+- **The game's own levels**: `stock_levels` lists them (`stock:level/<id>`; `search` by name, `world`); it says
+  where a new game starts, the usual way back to the game and a good place for a portal.
+- **Doors**: place one by `[x, z]` and it stands on the lowest floor there with room for a door (the bottom of its
+  opening, not the top of the wall); give `[x, y, z]` for a door on an upper floor. `describe_type <id>`'s
+  `modelSize` gives its size and, in `from` / `to`, its box around its position. In a doorway `surface_at` returns
+  the top of the wall over it: pass `below` to reach the floor.
 
 ## Planets and galaxies: how the player gets in
 
@@ -120,7 +129,9 @@ on the planet map as soon as one of its planets is open. So a pack is reachable 
   `dir`, the `back` direction); or
 - an exit in one of the game's levels leads in (a portal): `edit_stock_level`, then `connect` from it to the planet's
   entry level. The example world does this, and its first planet waits for `{"entered": itself}` so it shows on the
-  map once the portal was used.
+  map once the portal was used. An edit adds to the game level: `level_info` lists the game level's own start points
+  and exits (`baseLevel`) and `level_preview` draws them grey; never reuse their start point numbers (`connect`
+  avoids them, `validate` says when one clashes), or the game's own arrivals there, a new game's included, break.
 `validate` warns about a planet nothing leads to. The planet's `disc` is its look on the map: `index` the game disc
 whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `radius`, and optional `colour`.
 `set_planet` and `set_galaxy` take the files' full formats, with every key described.
@@ -133,5 +144,6 @@ whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `
   game's rules it warns about start points inside an exit's radius, key doors whose key no level holds, planets
   nothing leads to, and objects the geometry leaves buried, floating or over a pit. It can't tell whether a door
   fills its opening or a gap lets the player around it: look.
-- `level_preview` draws a level from above with its objects on it: look at each level once it is laid out.
+- `level_preview` draws a level from above with its objects on it: look at each level once it is laid out. With
+  `colours` it shows the baked vertex colours instead, to compare the levels' moods.
 - `geometry_info` for the limits; `surface_at` to check an object isn't over water, a pit or nothing.

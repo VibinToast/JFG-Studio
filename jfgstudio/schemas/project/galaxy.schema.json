@@ -7,6 +7,6 @@
  "properties": {
   "format": {"const": 1},
   "name": {"type": "string", "minLength": 1, "maxLength": 40, "description": "the name shown at the top of the map"},
-  "home": {"type": "string", "pattern": "^[a-z0-9_-]+$", "description": "the planet the cursor starts on (one of this galaxy's planets; it should be open from the start)"}
+  "home": {"type": "string", "pattern": "^[a-z0-9_-]+$", "description": "the planet the cursor starts on when the player switches to this galaxy (one of its planets). The galaxy appears on L / R once any of its planets is open: from the start (unlock \"start\"), or once entered through a portal (unlock {\"entered\": itself})"}
  }
 }

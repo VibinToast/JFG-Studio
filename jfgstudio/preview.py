@@ -31,6 +31,7 @@ MARKS = {  # schema key -> (colour, shape, size in pixels)
 }
 OTHER = ((200, 120, 255), "dot", 2)
 REGION_RGB = (255, 110, 110)
+BASE_RGB = (150, 150, 150)
 
 
 def _png(rgb: np.ndarray) -> bytes:
@@ -66,15 +67,29 @@ class Canvas:
             self.put(int(round(a[0] + (b[0] - a[0]) * t)), int(round(a[1] + (b[1] - a[1]) * t)), rgb)
 
 
-def _surfaces(c: Canvas, mesh) -> None:
-    """Each kind's triangles rasterised from above: the topmost one wins, shaded by its height."""
+def _layers(mesh, colours: bool):
+    """(triangles (n, 3, 3), a colour per triangle (n, 3) or None, the kind's colour, shade by height) per layer, in
+    drawing order. `colours`: the baked vertex colours (each triangle's average), as the game lights the level."""
+    order = {k: i for i, k in enumerate(DRAW_ORDER)}
+    if colours and hasattr(mesh, "parts"):
+        for p in sorted(mesh.parts, key=lambda p: order.get(p[5], 0)):
+            if p[5] != "hidden":
+                cols = np.asarray(p[2], np.float64).reshape(-1, 3, 4)[:, :, :3].mean(axis=1) * 255
+                yield np.asarray(p[0], np.float64).reshape(-1, 3, 3), cols, None, False
+        return
+    for kind in DRAW_ORDER:
+        yield mesh.kind_triangles(kind), None, np.array(SURFACE_RGB[kind], np.float64), True
+
+
+def _surfaces(c: Canvas, mesh, colours: bool = False) -> None:
+    """Each layer's triangles rasterised from above: the topmost one wins, shaded by its height (or in its baked
+    colour)."""
     lo, hi = mesh.bounds
     span_y = max(float(hi[1] - lo[1]), 1.0)
     top = np.full((c.h, c.w), -np.inf)
-    for kind in DRAW_ORDER:
-        tris = mesh.kind_triangles(kind)
-        base = np.array(SURFACE_RGB[kind], np.float64)
-        for t in tris:
+    for tris, cols, kind_rgb, shaded in _layers(mesh, colours):
+        for i, t in enumerate(tris):
+            base = kind_rgb if cols is None else cols[i]
             p = np.array([c.px(v[0], v[2]) for v in t])
             x0, y0 = np.floor(p.min(axis=0)).astype(int)
             x1, y1 = np.ceil(p.max(axis=0)).astype(int)
@@ -96,12 +111,17 @@ def _surfaces(c: Canvas, mesh) -> None:
             region = top[y0:y1 + 1, x0:x1 + 1]
             win = inside & (y >= region)
             region[win] = y[win]
-            shade = 0.45 + 0.75 * (y[win] - float(lo[1])) / span_y
-            c.rgb[y0:y1 + 1, x0:x1 + 1][win] = np.clip(base[None, :] * shade[:, None], 0, 255)
+            if shaded:
+                shade = 0.45 + 0.75 * (y[win] - float(lo[1])) / span_y
+                c.rgb[y0:y1 + 1, x0:x1 + 1][win] = np.clip(base[None, :] * shade[:, None], 0, 255)
+            else:
+                c.rgb[y0:y1 + 1, x0:x1 + 1][win] = np.clip(base, 0, 255)
 
 
 def _mark(c: Canvas, o: dict, key: str | None, schema) -> None:
     rgb, shape, size = MARKS.get(key, OTHER)
+    if o.get("base"):
+        rgb = BASE_RGB  # the game level's own object, under an edit
     x, y = c.px(o["pos"][0], o["pos"][2])
     xi, yi = int(round(x)), int(round(y))
     if shape == "ring":
@@ -134,12 +154,13 @@ def _mark(c: Canvas, o: dict, key: str | None, schema) -> None:
             c.line((x - fy * size + fx, y + fx * size + fy), (x + fy * size + fx, y - fx * size + fy), rgb)
 
 
-def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = None,
-           size: int = 512) -> tuple[bytes, dict]:
-    """(PNG bytes, legend) of a level from above."""
+def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = None, size: int = 512,
+           colours: bool = False) -> tuple[bytes, dict]:
+    """(PNG bytes, legend) of a level from above. Objects with "base" are a game level's own (drawn grey);
+    `colours` draws the baked vertex colours instead of the surface kinds."""
     lo, hi = mesh.bounds
     c = Canvas(lo, hi, max(64, min(int(size), 2048)))
-    _surfaces(c, mesh)
+    _surfaces(c, mesh, colours)
     corners: dict[int, list] = {}
     keyed = []
     for o in objects:
@@ -162,5 +183,9 @@ def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = N
               "marks": {"start point": "white square with an arrow (its facing)", "exit": "cyan ring (its radius)",
                         "squad": "red square (squadron) and red dots (members), red outline (their region)",
                         "door": "yellow bar across its facing", "key": "gold diamond",
-                        "pickups": "green dots", "lights": "pale yellow dots", "other": "purple dots"}}
+                        "pickups": "green dots", "lights": "pale yellow dots", "other": "purple dots",
+                        "grey": "the game level's own start points and exits, under an edit of it"}}
+    if colours:
+        legend["surfaces"] = "the baked vertex colours, as the game lights the level (colliders left out)"
+        legend.pop("shading")
     return _png(c.rgb), legend

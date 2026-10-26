@@ -388,10 +388,12 @@ class _Builder:
         for g in world["galaxies"]:
             self.log(f"galaxy {g['id']}: {g['name']}" + (f", home {g['home']}" if g.get("home") else ""))
         for p in world["planets"]:
-            reached = ", ".join(f"{'map point ' if isinstance(r['from'], int) else ''}{r['from']} "
-                                f"({worldmap.DIRS[r['dir']]})" for r in p["routes"]) or "nothing (its galaxy's home)"
+            routes = ", ".join(f"{'map point ' if isinstance(r['from'], int) else ''}{r['from']} "
+                               f"({worldmap.DIRS[r['dir']]})" for r in p["routes"])
             where = f"({p['disc']['x']}, {p['disc']['y']})"
-            self.log(f"planet {p['id']} on {p['galaxy']}: at {where}, reached from {reached}, unlock {p['unlock']}")
+            self.log(f"planet {p['id']} on {p['galaxy']}: at {where}, "
+                     + (f"map routes from {routes}" if routes else "no map routes (a galaxy's first planet needs none)")
+                     + f", unlock {p['unlock']} (validate checks that the player can get there)")
         return world
 
     def map_image(self) -> bytes | None:

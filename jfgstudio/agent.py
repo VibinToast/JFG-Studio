@@ -12,6 +12,7 @@ gives it.
 """
 
 import copy
+import itertools
 import json
 import math
 from importlib import resources
@@ -32,6 +33,8 @@ FLOOR_KINDS = ("solid", "lava", "hidden")
 LIST_LIMIT = 150  # catalog types listed at once
 NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way back to the game
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
+DOOR_CLEARANCE = 120  # a door placed by [x, z] stands on the lowest floor with this much room above it
+SPREAD_TRIES = 24  # place_squad looks this many places around the centre for a dry spot for each member
 
 
 class AgentError(Exception):
@@ -142,11 +145,11 @@ class Session:
                     **({"ids": [f"0x{i:X}" for i in s.ids[:3]] + (["..."] if len(s.ids) > 3 else [])} if s.ids
                        else {"behaviour": s.behaviour})}
                    for s in sorted(self.schemas.values(), key=lambda s: (s.category, s.key))]
-        out = {"schemas": schemas}
         if search is None and behaviour is None:
-            out["next"] = ("describe_type <key> for a schema's fields and ids; object_types with search (a name) or "
-                           "behaviour (a schema's behaviour number) for the game's own types")
-            return out
+            return {"schemas": schemas,
+                    "next": "describe_type <key> for a schema's fields and ids; object_types with search (a name) or "
+                            "behaviour (a schema's behaviour number) for the game's own types"}
+        out = {}  # a search: only the matches (the schemas are the call without one)
         if self.catalog() is None:
             out["catalog"] = f"not available ({self._catalog_error}): only the schemas' own ids can be named"
             return out
@@ -209,9 +212,13 @@ class Session:
             try:
                 from jfgstudio.gui.viewport import TrackMesh
                 mesh = TrackMesh(str(self._catalog.model_glb(t["assets"][0])), surfaces=False)
-                x, y, z = ((mesh.bounds[1] - mesh.bounds[0]) * t["scale"]).tolist()
+                lo, hi = (mesh.bounds[0] * t["scale"]).tolist(), (mesh.bounds[1] * t["scale"]).tolist()
+                x, y, z = (b - a for a, b in zip(lo, hi, strict=True))
                 size = {"x": round(x), "y": round(y), "z": round(z),
-                        "note": "the model at its type's scale; an object's own scale field (if any) multiplies it"}
+                        "from": [round(v) for v in lo], "to": [round(v) for v in hi],
+                        "note": "the model at its type's scale, around the object's position (from / to: its box "
+                                "relative to it, so from y 0 means it stands on its position); an object's own "
+                                "scale field (if any) multiplies it"}
             except Exception:  # noqa: BLE001 (a model the reader can't take: no size, not an error)
                 size = None
         self._sizes[oid] = size
@@ -229,17 +236,16 @@ class Session:
             d["values"] = {str(k): v for k, v in f.enum.items()}
         return d
 
-    def stock_levels(self, search: str | None = None) -> dict:
-        """The game's own levels (from the catalog): id, name, world and track; `search` filters by name. Exits and
-        entry levels name them stock:level/<id>."""
+    def stock_levels(self, search: str | None = None, world: int | None = None) -> dict:
+        """The game's own levels (from the catalog) as "id: name (world w)"; `search` filters by name, `world` by
+        world. Exits and entry levels name them stock:level/<id>."""
         if self.catalog() is None:
             raise AgentError(f"the catalog is not available ({self._catalog_error})")
-        out = [{"id": lv["id"], "name": lv["name"], "world": lv["world"], "track": lv["track"]}
-               for lv in self._catalog.levels() if not search or search.lower() in lv["name"].lower()]
-        for lv in out:
-            if lv["id"] == NEW_GAME_LEVEL:
-                lv["note"] = "where a new game starts (Juno); the usual way back to the game"
-        return {"levels": out[:LIST_LIMIT * 3]}
+        out = [f"{lv['id']}: {lv['name']} (world {lv['world']})" for lv in self._catalog.levels()
+               if (not search or search.lower() in lv["name"].lower()) and (world is None or lv["world"] == world)]
+        return {"levels": out[:LIST_LIMIT * 3], "newGame": NEW_GAME_LEVEL,
+                "note": f"stock:level/{NEW_GAME_LEVEL} is where a new game starts (Juno): the usual way back to the "
+                        "game, and a good place for a portal into the pack"}
 
     def _type(self, type) -> tuple[int | None, obj.Schema | None, str | None]:
         """(stock object id, schema, pack kind ref) of a type named by schema key, id or kind."""
@@ -456,11 +462,13 @@ class Session:
             out["next"] = "settle_objects puts sunk and floating ones on the floor; move the others yourself"
         return out
 
-    def preview(self, level: str, size: int = 512, out: str | None = None) -> dict:
-        """A top-down picture of the level with its objects ("png": the bytes), and its legend; `out` also saves it."""
+    def preview(self, level: str, size: int = 512, out: str | None = None, colours: bool = False) -> dict:
+        """A top-down picture of the level with its objects ("png": the bytes), and its legend; `out` also saves it.
+        An edit of a game level also shows that level's own start points and exits, grey. `colours`: the baked
+        vertex colours instead of the surface kinds."""
         lv = self._level(level)
-        png, legend = preview.render(self._mesh(level), lv.objects["objects"], self.schemas, self._behaviours(),
-                                     _as_int(size, "size"))
+        png, legend = preview.render(self._mesh(level), lv.objects["objects"] + self.base_objects(lv), self.schemas,
+                                     self._behaviours(), _as_int(size, "size"), bool(colours))
         if out:
             Path(out).write_bytes(png)
             legend["saved"] = str(out)
@@ -508,7 +516,14 @@ class Session:
 
     def level_info(self, name: str) -> dict:
         level = self._level(name)
-        return {"level": copy.deepcopy(level.level), "objects": [self._describe(o) for o in level.objects["objects"]]}
+        out = {"level": copy.deepcopy(level.level), "objects": [self._describe(o) for o in level.objects["objects"]]}
+        base = self.base_objects(level)
+        if base:
+            out["baseLevel"] = {"note": "the game level's own start points and exits (read-only): this level's "
+                                        "objects are added to them, so don't reuse their start point numbers",
+                                "objects": [{"schema": o["schema"], "pos": o["pos"], "fields": o["fields"]}
+                                            for o in base]}
+        return out
 
     def _describe(self, o: dict) -> dict:
         d = {k: copy.deepcopy(o[k]) for k in ("uid", "name", "type", "pos", "fields", "target", "stock",
@@ -544,7 +559,9 @@ class Session:
         if planet:
             if planet not in self.p.planets:
                 del self.p.levels[name]
-                raise AgentError(f"no planet {planet!r} (planets: {', '.join(self.p.planets) or 'none'})")
+                raise AgentError(f"no planet {planet!r} yet (planets: {', '.join(self.p.planets) or 'none'}): "
+                                 "a planet needs its entry level first, so add the level without one, then "
+                                 'set_planet, then set_level {"planet": ...}')
             level.level["planet"] = planet
         self._save()
         return {"level": name, "next": "place a start point (type startpoint, fields startPoint 0, player 0)"}
@@ -600,7 +617,9 @@ class Session:
             raise AgentError("not a valid level.json: " + "; ".join(
                 f"{'/'.join(str(p) for p in e.absolute_path) or '(top)'}: {e.message}" for e in errors))
         if "planet" in values and values["planet"] and values["planet"] not in self.p.planets:
-            raise AgentError(f"no planet {values['planet']!r} (planets: {', '.join(self.p.planets) or 'none'})")
+            raise AgentError(f"no planet {values['planet']!r} yet (planets: {', '.join(self.p.planets) or 'none'}): "
+                             "a planet needs its entry level first, so add the level without one, then "
+                             'set_planet, then set_level {"planet": ...}')
         if values.get("music"):
             try:
                 music = refs.parse(values["music"], "music")
@@ -644,11 +663,29 @@ class Session:
         if not on_floor:
             return [round(x), round(float(pos[1]) + lift), round(z)]
         below = float(pos[1]) if len(pos) == 3 else None
-        y = self._floor(self._mesh(level.name), x, z, below)
+        mesh = self._mesh(level.name)
+        if below is None and schema is not None and schema.key == "door":
+            y = self._door_floor(mesh, x, z)
+        else:
+            y = self._floor(mesh, x, z, below)
         if y is None:
             where = f" at or below y {below:g}" if below is not None else ""
             raise AgentError(f"no floor under ({x:g}, {z:g}){where}: check surface_at, or give on_floor false")
         return [round(x), obj.on_ground(y, schema) + round(lift), round(z)]
+
+    @staticmethod
+    def _door_floor(mesh, x: float, z: float) -> float | None:
+        """Where a door at (x, z) stands: the lowest floor with at least DOOR_CLEARANCE free above it (up to the next
+        surface: a lintel's underside, or the top of the wall when the opening's top isn't modelled). A door is the
+        one thing usually placed under something; give [x, y, z] for a door on an upper floor."""
+        from jfgstudio.gui.viewport import heights_at
+        floors = sorted(set(heights_at(mesh.collision, x, z, facing=1).tolist()))
+        surfaces = sorted(set(heights_at(mesh.collision, x, z).tolist()))
+        for f in floors:
+            above = next((s for s in surfaces if s > f + 1), math.inf)
+            if above - f >= DOOR_CLEARANCE:
+                return f
+        return floors[-1] if floors else None
 
     def _add(self, level: proj.Level, made: list[dict], label: str) -> list[dict]:
         self._history(level).add(made, label)
@@ -744,10 +781,14 @@ class Session:
                                          "count": members, "baddyType": m_oid})
         if m_kind:
             squadron["kindFields"] = {"baddyType": m_kind}
+        wet = []
         for k in range(members):
             a = 2 * math.pi * k / members
-            at = self._pos(lv, [cx + spread * math.sin(a), cz + spread * math.cos(a)], self.schemas["squadmember"],
-                           True)
+            spot = self._dry_spot(lv.name, cx + spread * math.sin(a), cz + spread * math.cos(a), cx, cz)
+            if spot is None:
+                spot = (cx + spread * math.sin(a), cz + spread * math.cos(a))
+                wet.append(k)
+            at = self._pos(lv, list(spot), self.schemas["squadmember"], True)
             m = placer.single(m_oid, at, m_ex, name=label, fields={"squadron": squadron_id})
             m["schema"] = "squadmember"
             if m_kind:
@@ -768,21 +809,83 @@ class Session:
                 h.set_value(existing["uid"], ("fields", "keyLock"), DOOR_LOCKED, "lock door")
             self._save()
             made.append(self._describe(existing))
+        if wet:
+            made.append({"warning": f"{len(wet)} member(s) found no dry floor near their place (lava, water, a pit "
+                                    "or no floor there): move them (surface_at, find_flat)"})
         return made
 
-    def connect(self, from_level: str, exit_pos, to_level: str, arrive_pos, arrive_yaw: float = 0,
-                radius: int = 70, name: str | None = None) -> list[dict]:
-        """An exit in `from_level` and the start point it brings the player to in `to_level` (a new start point
-        number there). `arrive_yaw` is the facing in degrees (0 = towards -z)."""
+    def _dry(self, level: str, x: float, z: float) -> bool:
+        """Solid floor at (x, z) with no lava, water or kill floor at or over it."""
+        at = self.surface_at(level, [[x, z]])[0]
+        return at["floor"] is not None and at.get("kind") != "lava" and "water" not in at and "kill" not in at
+
+    def _dry_spot(self, level: str, x: float, z: float, cx: float, cz: float) -> tuple[float, float] | None:
+        """(x, z) when it is dry, else the nearest dry spot found on rings around it (pulled towards the squad's
+        centre (cx, cz) first); None when there is none close by."""
+        if self._dry(level, x, z):
+            return (x, z)
+        for k in range(1, SPREAD_TRIES + 1):
+            r = 40 * ((k + 7) // 8)
+            a = 2 * math.pi * (k % 8) / 8
+            for px, pz in ((x + (cx - x) * k / SPREAD_TRIES, z + (cz - z) * k / SPREAD_TRIES),
+                           (x + r * math.cos(a), z + r * math.sin(a))):
+                if self._dry(level, px, pz):
+                    return (px, pz)
+        return None
+
+    def base_objects(self, level: proj.Level) -> list[dict]:
+        """The start points and exits of the game level an edit adds to (read-only, from the player's catalog; never
+        written into the project). Empty for a level of the pack's own or without a catalog."""
+        if level.base is None or self.catalog() is None:
+            return []
+        info = self._catalog.levels()[level.base]
+        out = []
+        for n in (info["objectList0"], info["objectList1"]):
+            try:
+                entries = self._catalog.objlist(n)
+            except (IndexError, ValueError):
+                continue
+            for e in entries:
+                if not e or e[0] not in (prefabs.START_ID, prefabs.EXIT_ID):
+                    continue
+                schema = self.schemas["startpoint" if e[0] == prefabs.START_ID else "exit"]
+                if len(e[1]) < schema.min_size:
+                    continue
+                d = obj.decode_entry(e[1], schema)
+                out.append({"type": f"stock:objtype/0x{e[0]:X}", "schema": schema.key, "pos": d["pos"],
+                            "fields": d["fields"], "base": True})
+        return out
+
+    def _base_starts(self, level: proj.Level) -> set[int]:
+        return {o["fields"]["startPoint"] for o in self.base_objects(level) if o["schema"] == "startpoint"}
+
+    def connect(self, from_level: str, exit_pos, to_level: str, arrive_pos=None, arrive_yaw: float = 0,
+                radius: int = 70, name: str | None = None, arrive_start_point: int | None = None) -> list[dict]:
+        """An exit in `from_level` and the start point it brings the player to in `to_level`: a new one at
+        `arrive_pos` (a number neither the project's level nor, for an edit of a game level, the game level uses),
+        or with `arrive_start_point` one that is already there. `arrive_yaw` is the facing in degrees (0 = towards
+        -z)."""
         src, dst = self._level(from_level), self._level(to_level)
         st = self.schemas["startpoint"]
         dst_placer = prefabs.Placer(dst, self.schemas, self._behaviours())
-        number = dst_placer.free("startpoint", "startPoint", start=0)
-        yaw_f = st.role("yaw")
-        yaw = obj.value_of_angle(yaw_f, math.radians(float(arrive_yaw))) if yaw_f else 0
-        dst_placer.single(prefabs.START_ID, self._pos(dst, arrive_pos, st, True), name=f"from {from_level}",
-                          fields={"player": 0, "startPoint": number, yaw_f.name if yaw_f else "yaw": yaw})
-        arrived = self._add(dst, dst_placer.made, "arrival")
+        mine = {o.get("fields", {}).get("startPoint") for o in dst.objects["objects"] if self._key(o) == "startpoint"}
+        base = self._base_starts(dst)
+        arrived = []
+        if arrive_start_point is not None:
+            number = _as_int(arrive_start_point, "arrive_start_point")
+            if number not in mine | base:
+                own = sorted(n for n in mine if n is not None)
+                raise AgentError(f"{to_level} has no start point {number} (its own: {own}"
+                                 + (f"; the game level's: {sorted(base)}" if base else "") + ")")
+        else:
+            if arrive_pos is None:
+                raise AgentError("give arrive_pos (a new start point) or arrive_start_point (an existing one)")
+            number = next(n for n in itertools.count(0) if n not in mine | base)
+            yaw_f = st.role("yaw")
+            yaw = obj.value_of_angle(yaw_f, math.radians(float(arrive_yaw))) if yaw_f else 0
+            dst_placer.single(prefabs.START_ID, self._pos(dst, arrive_pos, st, True), name=f"from {from_level}",
+                              fields={"player": 0, "startPoint": number, yaw_f.name if yaw_f else "yaw": yaw})
+            arrived = self._add(dst, dst_placer.made, "arrival")
         ex = self.schemas["exit"]
         src_placer = prefabs.Placer(src, self.schemas, self._behaviours())
         o = src_placer.single(prefabs.EXIT_ID, self._pos(src, exit_pos, ex, True), name=name or f"to {to_level}",
@@ -908,6 +1011,15 @@ class Session:
                                          f"{f['problem']}" + (f" by {f['by']:g}" if "by" in f else "")
                                          + (f"; it would stand at {f['standOn']}" if "standOn" in f else ""),
                                          f["uid"]) for f in findings]
+        for lv in self.p.levels.values():  # an edit's start points against the game level's own
+            base = self._base_starts(lv)
+            for o in lv.objects["objects"]:
+                n = o.get("fields", {}).get("startPoint")
+                if self._key(o) == "startpoint" and n in base:
+                    problems.append(val.Problem(val.ERROR, "start-clash", f"levels/{lv.name}/objects.json",
+                                                f"start point {n} is one the game level already has: arrivals and "
+                                                f"the game's own uses of it would clash (free numbers start at "
+                                                f"{next(k for k in itertools.count(0) if k not in base)})", o["uid"]))
         shown = [self._problem(p) for p in problems if notes or p.severity != val.INFO]
         return {"errors": sum(p.severity == val.ERROR for p in problems),
                 "warnings": sum(p.severity == val.WARNING for p in problems), "problems": shown}

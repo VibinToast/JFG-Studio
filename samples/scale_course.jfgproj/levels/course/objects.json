@@ -426,6 +426,66 @@
    "uid": "ledge_5__260_high__grabbable_top_edges__metal_walls1"
   },
   {
+   "fields": {},
+   "name": "word ledge 1: 100 high, made by the word (sand walls)",
+   "pos": [
+    -520,
+    102,
+    2480
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "word_ledge_1__100_high__made_by_the_word__sand_walls1"
+  },
+  {
+   "fields": {},
+   "name": "word ledge 2: 140 high, made by the word (sand walls)",
+   "pos": [
+    -270,
+    142,
+    2480
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "word_ledge_2__140_high__made_by_the_word__sand_walls1"
+  },
+  {
+   "fields": {},
+   "name": "word ledge 3: 180 high, made by the word (sand walls)",
+   "pos": [
+    -20,
+    182,
+    2480
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "word_ledge_3__180_high__made_by_the_word__sand_walls1"
+  },
+  {
+   "fields": {},
+   "name": "word ledge 4: 220 high, made by the word (sand walls)",
+   "pos": [
+    230,
+    222,
+    2480
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "word_ledge_4__220_high__made_by_the_word__sand_walls1"
+  },
+  {
+   "fields": {},
+   "name": "word ledge 5: 260 high, made by the word (sand walls)",
+   "pos": [
+    480,
+    262,
+    2480
+   ],
+   "size": 14,
+   "type": "stock:objtype/0xA9",
+   "uid": "word_ledge_5__260_high__made_by_the_word__sand_walls1"
+  },
+  {
    "fields": {
     "animGroup": -1,
     "arg1A": 1,

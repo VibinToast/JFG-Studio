@@ -281,9 +281,12 @@ class TrialFindings(AgentTest):
         self.assertEqual(self.s.update_object("home", start["uid"], facing=90)["fields"]["yaw"], 16)
         with self.assertRaises(agent.AgentError):
             self.s.place("home", "health", [0, 0], facing=90)  # no yaw field
-        levels = self.s.stock_levels()["levels"]
-        self.assertIn("note", next(lv for lv in levels if lv["id"] == agent.NEW_GAME_LEVEL))
-        self.assertEqual([lv["id"] for lv in self.s.stock_levels("place 2")["levels"]], [2] + list(range(20, 25)))
+        levels = self.s.stock_levels()
+        self.assertEqual((levels["newGame"], levels["levels"][2]), (agent.NEW_GAME_LEVEL, "2: Place 2 (world 0)"))
+        self.assertEqual([int(lv.split(":")[0]) for lv in self.s.stock_levels("place 2")["levels"]],
+                         [2] + list(range(20, 25)))
+        self.assertEqual(len(self.s.stock_levels(world=1)["levels"]), 10)
+        self.assertNotIn("schemas", self.s.object_types(search="bug"))  # a search gives only its matches
         made = self.s.edit_stock_level("portal_level", agent.NEW_GAME_LEVEL)
         self.assertEqual(made["track"], f"stock:track/{agent.NEW_GAME_LEVEL + 1}")  # the catalog's, not a guess
         self.assertEqual(self.s.p.levels["portal_level"].level["name"], "portal_level")  # no game names
@@ -333,6 +336,50 @@ class TrialFindings(AgentTest):
         self.assertEqual(shot["legend"]["up"], "-z")
         content = mcp_server.call(self.s, "level_preview", {"level": "home", "size": 128})["content"]
         self.assertEqual([c["type"] for c in content], ["image", "text"])
+
+
+class Trial2Findings(AgentTest):
+    """What the second agent trial (a planet entered through a portal in a game level) asked for."""
+
+    def base_starts(self, numbers):
+        def objects(level):
+            return [{"type": "stock:objtype/0xD", "schema": "startpoint", "pos": [0, 0, 0],
+                     "fields": {"player": 0, "startPoint": n, "yaw": 0}, "base": True}
+                    for n in numbers] if level.base is not None else []
+        self.s.base_objects = objects
+
+    def test_an_edit_knows_its_game_level(self):
+        self.with_catalog()
+        self.s.edit_stock_level("portal", agent.NEW_GAME_LEVEL)
+        self.base_starts(range(5))  # the game level's own start points 0-4
+        exit_, arrival = self.s.connect("home", [200, 0], "portal", [0, 100])
+        self.assertEqual((arrival["fields"]["startPoint"], exit_["fields"]["startPoint"]), (5, 5))
+        back = self.s.connect("home", [300, 0], "portal", arrive_start_point=2)
+        self.assertEqual([o["fields"]["startPoint"] for o in back], [2])  # only the exit: start point 2 is there
+        with self.assertRaises(agent.AgentError):
+            self.s.connect("home", [400, 0], "portal", arrive_start_point=9)
+        self.assertEqual(len(self.s.level_info("portal")["baseLevel"]["objects"]), 5)
+        self.assertTrue(self.s.preview("portal", 128)["png"])
+        self.s.update_object("portal", arrival["uid"], fields={"startPoint": 0})
+        clash = [p for p in self.s.validate()["problems"] if p["rule"] == "start-clash"]
+        self.assertEqual([(p["severity"], p["uid"]) for p in clash], [("error", arrival["uid"])])
+
+    def test_doors_stand_in_their_opening(self):
+        self.with_catalog()
+        gate = _quad(-1000, -1000, 1000, 1000, 0) + _block(-100, -20, 100, 20, 0, 460)  # a wall, its opening unmodelled
+        self.mesh = QuadMesh(gate)
+        self.assertEqual(self.s.place("home", "0x1AD", [0, 0])[0]["pos"][1], 2)  # the ground, not the wall's top
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + _block(-100, -20, 100, 20, 0, 100))
+        self.assertEqual(self.s.place("home", "0x1AD", [0, 0])[0]["pos"][1], 102)  # no room under: the platform
+
+    def test_squad_members_kept_dry(self):
+        self.with_catalog()
+        made = self.s.place_squad("home", [0, 250], "0x29", members=4, spread=80)
+        members = [o for o in made if o.get("schema") == "squadmember"]
+        self.assertEqual(len(members), 4)
+        for m in members:  # the river (water) runs from z 300 to 500
+            self.assertFalse(300 <= m["pos"][2] <= 500, m["pos"])
+        self.assertFalse([o for o in made if "warning" in o])
 
 
 class Server(AgentTest):

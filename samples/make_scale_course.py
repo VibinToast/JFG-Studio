@@ -45,13 +45,17 @@ def course():
     m.material("block", "stone")
     m.material("block_side", "stone")
     m.material("roof", "metal")
-    m.material("ledge_top", "stone", tri_flags=LEDGE_TOP)
-    m.material("ledge_wall", "metal", tri_flags=LEDGE_WALL)
+    m.material("flagged_top", "stone", tri_flags=LEDGE_TOP)  # names without the word "ledge":
+    m.material("flagged_wall", "metal", tri_flags=LEDGE_WALL)  # this row is made by the flags
+    m.material("word_ledge", "sand")  # the word "ledge" alone: the importer (jfgformats 0.3.0) flags the walls itself
+    # (its own texture: jfgformats 0.3.0 merged it with the flagged row's same-looking tops and lost its ledges; 0.3.1
+    # fixed that)
+    m.material("word_wall", "sand")
     items = []
 
     # the ground: everything but the gap trench (z 1300-1700)
     m.floor("ground", -1800, -600, 1800, 1300, 0, step=400)
-    m.floor("ground", -1800, 1700, 1800, 2400, 0, step=400)
+    m.floor("ground", -1800, 1700, 1800, 2800, 0, step=400)
 
     # 1. ramps, rising along +z from a little under the ground (a lip stops the hero) to a platform
     for i, deg in enumerate(RAMPS):
@@ -96,8 +100,15 @@ def course():
     # the flags, so they have no ledges
     for i, h in enumerate(LEDGES):
         x0 = -600 + i * 250
-        m.box("ledge_top", "ledge_wall", x0, 2000, x0 + 160, 2160, 0, h)
+        m.box("flagged_top", "flagged_wall", x0, 2000, x0 + 160, 2160, 0, h)
         items.append(("ledge", i + 1, f"{h} high, grabbable top edges (metal walls)", (x0 + 80, h, 2080)))
+
+    # 7. the same ledges made by the material word alone (a top named "..._ledge", plain walls): the importer finds
+    # the walls under its edges, flags them and links them (sand-coloured walls)
+    for i, h in enumerate(LEDGES):
+        x0 = -600 + i * 250
+        m.box("word_ledge", "word_wall", x0, 2400, x0 + 160, 2560, 0, h)
+        items.append(("word ledge", i + 1, f"{h} high, made by the word (sand walls)", (x0 + 80, h, 2480)))
     return m, items
 
 
@@ -126,10 +137,11 @@ def main() -> int:
              "tunnels (1 the lowest roof) and the passages between walls (1 the narrowest). Last: the trench, "
              "crossed on platforms from its end with the ramp out of it (gap 1 the narrowest). Beyond it: ledge blocks "
              "(1 the lowest, metal walls), whose top edges are grabbable: walk off an edge (the hero should catch "
-             "it and hang), and jump up at a wall.",
+             "it and hang), and jump up at a wall. Behind them: the same ledges made with the material word alone "
+             "(sand walls).",
              "A health pickup sits on top of each ramp and block and after each gap: getting it means the hero made "
              "it. The ring by the start is an exit back to the game.", ""]
-    for group in ("ramp", "block", "tunnel", "passage", "gap", "ledge"):
+    for group in ("ramp", "block", "tunnel", "passage", "gap", "ledge", "word ledge"):
         lines += [f"## {group.title()}s", ""] + [f"{n}. {size}" for g, n, size, _ in items if g == group] + [""]
     lines += ["Report: the steepest ramp walked up, the highest block stepped onto without jumping, the highest "
               "reached with a jump, the highest climbed (ledge grab), the lowest tunnel walked / crouched through, "

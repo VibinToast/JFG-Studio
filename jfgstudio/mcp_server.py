@@ -82,9 +82,12 @@ TOOLS = [
           {"level": _LEVEL, "path": {"type": "string", "description": "the new .glb"}}, ["level", "path"]),
     _tool("level_preview", "A top-down picture of a level: the geometry shaded by height and coloured by surface, with "
           "start points, exits (their radius), squads and their regions, doors (across their facing), keys and "
-          "pickups drawn on. Up is -z. Look at it after laying a level out.",
-          lambda s, a: s.preview(a["level"], a.get("size", 512), a.get("out")),
+          "pickups drawn on (an edit of a game level: that level's own start points and exits, grey). Up is -z. "
+          "Look at it after laying a level out.",
+          lambda s, a: s.preview(a["level"], a.get("size", 512), a.get("out"), a.get("colours", False)),
           {"level": _LEVEL, "size": {"type": "integer", "description": "pixels across (default 512, at most 2048)"},
+           "colours": {"type": "boolean", "description": "the baked vertex colours (the level's mood) instead of "
+                                                         "the surface kinds"},
            "out": {"type": "string", "description": "also save the PNG here"}}, ["level"]),
     _tool("check_placement", "A level's objects that should stand on the floor but are buried, floating, sunk or over "
           "a pit, with where each would stand.", lambda s, a: s.check_placement(a["level"]),
@@ -146,13 +149,17 @@ TOOLS = [
            "door": {"type": "string"}, "door_type": _TYPE, "door_pos": _POS, "door_fields": {"type": "object"},
            "spread": {"type": "number"}, "name": {"type": "string"}, "squadron_example": _EXAMPLE,
            "member_example": _EXAMPLE}, ["level", "centre", "member_type"]),
-    _tool("connect", "An exit in one level and the start point it brings the player to in another.",
-          lambda s, a: s.connect(a["from_level"], a["exit_pos"], a["to_level"], a["arrive_pos"],
-                                 a.get("arrive_yaw", 0), a.get("radius", 70), a.get("name")),
+    _tool("connect", "An exit in one level and the start point it brings the player to in another: a new one at "
+          "arrive_pos (numbered clear of the level's own and, for an edit of a game level, the game level's), or an "
+          "existing one with arrive_start_point.",
+          lambda s, a: s.connect(a["from_level"], a["exit_pos"], a["to_level"], a.get("arrive_pos"),
+                                 a.get("arrive_yaw", 0), a.get("radius", 70), a.get("name"),
+                                 a.get("arrive_start_point")),
           {"from_level": _LEVEL, "exit_pos": _POS, "to_level": _LEVEL, "arrive_pos": _POS,
            "arrive_yaw": {"type": "number", "description": "facing in degrees, 0 = towards -z"},
-           "radius": {"type": "integer"}, "name": {"type": "string"}},
-          ["from_level", "exit_pos", "to_level", "arrive_pos"]),
+           "radius": {"type": "integer"}, "name": {"type": "string"},
+           "arrive_start_point": {"type": "integer", "description": "arrive at this existing start point instead"}},
+          ["from_level", "exit_pos", "to_level"]),
     _tool("update_object", "Change an object's fields (merged), position, name or exit target.",
           lambda s, a: s.update_object(a["level"], a["uid"], a.get("fields"), a.get("pos"), a.get("on_floor", False),
                                        a.get("name"), a.get("target"), a.get("facing")),
@@ -180,7 +187,8 @@ TOOLS = [
            "level_id": {"type": "integer", "description": "the stock level (stock_levels)"}}, ["name", "level_id"]),
     _tool("stock_levels", "The game's own levels (id, name, world, track), for exits and entry levels "
           "(stock:level/<id>); search filters by name. Marks where a new game starts.",
-          lambda s, a: s.stock_levels(a.get("search")), {"search": {"type": "string"}}),
+          lambda s, a: s.stock_levels(a.get("search"), a.get("world")),
+          {"search": {"type": "string"}, "world": {"type": "integer"}}),
     _tool("get_triggers", "The project's triggers (\"when ... then ...\" rules).", lambda s, a: s.get_triggers()),
     _tool("set_triggers", "Replace the project's triggers; returns script problems.",
           lambda s, a: s.set_triggers(a["triggers"]), {"triggers": {"type": "array", "items": {"type": "object"}}},
