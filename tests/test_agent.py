@@ -372,6 +372,23 @@ class Trial2Findings(AgentTest):
         self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + _block(-100, -20, 100, 20, 0, 100))
         self.assertEqual(self.s.place("home", "0x1AD", [0, 0])[0]["pos"][1], 102)  # no room under: the platform
 
+    def test_lava_needs_ground_under_it(self):
+        class LavaMesh(QuadMesh):
+            def __init__(self, solid, lava):
+                super().__init__(solid)
+                self.tris["lava"] = np.array(lava, "f8").reshape(-1, 3, 3)
+                self.collision = np.concatenate([self.tris["solid"], self.tris["lava"]])
+
+        def lava_rules():
+            return [p for p in self.s.validate()["problems"] if p["rule"] == "lava-floor"]
+        shore = _quad(-1000, -1000, 1000, 0, 0)
+        self.mesh = LavaMesh(shore, _quad(-1000, 0, 1000, 600, -20))  # a lava lake over nothing
+        self.assertEqual(len(lava_rules()), 2)  # home and gemini share the track
+        self.assertIsNone(self.s.surface_at("home", [[0, 300]])[0]["underLava"])
+        self.mesh = LavaMesh(shore + _quad(-1000, 0, 1000, 600, -50), _quad(-1000, 0, 1000, 600, -20))
+        self.assertEqual(lava_rules(), [])
+        self.assertEqual(self.s.surface_at("home", [[0, 300]])[0]["underLava"], -50.0)
+
     def test_squad_members_kept_dry(self):
         self.with_catalog()
         made = self.s.place_squad("home", [0, 250], "0x29", members=4, spread=80)

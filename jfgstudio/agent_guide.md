@@ -56,6 +56,10 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
 - Surfaces come from material names: `water` (swimmable surface; deep water drowns heroes who can't swim), `lava`
   (hurts), `kill` (a pit floor: falling onto it is death), `collider` (invisible but solid), `nocollide` (drawn,
   not solid). Anything else is solid floor and wall.
+- **Lava needs solid ground under it.** It burns Vela and Lupus, but Juno passes through lava unhurt: for him it
+  isn't there, so lava over nothing is a hole he falls through (play-tested). Model lava as a surface over a solid
+  floor a little below it (30 under: he wades in it). `validate` warns about lava with no floor under it, and
+  `surface_at` gives `underLava`. Water works the same way for everyone: the floor under it is what they walk on.
 - A walkway that rises out of the ground must start a little below it: a lip of a few units stops the hero. A raised
   deck with no ramp onto it is walked under, not onto.
 - Objects that walk (enemies, start points) stand a few units above the floor (`place` does this): a spawn even a

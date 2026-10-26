@@ -116,8 +116,11 @@ def caverns_mesh() -> wk.Mesh:
         m.material(name, img, kind)
     m.floor("rock", -1400, -1800, 1400, -900, 0, 140, step=400)                # the south shore
     m.floor("molten_lava", -1400, -900, 1400, 400, -30, 90, tint=(1, 0.9, 0.8), step=400)
-    m.wall("rock_wall", -1400, -900, 1400, -900, -30, 0, 60)                   # the lava's banks
-    m.wall("rock_wall", 1400, 400, -1400, 400, -30, 0, 60)
+    # Rock under the lava: Juno's collision passes through lava (he is unhurt by it), so lava over nothing is a hole
+    # he falls through (play-tested in an agent's trial level). 30 under the surface: he wades in it.
+    m.floor("rock", -1400, -900, 1400, 400, -60, 140, tint=(0.6, 0.4, 0.3), step=400)
+    m.wall("rock_wall", -1400, -900, 1400, -900, -60, 0, 60)                   # the lava's banks
+    m.wall("rock_wall", 1400, 400, -1400, 400, -60, 0, 60)
     m.box("stone", "stone_wall", -110, -900, 110, 400, -60, 0)                  # the causeway
     m.disc("stone", "stone_wall", 0, -250, 360, -60, 0, n=20)                   # the plaza
     m.floor("rock", -1400, 400, 1400, 700, 0, 140, step=400)                   # the middle shore

@@ -19,6 +19,7 @@ from importlib import resources
 from pathlib import Path
 
 import jsonschema
+import numpy as np
 
 from jfgstudio import edit, formats, importer, placement, prefabs, preview, refs, rom, scripts
 from jfgstudio import objects as obj
@@ -33,6 +34,7 @@ FLOOR_KINDS = ("solid", "lava", "hidden")
 LIST_LIMIT = 150  # catalog types listed at once
 NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way back to the game
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
+LAVA_FLOOR_DEPTH = 100  # lava needs a solid floor at most this far under it, or Juno falls through
 DOOR_CLEARANCE = 120  # a door placed by [x, z] stands on the lowest floor with this much room above it
 SPREAD_TRIES = 24  # place_squad looks this many places around the centre for a dry spot for each member
 
@@ -353,7 +355,27 @@ class Session:
             kill = tops["kill"]
             if kill is not None and (at["floor"] is None or kill > at["floor"]):
                 at["kill"] = round(kill, 1)
+            if at.get("kind") == "lava":  # Juno passes through lava: what holds him up is the solid floor under it
+                under = floor_of(kinds["solid"], x, z, at["floor"] - 1)
+                hidden = floor_of(kinds["hidden"], x, z, at["floor"] - 1)
+                under = max((y for y in (under, hidden) if y is not None), default=None)
+                at["underLava"] = round(under, 1) if under is not None else None
             out.append(at)
+        return out
+
+    def lava_holes(self, level: str) -> list[list[int]]:
+        """Points of lava with no solid floor under it (LAVA_FLOOR_DEPTH at most): Juno, whose collision passes
+        through lava, falls through there. One point per lava triangle (its middle)."""
+        from jfgstudio.gui.viewport import floor_of
+        mesh = self._mesh(level)
+        lava = mesh.kind_triangles("lava")
+        ground = np.concatenate([mesh.kind_triangles("solid"), mesh.kind_triangles("hidden")])
+        out = []
+        for t in lava:
+            x, y, z = (float(v) for v in t.mean(axis=0))
+            under = floor_of(ground, x, z, y - 1)
+            if under is None or y - under > LAVA_FLOOR_DEPTH:
+                out.append([round(x), round(y), round(z)])
         return out
 
     def find_flat(self, level: str, x: float, z: float, radius: float = 60, search: float = 600,
@@ -1011,6 +1033,18 @@ class Session:
                                          f"{f['problem']}" + (f" by {f['by']:g}" if "by" in f else "")
                                          + (f"; it would stand at {f['standOn']}" if "standOn" in f else ""),
                                          f["uid"]) for f in findings]
+            for name in self.p.levels:  # lava over nothing: a hole for Juno
+                try:
+                    holes = self.lava_holes(name)
+                except AgentError:
+                    continue
+                if holes:
+                    problems.append(val.Problem(val.WARNING, "lava-floor", f"levels/{name}/level.json",
+                                                f"lava with no solid floor under it at {holes[0]}"
+                                                + (f" and {len(holes) - 1} more places" if len(holes) > 1 else "")
+                                                + ": Juno isn't held up by lava (he passes through it, unhurt) and "
+                                                f"falls through. Put a solid floor at most {LAVA_FLOOR_DEPTH} under "
+                                                "every lava surface"))
         for lv in self.p.levels.values():  # an edit's start points against the game level's own
             base = self._base_starts(lv)
             for o in lv.objects["objects"]:
