@@ -62,7 +62,8 @@ KIND_COLOURS = {
     "startpoint": (0.24, 0.78, 1.0, 1.0), "exit": (1.0, 0.70, 0.10, 1.0), "squadron": (1.0, 0.29, 0.29, 1.0),
     "squadmember": (1.0, 0.55, 0.55, 1.0), "door": (0.70, 0.45, 1.0, 1.0), "regionpoint": (0.3, 1.0, 0.5, 1.0),
     "light": (1.0, 0.95, 0.45, 1.0), "glow": (1.0, 0.85, 0.6, 1.0), "audio": (0.45, 1.0, 0.75, 1.0),
-    "camerazone": (0.45, 0.85, 1.0, 1.0), "fogzone": (1.0, 0.6, 0.9, 1.0), "patrolpoint": (1.0, 0.6, 0.25, 1.0),
+    "camerazone": (0.45, 0.85, 1.0, 1.0), "cutcamera": (0.55, 0.95, 1.0, 1.0), "staticcamera": (0.55, 0.95, 1.0, 1.0),
+    "fogzone": (1.0, 0.6, 0.9, 1.0), "patrolpoint": (1.0, 0.6, 0.25, 1.0),
     "patrolpath": (1.0, 0.6, 0.25, 1.0), "refuel": (0.6, 0.9, 1.0, 1.0), "animtrigger": (0.85, 0.75, 1.0, 1.0),
 }
 OTHER_COLOUR = (0.75, 0.80, 0.90, 1.0)
@@ -676,10 +677,9 @@ def marker_lines(objects: list, keys: dict, selection: set, links: list, boxes: 
         if key == "regionpoint":
             seg((x, y, z), (x, y + 15, z), col)
             continue
-        top = y + MARKER_HEIGHT
-        seg((x, y, z), (x, top, z), col)
-        for dx, dz in ((12, 0), (0, 12)):
-            seg((x - dx, top, z - dz), (x + dx, top, z + dz), col)
+        if key in CAMERAS:  # in the air where the shot is taken: its frustum (camera_lines), no post
+            continue
+        seg((x, y, z), (x, y + MARKER_HEIGHT, z), col)  # a post up to its icon (gui/icons.py)
         if key == "startpoint":
             # The hero faces -z at yaw 0 (seen in the port, 2026-10-25): the arrow points that way.
             yaw = o.get("fields", {}).get("yaw", 0) * 1024 / 65536 * 2 * math.pi
@@ -695,6 +695,45 @@ def marker_lines(objects: list, keys: dict, selection: set, links: list, boxes: 
     for a, b, c in links:
         seg(a, b, c)
     return np.array(out, "f4").reshape(-1, 7) if out else np.zeros((0, 7), "f4")
+
+
+CAMERAS = {"cutcamera": 1, "staticcamera": -1}  # schema key -> the sign its pitch looks up with (camera_view)
+CAMERA_FOV = math.radians(55)  # the frustum drawn: the game's normal view (neither camera sets its own)
+
+
+def camera_view(key: str, yaw: float, pitch: float, roll: float) -> tuple[np.ndarray, np.ndarray]:
+    """(forward, up) unit vectors a camera object looks along, from its entry's angles in radians (MSR "Cutscene
+    camera", "Static camera"). Checked on the game's own cutscene cameras: each looks at the door its lock light
+    opens with its yaw turned half a turn (heading yaw + pi, as x = sin, z = cos) and up by its pitch. The static
+    camera's code takes its pitch the other way round (pitch 0x8000 - entry against the cutscene camera's -entry)."""
+    heading, elevation = yaw + math.pi, CAMERAS.get(key, 1) * pitch
+    fwd = np.array([math.sin(heading) * math.cos(elevation), math.sin(elevation),
+                    math.cos(heading) * math.cos(elevation)])
+    right = np.cross(fwd, [0.0, 1.0, 0.0])
+    right = right / (np.linalg.norm(right) or 1.0)
+    up = np.cross(right, fwd)
+    c, s = math.cos(roll), math.sin(roll)
+    return fwd, up * c + right * s
+
+
+def camera_lines(pos, fwd, up, colour, depth: float = 260.0, aspect: float = 4 / 3) -> list:
+    """A camera as an engine editor draws one: a small body, its view frustum out to `depth`, and a triangle on top
+    of the frustum's far end to show which way is up. (a, b, colour) segments."""
+    p = np.asarray(pos, float)
+    right = np.cross(fwd, up)
+    hh = math.tan(CAMERA_FOV / 2) * depth
+    hw = hh * aspect
+    far = [p + fwd * depth + right * sx * hw + up * sy * hh for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    out = [(p, f, colour) for f in far]
+    out += [(far[i], far[(i + 1) % 4], colour) for i in range(4)]
+    top, peak = p + fwd * depth + up * hh, p + fwd * depth + up * hh * 1.35
+    left, rite = top - right * hw * 0.3, top + right * hw * 0.3
+    out += [(left, peak, colour), (rite, peak, colour), (left, rite, colour)]
+    corners = ((-1, -1), (1, -1), (1, 1), (-1, 1))
+    b = [p - fwd * k + right * sx * 10 + up * sy * 8 for k in (4, 30) for sx, sy in corners]
+    for i in range(4):  # the body: a box behind the lens
+        out += [(b[i], b[(i + 1) % 4], colour), (b[4 + i], b[4 + (i + 1) % 4], colour), (b[i], b[4 + i], colour)]
+    return [(tuple(a), tuple(c), col) for a, c, col in out]
 
 
 def region_links(objects: list, keys: dict) -> list:

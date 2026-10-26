@@ -22,7 +22,7 @@ from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
 from jfgstudio import validate as val
-from jfgstudio.gui import kind_tools, level_tools, model_viewer, planet_tools, script_tools, theme
+from jfgstudio.gui import icons, kind_tools, level_tools, model_viewer, planet_tools, script_tools, theme
 from jfgstudio.gui import viewport as vp
 
 gz = imguizmo.im_guizmo
@@ -32,9 +32,10 @@ TOOLS = (("hand", "Q", "Hand: pan and orbit the view"), ("move", "W", "Move"),
          ("region", "G", "Region: click a navigation region's corners on the floor"),
          ("water", "T", "Water: drag a rectangle on the floor to add a water surface to the pack's geometry"),
          ("patrol", "P", "Patrol: click a squad patrol network's points; each links to the last"))
-# Sprites the game keeps for its own debugging (a red ball, an "AI" badge) on objects it never draws in play: those
-# objects stay markers or shapes in the Scene
-DEBUG_SPRITES = {1, 38}
+# Sprites the game keeps for its own debugging (a red ball, an "AI" badge, a small blue tag, a music note) on objects
+# it never draws in play (triggers, region and patrol points, animators, texture scrolls, sound points): those objects
+# get an icon in the Scene instead
+DEBUG_SPRITES = {1, 38, 42, 43}
 
 
 class State:
@@ -770,10 +771,11 @@ def scene() -> None:
         stock_inst, stock_boxes = _instances(stock, pickable=False)
         instances = instances + [(p, m, (0.25, 0.3, 0.4, 0.45)) for p, m, _ in stock_inst]
         lines = vp.marker_lines(objs + stock, {**keys, **stock_keys}, S.selection,
-                                vp.region_links(objs + stock, {**keys, **stock_keys}), {**boxes, **stock_boxes},
-                                _rings(objs))
+                                vp.region_links(objs + stock, {**keys, **stock_keys}) + _camera_links(objs + stock),
+                                {**boxes, **stock_boxes}, _rings(objs))
     else:
-        lines = vp.marker_lines(objs, keys, S.selection, vp.region_links(objs, keys), boxes, _rings(objs))
+        lines = vp.marker_lines(objs, keys, S.selection, vp.region_links(objs, keys) + _camera_links(objs), boxes,
+                                _rings(objs))
     tex = S.view.render(w, h, S.camera, lines, instances)
     origin = imgui.get_cursor_screen_pos()
     S.scene_rect = (origin.x, origin.y, w, h)
@@ -788,8 +790,12 @@ def scene() -> None:
         imgui.end_drag_drop_target()
     hovered = imgui.is_item_hovered()
     draw = imgui.get_window_draw_list()
+    _icons(draw, origin, w, h, objs, keys, {**boxes, **stock_boxes} if stock else boxes, stock,
+           stock_keys if stock else {})
+    gap = icons.radius() + 4
     for o in objs:
-        p = vp.project(S.camera, (w, h), (o["pos"][0], o["pos"][1] + vp.MARKER_HEIGHT + 6, o["pos"][2]))
+        p = vp.project(S.camera, (w, h), (o["pos"][0], o["pos"][1] + vp.MARKER_HEIGHT, o["pos"][2]))
+        p = (p[0] + gap - 4, p[1] + 7) if p else None  # beside its icon
         if o["uid"] in boxes:
             top = max(c[1] for c in boxes[o["uid"]])
             p = vp.project(S.camera, (w, h), (o["pos"][0], top + 6, o["pos"][2])) if o["uid"] in S.selection else None
@@ -825,6 +831,46 @@ def scene() -> None:
         mouse = imgui.get_mouse_pos()
         S.box_start = (mouse.x - origin.x, mouse.y - origin.y)
     _box_select(origin, w, h, objs, draw, using)
+
+
+def _camera_links(objs) -> list:
+    """Camera objects' frustums (which way each shot looks), and from a selected cutscene camera a line to every
+    object that plays it (a door lock light's cutscene with its id)."""
+    out = []
+    for o in objs:
+        schema = S.schema(o)
+        if schema is None or schema.key not in vp.CAMERAS or o.get("deleted"):
+            continue
+        values = S.fields(o, schema)
+        angles = [obj.angle_of(schema.field(n), values.get(n, 0)) for n in ("yaw", "pitch", "roll")]
+        fwd, up = vp.camera_view(schema.key, *angles)
+        selected = o["uid"] in S.selection
+        colour = vp.SELECTED_COLOUR if selected else vp.KIND_COLOURS[schema.key]
+        out += vp.camera_lines(o["pos"], fwd, up, colour)
+        if selected and schema.key == "cutcamera" and values.get("id"):
+            for x in objs:
+                sx = S.schema(x)
+                if sx is not None and sx.field("cutscene") and S.fields(x, sx).get("cutscene") == values["id"]:
+                    out.append((tuple(o["pos"]), tuple(x["pos"]), vp.SELECTED_COLOUR))
+    return out
+
+
+def _icons(draw, origin, w, h, objs, keys, boxes, stock, stock_keys) -> None:
+    """Every object drawn without a model gets an icon on its post (gui/icons.py), the selected ones on top; the
+    game's read-only objects dimmed."""
+    marks = []
+    for o, key, dim in [(o, keys.get(o["uid"]), False) for o in objs] + [(o, stock_keys.get(o["uid"]), True)
+                                                                         for o in stock]:
+        if o["uid"] in boxes or key == "regionpoint" or o.get("deleted"):
+            continue
+        lift = 0.0 if key in vp.CAMERAS else vp.MARKER_HEIGHT  # a camera's icon is where the shot is taken
+        p = vp.project(S.camera, (w, h), (o["pos"][0], o["pos"][1] + lift, o["pos"][2]))
+        if p:
+            oid = kind_tools.base_oid(o)
+            marks.append((o["uid"] in S.selection, p, icons.kind(key, S.behaviours.get(oid)),
+                          vp.KIND_COLOURS.get(key, vp.OTHER_COLOUR), dim))
+    for selected, p, icon, colour, dim in sorted(marks, key=lambda m: m[0]):
+        icons.draw(draw, origin.x + p[0], origin.y + p[1], icon, colour, selected, dim)
 
 
 def _scene_menu(origin, w, h, objs, hovered: bool) -> None:
@@ -896,7 +942,7 @@ def _hit(origin, w, h, objs) -> str | None:
     """What is under the mouse: a marker within 14 pixels, else the nearest model the ray hits."""
     mouse = imgui.get_mouse_pos()
     mx, my = mouse.x - origin.x, mouse.y - origin.y
-    best, best_d = None, 14.0 ** 2
+    best, best_d = None, (icons.radius() + 3) ** 2
     modelled = {uid for uid, _, _ in S.instances}
     for o in objs:
         if o["uid"] in modelled:
