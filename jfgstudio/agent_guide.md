@@ -180,9 +180,10 @@ Describe things by what they do; the catalog's names are the player's (never wri
 | Breakable glass | `place_glass(level, a, b, bottom)` (0x12B) | a square pane: fits a square window opening in a wall; never in the open |
 | Drops | squadron `drop` | 20-22 health, 23 health upgrade, 1-16 a weapon's pickup (weapon n is drop n + 1) |
 
-Weapon numbers (ammo's `weapon`, drops, chests): 1 homing missiles, 2 machine gun, 3 shotgun, 4 electricity,
-5 rockets, 6 flamethrower, 7 sniper, 8 grenades, 9 shuriken, 10 fish food, 11 timed mines, 12 remote mines,
-13 flares, 14 cluster bombs (the chest's contents name them; 0 is in no chest, probably the starting gun).
+Weapon numbers (ammo's `weapon`, drops, chests; the decomp's weapon table): 0 pistol, 1 homing missiles, 2 machine
+gun, 3 shotgun, 4 shrink beam, 5 rockets, 6 flamethrower, 7 sniper pistol, 8 grenades, 9 shuriken, 10 fish food,
+11 timed mines, 12 remote mines, 13 flares, 14 cluster bombs. Each ammo pickup fills one weapon: full ammo fills it,
+extra ammo and a clip add some, a capacity upgrade raises its maximum, and only a hero who has that weapon takes it.
 
 **Facing** (`facing` on `place` and `update_object`): degrees, 0 towards -z, 90 towards -x, 180 towards +z,
 270 towards +x (counter-clockwise seen from above), or an [x, z] point to face. **Music**: `stock_levels` lists

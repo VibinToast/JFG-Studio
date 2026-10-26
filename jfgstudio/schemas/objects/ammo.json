@@ -7,10 +7,10 @@
  "category": "Pickups",
  "hidden": false,
  "status": "decoded",
- "description": "Ammo pickups: full ammo (0xE8), the capacity upgrade (0xE7), extra ammo (0xCF) and a clip (0x17E). MSR 'Ammo'.",
+ "description": "Ammo for one weapon (its weapon field): full ammo (0xE8) fills it, extra ammo (0xCF) and a clip (0x17E) add some, the capacity upgrade (0xE7) raises its maximum. MSR 'Ammo'.",
  "fields": [
   {"name": "respawn", "offset": "0x0A", "type": "s8", "description": "respawn delay in seconds; 0 = gone for good"},
-  {"name": "weapon", "offset": "0x0B", "type": "u8", "description": "weapon number: 0 (no chest names it: probably the starting gun), 1 homing missiles, 2 machine gun, 3 shotgun, 4 electricity, 5 rockets, 6 flamethrower, 7 sniper, 8 grenades, 9 shuriken, 10 fish food, 11 timed mines, 12 remote mines, 13 flares, 14 cluster bombs (as the chest's contents name them)"},
+  {"name": "weapon", "offset": "0x0B", "type": "u8", "enum": {"0": "pistol", "1": "homing missiles", "2": "machine gun", "3": "shotgun", "4": "shrink beam", "5": "rockets", "6": "flamethrower", "7": "sniper pistol", "8": "grenades", "9": "shuriken", "10": "fish food", "11": "timed mines", "12": "remote mines", "13": "flares", "14": "cluster bombs", "15": "spare (no weapon)"}, "description": "the one weapon it fills (the decomp's weaponPowerUpObjects order). Taken only by a hero who has that weapon; otherwise it shows faint and stays"},
   {"name": "yaw", "offset": "0x0C", "type": "u8", "unit": "angle8", "role": "yaw", "description": "facing"},
   {"name": "upgrade", "offset": "0x0E", "type": "u16", "description": "capacity upgrade only: which one (saved as game flag 0x80 + n)"}
  ]
