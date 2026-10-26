@@ -55,6 +55,8 @@ class State:
         self.view = vp.Viewport()
         self.camera = vp.Camera()
         self.framed_level = None
+        self.tex_lists = {}  # (track, glb, mtime) -> the level's track texture list, None while it is read
+        self.track_textures = None  # track_textures.TrackTextures, made with the catalog
         self.frame_on_open = False  # frame the selection once the level's Scene is shown (an exit's Go to)
         self.snap_floor = True
         self.drag = None  # uid -> start position, while the gizmo moves the selection
@@ -253,6 +255,31 @@ class State:
                     info = None
             self.model_paths[key] = info
         return self.model_paths[key]
+
+    def level_textures(self) -> list[dict] | None:
+        """The open level's track texture list (track_textures: what a texscroll's texture numbers), or None while
+        it is being read (a pack track runs the importer: a few seconds, in the background) or can't be."""
+        if self.catalog() is None or not self.level:
+            return None
+        track = self.project.levels[self.level].level["track"]
+        glb = self.track_path() if track.startswith("pack:") else None
+        if track.startswith("pack:") and glb is None:
+            return None
+        key = (track, glb, Path(glb).stat().st_mtime if glb else None)
+        if key not in self.tex_lists:
+            self.tex_lists[key] = None
+            if self.track_textures is None:
+                from jfgstudio.track_textures import TrackTextures
+                self.track_textures = TrackTextures(self.cat)
+
+            def read():
+                try:
+                    self.tex_lists[key] = self.track_textures.of(track, glb)
+                except Exception as e:  # noqa: BLE001 (shown where the list is asked for)
+                    self.tex_lists[key] = []
+                    self.message = f"Can't read the level's textures: {e}"
+            threading.Thread(target=read, daemon=True).start()
+        return self.tex_lists[key]
 
     def sky_for(self, level: dict):
         """(dome .glb, mode) for a level's sky (header +0x58 is a definition index; +0x69 the mode), or None."""
@@ -736,6 +763,7 @@ def scene() -> None:
     objs = S.objects()
     keys = _keys(objs)
     instances, boxes = _instances(objs)
+    _scrolls(S.all_objects())
     stock = [] if S.game_editable() else S.game_objects()  # read-only game objects: drawn grey, not editable
     if stock:
         stock_keys = _keys(stock)
@@ -1111,9 +1139,13 @@ def _inspector_body(sel: list[dict], h, light_shown: bool = False) -> None:
             imgui.text_wrapped("Partly decoded: other fields come from the stock entry.")
             imgui.pop_style_color()
         values = S.fields(o, schema)
+        if schema.key == "texscroll":
+            _texture_picker(uid, int(values.get("texture", 0)), "texture" in o.get("fields", {}))
         for f in schema.fields:
             if is_exit and f.link in ("level", "startPoint"):
                 continue  # the Destination picker sets these
+            if schema.key == "texscroll" and f.name == "texture":
+                continue  # _texture_picker
             _field_input(uid, f, int(values.get(f.name, f.default)), f.name in o.get("fields", {}))
     if imgui.collapsing_header("Entry"):
         imgui.text(f"size 0x{o['size']:X}" if "size" in o else "size from the stock base")
@@ -1157,6 +1189,64 @@ def _light_link(o: dict) -> None:
     if imgui.is_item_hovered():
         theme.tip("Click to select it. A squad locks every door with its door id until all its members are "
                           "dead; set the door id on the squadron (Inspector) to tie another squad to this door.")
+
+
+def _texture_picker(uid: str, value: int, own: bool) -> None:
+    """A texscroll's texture: one of the level's track textures, picked by its picture. Its surfaces are
+    highlighted in the Scene while it is selected."""
+    textures = S.level_textures()
+    if textures is None:
+        _muted(f"texture {value}: reading the level's textures...")
+        return
+    if not textures:
+        _muted(f"texture {value}: the level has no textures to list")
+        return
+    k = min(max(value, 0), len(textures) - 1)  # the game clamps it
+
+    def thumb(t, size):
+        glo = S.view.thumbnail_rgba(("tracktex", id(textures), t["index"]), t["width"], t["height"], t["rgba"])
+        imgui.image(imgui.ImTextureRef(glo), imgui.ImVec2(size, size))
+
+    size = imgui.get_frame_height()
+    thumb(textures[k], size)
+    imgui.same_line()
+    label = f"texture {value}" + (f"  (the game uses {k})" if k != value else "")
+    if not own:
+        imgui.push_style_color(imgui.Col_.text, theme.colour("MUTED"))
+    opened = imgui.begin_combo("texture", label, imgui.ComboFlags_.height_large)
+    if not own:
+        imgui.pop_style_color()
+    if imgui.is_item_hovered():
+        theme.tip("Which of the level's textures it scrolls (an index into the track's texture list). Its surfaces "
+                  "glow in the Scene while this is selected, and every texscroll's surfaces move there as in the game")
+    if opened:
+        for t in textures:
+            thumb(t, size * 1.6)
+            imgui.same_line()
+            if imgui.selectable(f"texture {t['index']}  ({t['width']} x {t['height']})##tex{t['index']}",
+                                t["index"] == value, 0, imgui.ImVec2(0, size * 1.6))[0]:
+                S.history().set_value(uid, ("fields", "texture"), t["index"], "texscroll texture")
+                S.validate()
+        imgui.end_combo()
+
+
+def _scrolls(objs: list[dict]) -> None:
+    """The level's texscrolls for the Scene: the speed each moves its texture at (summed, as the game adds them),
+    and the surfaces of the selected ones."""
+    scrolls = [o for o in objs if (sc := S.schema(o)) is not None and sc.key == "texscroll" and not o.get("deleted")]
+    S.view.scrolls, S.view.scroll_marked = {}, set()
+    textures = S.level_textures() if scrolls else None
+    if not textures:
+        return
+    from jfgstudio.track_textures import scroll_rate
+    for o in scrolls[:16]:  # the game drops the 17th and later
+        values = S.fields(o, S.schema(o))
+        t = textures[min(max(int(values.get("texture", 0)), 0), len(textures) - 1)]
+        du, dv = S.view.scrolls.get(t["rgba"], (0.0, 0.0))
+        S.view.scrolls[t["rgba"]] = (du + scroll_rate(values.get("uSpeed", 0), t["width"]),
+                                     dv + scroll_rate(values.get("vSpeed", 0), t["height"]))
+        if o["uid"] in S.selection:
+            S.view.scroll_marked.add(t["rgba"])
 
 
 def _field_input(uid: str, f: obj.Field, value: int, own: bool) -> None:

@@ -1,4 +1,5 @@
-"""Sprite objects with a made-up sprite (no ROM): the catalog's sprite index, the quad and its billboard matrix."""
+"""Sprite objects with a made-up sprite (no ROM): the catalog's sprite index, the quad and its billboard matrix;
+and the texscroll speeds the Scene moves textures at."""
 
 import json
 import math
@@ -61,6 +62,17 @@ class Sprites(unittest.TestCase):
         np.testing.assert_allclose(normal / np.linalg.norm(normal), -cam.forward(), atol=1e-6)
         np.testing.assert_allclose(np.linalg.norm(m[:3, 1]), 2.0)  # scaled, and upright
         self.assertGreater(m[1, 1], 0)
+
+
+
+class Scroll(unittest.TestCase):
+    def test_rate(self):
+        from jfgstudio.track_textures import scroll_rate
+        # MSR "Texture scroll": about 0.47 texels a second per unit of speed; 64 on a 32-texel side is about one
+        # repeat a second, and a negative speed scrolls the other way
+        self.assertAlmostEqual(scroll_rate(64, 32), 0.9375)
+        self.assertAlmostEqual(scroll_rate(-32, 32), -0.46875)
+        self.assertEqual(scroll_rate(0, 64), 0.0)
 
 
 if __name__ == "__main__":

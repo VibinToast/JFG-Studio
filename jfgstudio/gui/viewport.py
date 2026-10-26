@@ -14,6 +14,7 @@ speed), middle mouse to pan, Alt + left to orbit around the selection, F to fram
 import math
 import os
 import struct
+import time
 
 import moderngl
 import numpy as np
@@ -22,10 +23,11 @@ from jfgstudio import formats
 
 TRACK_VS = """
 #version 330
-uniform mat4 mvp; uniform mat4 model;
+uniform mat4 mvp; uniform mat4 model; uniform vec2 uv_shift;
 in vec3 in_pos; in vec2 in_uv; in vec4 in_col;
 out vec2 uv; out vec4 col; out float depth;
-void main() { gl_Position = mvp * model * vec4(in_pos, 1.0); uv = in_uv; col = in_col; depth = gl_Position.w; }
+void main() { gl_Position = mvp * model * vec4(in_pos, 1.0); uv = in_uv + uv_shift; col = in_col;
+              depth = gl_Position.w; }
 """
 TRACK_FS = """
 #version 330
@@ -424,6 +426,8 @@ class Viewport:
         self.models = {}  # .glb path -> TrackMesh (or None when it could not be read)
         self.model_parts = {}  # .glb path -> uploaded parts
         self.thumbnails = {}  # .png path -> (GL id, size) for imgui
+        self.scrolls = {}  # a track image's RGBA -> (u, v) repeats a second: the level's texscrolls, drawn moving
+        self.scroll_marked = set()  # track images (RGBA) the selected texscroll moves: highlighted
 
     def _init(self):
         self.ctx = moderngl.create_context()
@@ -440,7 +444,7 @@ class Viewport:
         if path == self.mesh_path and stamp == self.mesh_stamp:
             return
         self.mesh_path, self.mesh_stamp, self.mesh, self.error = path, stamp, None, ""
-        for vao, _, tex, _ in self.gpu_parts:
+        for vao, _, tex, _, _ in self.gpu_parts:
             vao.release()
             if tex is not None:
                 tex.release()
@@ -482,6 +486,16 @@ class Viewport:
                 self.thumbnails[path] = None
         return self.thumbnails[path]
 
+    def thumbnail_rgba(self, key, w: int, h: int, rgba: bytes) -> int:
+        """Pixels as a GL texture for imgui (a texscroll's texture list), made once per `key`: its GL id."""
+        if key not in self.thumbnails:
+            if self.ctx is None:
+                self._init()
+            t = self.ctx.texture((w, h), 4, rgba)
+            t.filter = (moderngl.NEAREST, moderngl.NEAREST)
+            self.thumbnails[key] = (t.glo, (w, h))
+        return self.thumbnails[key][0]
+
     def _upload(self, mesh=None):
         textures = {}
         out = [] if mesh is not None else self.gpu_parts
@@ -498,7 +512,7 @@ class Viewport:
                     t.filter = (moderngl.LINEAR, moderngl.LINEAR)
                     textures[key] = t
                 tex = textures[key]
-            out.append((vao, len(data), tex, kind))
+            out.append((vao, len(data), tex, kind, image))
         return out
 
     def _draw_sky(self, mvp, camera) -> None:
@@ -514,11 +528,12 @@ class Viewport:
             m[:3, 3] = camera.pos
         prog["model"].write(m.T.tobytes())
         prog["fog_on"].value = False
+        prog["uv_shift"].value = (0.0, 0.0)
         prog["tint"].value = (0.0, 0.0, 0.0, 0.0)
         prog["alpha"].value = 1.0
         self.ctx.disable(moderngl.DEPTH_TEST)
         self.ctx.depth_mask = False
-        for vao, count, tex, _ in self.model_parts[path]:
+        for vao, count, tex, _, _ in self.model_parts[path]:
             prog["textured"].value = tex is not None
             (tex or self.white).use(0)
             vao.render(moderngl.TRIANGLES, vertices=count)
@@ -558,8 +573,9 @@ class Viewport:
             prog["fog_col"].value = tuple(self.fog[0])
             prog["fog_range"].value = (float(self.fog[1]), float(self.fog[2]))
         tints = {"lava": (1.0, 0.35, 0.05, 0.45), "kill": (1.0, 0.0, 0.0, 0.6), "water": (0.2, 0.5, 1.0, 0.2)}
+        now = time.monotonic()
         for translucent in (False, True):
-            for vao, count, tex, kind in self.gpu_parts:
+            for vao, count, tex, kind, image in self.gpu_parts:
                 if (kind == "water") != translucent:
                     continue
                 if kind == "hidden" and not self.show_hidden:
@@ -568,6 +584,11 @@ class Viewport:
                 (tex or self.white).use(0)
                 prog["tex"].value = 0
                 prog["tint"].value = tints.get(kind, (0.0, 0.0, 0.0, 0.0))
+                key = bytes(image) if image is not None and self.scrolls else None
+                du, dv = self.scrolls.get(key, (0.0, 0.0))
+                prog["uv_shift"].value = (du * now % 1.0, dv * now % 1.0)  # texscrolls move their textures
+                if key in self.scroll_marked:  # the selected texscroll's surfaces
+                    prog["tint"].value = (0.1, 1.0, 0.85, 0.30 + 0.15 * math.sin(now * 5.0))
                 prog["alpha"].value = 0.55 if kind == "water" else 1.0
                 if kind == "water":
                     self.ctx.enable(moderngl.BLEND)
@@ -579,13 +600,14 @@ class Viewport:
                 self.ctx.depth_mask = True
                 self.ctx.disable(moderngl.BLEND)
         prog["alpha"].value = 1.0
+        prog["uv_shift"].value = (0.0, 0.0)
         for path, matrix, tint in instances:
             if path not in self.model_parts:
                 mesh = self.model(path)
                 self.model_parts[path] = self._upload(mesh) if mesh is not None else []
             prog["model"].write(np.asarray(matrix, "f4").T.tobytes())
             prog["tint"].value = tuple(tint)
-            for vao, count, tex, kind in self.model_parts[path]:
+            for vao, count, tex, kind, _ in self.model_parts[path]:
                 prog["textured"].value = tex is not None
                 (tex or self.white).use(0)
                 if kind == "sprite":  # soft edges blend; it doesn't hide what is drawn after it

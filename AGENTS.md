@@ -24,6 +24,7 @@ Neighbours in `JetForceGemini/`: the decomp (`Decomp/`, read-only; Studio import
 | `jfgstudio/validate.py` | the validator (rules from the decomp's tested pitfalls and its review) |
 | `jfgstudio/build.py`, `bps.py` | the pack builder and the map patch encoder |
 | `jfgstudio/catalog.py`, `rom.py`, `formats.py`, `settings.py` | the user's ROM, the local catalog, jfgformats, paths |
+| `jfgstudio/track_textures.py` | a level's track texture list (what a texscroll numbers), from jfgformats' importer |
 | `jfgstudio/gui/` | the editor window (Unity-style docked layout) and the theme |
 | `samples/` | the sample planet project and the script that draws its geometry |
 | `tests/` | unittest, synthetic data only: `python -m unittest discover -s tests -t .` |
