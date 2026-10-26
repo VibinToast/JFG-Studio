@@ -886,7 +886,8 @@ class Session:
         squadron = placer.single(SQUADRON_ID, self._pos(lv, [cx, cz], sq_schema, True), sq_ex,
                                  name=f"{label} squad",
                                  fields={"squadronId": squadron_id, "doorId": door_id, "region": region_id,
-                                         "count": members, "baddyType": m_oid, "trigger": prefabs.TRIGGER_AT_ONCE})
+                                         "count": members, "baddyType": m_oid,
+                                         "trigger": prefabs.TRIGGER_AT_ONCE})
         if m_kind:
             squadron["kindFields"] = {"baddyType": m_kind}
         wet = []
@@ -1285,7 +1286,8 @@ class Session:
         if matched[1] is not None:
             changes += [edit.Change(m["uid"], ("stock",), copy.deepcopy(m.get("stock")),
                                     {"list": matched[1][0], "entry": matched[1][1]}) for m in members]
-        changes.append(edit.Change(uid, ("fields", "trigger"), sq["fields"].get("trigger"), prefabs.TRIGGER_AT_ONCE))
+        trigger = sq["fields"].get("trigger")
+        changes.append(edit.Change(uid, ("fields", "trigger"), trigger, prefabs.TRIGGER_AT_ONCE))
         region = sq["fields"].get("region")
         corners = [o for o in lv.objects["objects"] if self._key(o) == "regionpoint"
                    and o.get("fields", {}).get("region") == region]
