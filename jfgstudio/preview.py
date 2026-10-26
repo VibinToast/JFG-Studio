@@ -29,10 +29,12 @@ MARKS = {  # schema key -> (colour, shape, size in pixels)
     "chest": ((80, 255, 80), "square", 3),
     "light": ((255, 255, 170), "dot", 2),
     "glow": ((255, 255, 170), "dot", 2),
+    "patrolpoint": ((90, 190, 255), "dot", 3),
 }
 OTHER = ((200, 120, 255), "dot", 2)
 REGION_RGB = (255, 110, 110)
 HOLE_RGB = (255, 90, 200)  # a hole of a region: an obstacle squads take cover behind
+PATROL_RGB = (90, 190, 255)  # patrol points and the links between them
 BASE_RGB = (150, 150, 150)
 
 
@@ -183,6 +185,15 @@ def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = N
             corners.setdefault(f.get("region", 0), []).append((f.get("corner", 0), c.px(o["pos"][0], o["pos"][2])))
         else:
             keyed.append((o, key, s))
+    nodes = {o.get("fields", {}).get("node"): c.px(o["pos"][0], o["pos"][2]) for o, key, _ in keyed
+             if key == "patrolpoint"}
+    for o, key, _ in keyed:  # patrol routes: their links, then the points
+        f = o.get("fields", {})
+        if key == "patrolpath" and f.get("nodeA") in nodes and f.get("nodeB") in nodes:
+            (ax, ay), (bx, by) = nodes[f["nodeA"]], nodes[f["nodeB"]]
+            for dx, dy in ((0, 0), (1, 0), (0, 1)):  # two pixels wide: a route stands out from region outlines
+                c.line((ax + dx, ay + dy), (bx + dx, by + dy), PATROL_RGB)
+    keyed = [k for k in keyed if k[1] != "patrolpath"]
     holes = hole_regions(objects, schemas, behaviours)
     for region, pts in corners.items():
         pts = [p for _, p in sorted(pts, key=lambda q: q[0])]
@@ -201,6 +212,7 @@ def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = N
               "marks": {"start point": "white square with an arrow (its facing)", "exit": "cyan ring (its radius)",
                         "squad": "red square (squadron) and red dots (members), red outline (their region)",
                         "hole": "pink crossed outline: a hole of a region, where squads take cover",
+                        "patrol": "blue dots (patrol points) joined by blue lines (the links squads walk)",
                         "door": "yellow bar across its facing", "key": "gold diamond",
                         "pickups": "green dots", "lights": "pale yellow dots", "other": "purple dots",
                         "grey": "the game level's own start points and exits, under an edit of it"}}
