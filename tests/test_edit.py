@@ -74,9 +74,11 @@ class Floor(unittest.TestCase):
         from jfgstudio.gui.viewport import TrackMesh
         m = TrackMesh.__new__(TrackMesh)
         # Two floors over the same square: the ground at 0 and a platform at 50 over half of it.
-        ground = [[(-100, 0, -100), (100, 0, -100), (100, 0, 100)], [(-100, 0, -100), (100, 0, 100), (-100, 0, 100)]]
-        platform = [[(0, 50, -100), (100, 50, -100), (100, 50, 100)]]
-        m.collision = np.array(ground + platform, float)
+        # Wound to face up, as floors are: a ceiling (facing down) is never a floor.
+        ground = [[(-100, 0, -100), (100, 0, 100), (100, 0, -100)], [(-100, 0, -100), (-100, 0, 100), (100, 0, 100)]]
+        platform = [[(0, 50, -100), (100, 50, 100), (100, 50, -100)]]
+        roof = [[(-100, 300, -100), (100, 300, -100), (100, 300, 100)]]  # facing down
+        m.collision = np.array(ground + platform + roof, float)
         self.assertEqual(m.floor_height(50, -50), 50)          # the highest floor
         self.assertEqual(m.floor_height(50, -50, below=20), 0)  # the one under an object that is below the platform
         self.assertEqual(m.floor_height(-50, 50), 0)

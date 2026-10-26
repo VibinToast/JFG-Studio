@@ -55,8 +55,10 @@ def check(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = No
         s = stands(o, schemas, behaviours)
         if s is False:
             continue
+        if s and s.key == "squadron" and o.get("fields", {}).get("offsetY", 0) < 0:
+            continue  # it launches flyers down to a spot below it: high on purpose (decomp MSR mod #6)
         x, y, z = (float(v) for v in o["pos"])
-        f = floor_of(mesh.collision, x, z, y + RISE)
+        f = mesh.floor_height(x, z, y + RISE)
         finding = {"uid": o["uid"], "pos": list(o["pos"])}
         if o.get("name"):
             finding["name"] = o["name"]
@@ -67,14 +69,14 @@ def check(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = No
                 finding["problem"] = "over a pit"
             else:
                 finding["problem"] = "no floor"
-            higher = floor_of(mesh.collision, x, z)
+            higher = mesh.floor_height(x, z)
             if higher is not None:
                 finding["standOn"] = [round(x), obj.on_ground(higher, s), round(z)]
             out.append(finding)
             continue
         up = _enclosed(mesh, x, y, z)
         if up is not None:  # inside a block that rose around it (the old floor may still be under it)
-            top = floor_of(mesh.collision, x, z, y + up + 1)
+            top = mesh.floor_height(x, z, y + up + 1)
             finding["problem"] = "buried"
             if top is not None:
                 finding["standOn"] = [round(x), obj.on_ground(top, s), round(z)]
@@ -85,7 +87,7 @@ def check(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = No
         if half is not None:
             if s.key == "refuel":
                 half = max(half, o.get("fields", {}).get("radius", 0))
-            ring = [floor_of(mesh.collision, x + dx * half, z + dz * half, y + RISE)
+            ring = [mesh.floor_height(x + dx * half, z + dz * half, y + RISE)
                     for dx, dz in RING]
             ring = [h for h in ring if h is not None]
             if ring and max(ring) - min(ring) > TILT:

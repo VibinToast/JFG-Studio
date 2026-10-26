@@ -984,7 +984,7 @@ class Session:
             region = [[cx - h, cz - h], [cx + h, cz - h], [cx + h, cz + h], [cx - h, cz + h]]
         if len(region) < 3:
             raise AgentError("region is at least three [x, z] corners, in order around it")
-        corners = [self._pos(lv, [c[0], c[-1]], self.schemas["regionpoint"], True) for c in region]
+        corners = [self._corner(lv, c, (cx, cz)) for c in region]
         region_id = placer.polygon(corners)
         # Never the catalog's name: that is the player's game data, and uids and names are written into the project.
         label = name or (m_kind.rsplit("/", 1)[1].replace("_", " ") if m_kind else "enemy")
@@ -1086,6 +1086,24 @@ class Session:
                                     + (f" ({got['edge']} obstacle(s) touch its edge: cut the outline round them)"
                                        if got["edge"] else "")})
         return made
+
+    def _open_to_sky(self, level: str) -> bool:
+        """A level some of whose floor has no roof over it (the game's fully roofed levels have no sky)."""
+        from jfgstudio import layout_study
+        try:
+            found = layout_study.study(self._mesh(level).collision)
+        except AgentError:
+            return False
+        return found is not None and found[0]["roofed"] < 0.9
+
+    def _corner(self, lv: proj.Level, c, centre) -> list:
+        """A region corner on the floor under it, or at the floor height of the region's centre where there is none
+        (past a wall: a region is 2D, the game ignores its corners' height)."""
+        try:
+            return self._pos(lv, [c[0], c[-1]], self.schemas["regionpoint"], True)
+        except AgentError:
+            y = self._pos(lv, list(centre), self.schemas["regionpoint"], True)[1]
+            return [round(float(c[0])), y, round(float(c[-1]))]
 
     def _face_point(self, lv: proj.Level, face) -> tuple[float, float] | None:
         """The point squads face: `face` [x, z], else the level's start point 0 (else its first), else None."""
@@ -1689,11 +1707,11 @@ class Session:
                                             "clearing in the geometry)" if f["problem"] == "on a slope" else ""),
                                          f["uid"]) for f in findings]
             for name, lv in self.p.levels.items():  # nothing above: black where the sky should be
-                if lv.base is None and lv.level.get("sky", -1) == -1:
+                if lv.base is None and lv.level.get("sky", -1) == -1 and self._open_to_sky(name):
                     problems.append(val.Problem(val.WARNING, "sky", f"levels/{name}/level.json",
-                                                "the level has no sky (sky -1): the player sees black above, through "
-                                                "any opening. Set one (set_level sky): a game level's of the same "
-                                                "theme, as stock_levels lists them"))
+                                                "the level has no sky (sky -1) but is open above: the player sees "
+                                                "black there. Set one (set_level sky): a game level's of the same "
+                                                "theme, as stock_levels lists them (fully roofed levels need none)"))
             for name, lost in self._lost_collision().items():
                 problems.append(val.Problem(val.ERROR, "collision", f"levels/{name}/level.json",
                                             f"{lost} colliding triangles of its geometry come after non-colliding "

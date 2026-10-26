@@ -222,9 +222,19 @@ class TrackMesh:
                 image, size = self.images[key]
             self.parts.append((pos[idx], uv[idx], col[idx], image, size, _surface(mat) if self.surfaces else "solid"))
 
+    @property
+    def floors(self) -> np.ndarray:
+        """The solid triangles that face up: what can be stood on (a ceiling faces down and is never a floor)."""
+        if getattr(self, "_floors", None) is None:
+            t = np.asarray(self.collision, "f8").reshape(-1, 3, 3)
+            e1, e2 = t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]
+            self._floors = t[(e1[:, 2] * e2[:, 0] - e1[:, 0] * e2[:, 2]) > 0]  # the normal's y, as heights_at
+        return self._floors
+
     def floor_height(self, x: float, z: float, below: float | None = None) -> float | None:
-        """The highest floor under (x, z) (below a height when given): a ray down against the solid triangles."""
-        return floor_of(self.collision, x, z, below)
+        """The highest floor under (x, z) (below a height when given): a ray down against the solid triangles that
+        face up, so a room's roof is never taken for its floor."""
+        return floor_of(self.floors, x, z, below)
 
     def kind_triangles(self, kind: str) -> np.ndarray:
         """The triangles (n, 3, 3) of one surface kind (solid, water, lava, kill, hidden, nocollide)."""
