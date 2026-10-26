@@ -1,8 +1,9 @@
 """Importing geometry (task S20): copy a Blender `.glb` into a project and check it the way the build will.
 
 The check runs jfgformats' track importer on it (the same `import_track` the build uses), then `check_track_buffer`,
-and reports what the game will see: segments, batches, triangles, textures (new images count against the game's 3D
-texture table) and the surfaces the material words make. A problem the build would refuse is reported here first.
+and reports what the game will see: segments, batches, triangles, textures (new images become new textures of the
+game's, added at load) and the surfaces the material words make. A problem the build would refuse is reported here
+first.
 """
 
 import json

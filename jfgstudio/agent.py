@@ -431,7 +431,7 @@ class Session:
         out = {"bounds": [[round(float(v)) for v in lo], [round(float(v)) for v in hi]],
                "triangles": sum(counts.values()), "surfaces": {k: n for k, n in counts.items() if n},
                "images": len(mesh.images), "farthest": round(far),
-               "limits": {"farthest": 32767, "newImages": 3}}
+               "limits": {"farthest": 32767, "imagePixels": 2048}}
         if far > 32767:
             out["problem"] = "a vertex is farther than 32767 units from the origin: the game can't hold it"
         return out

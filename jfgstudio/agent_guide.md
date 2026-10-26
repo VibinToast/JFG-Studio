@@ -52,7 +52,10 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
 
 - Game units, Y up, the same as Blender's glTF export with +Y up (1 Blender unit = 1 game unit).
 - Every vertex within 32767 units of the origin; keep levels well inside that.
-- About three new images fit the game's texture table per level: reuse materials.
+- New images: the port adds a pack's images to the game's textures (there's no small fixed number; the example
+  world adds 31). Each is stored as one 16-bit image of at most 2048 pixels (64 x 32, 32 x 64 ...) with
+  power-of-two sides: a bigger one is shrunk, so draw them small. Reuse images between materials to keep the pack
+  small; the vertex colours give variety for free.
 - Surfaces come from material names: `water` (swimmable surface; deep water drowns heroes who can't swim), `lava`
   (hurts), `kill` (a pit floor: falling onto it is death), `collider` (invisible but solid), `nocollide` (drawn,
   not solid). Anything else is solid floor and wall.

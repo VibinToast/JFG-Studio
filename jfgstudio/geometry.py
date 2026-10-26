@@ -2,7 +2,7 @@
 
 Water planes: a flat quad with a `water` material (batch flag 0x2000, translucent), the way the game draws water: a
 surface, not a volume; its height is the swim height (design doc §5.3). The quad reuses the file's own water
-material when it has one, so it adds no new texture (the game's 3D texture table has little room).
+material when it has one, so it adds no new texture (one fewer image in the pack).
 """
 
 import json
