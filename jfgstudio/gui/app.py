@@ -1279,6 +1279,7 @@ def project_window() -> None:
 
 
 PREFAB_PAYLOAD = "JFG_PREFAB"
+VARIANT_BASE = 1 << 20  # prefab ids from here: a type with a field set (oid << 4 | value), _split()
 UNCOUNTED = {"Ammo", "Health", "Breakable glass"}  # kind names that are their own plural
 # Types with no fields decoded, by behaviour (the decomp's behaviour table, by its init functions): the category and
 # fold Prefabs lists them under. They are placed as copies of a stock entry, like the rest of Other.
@@ -1332,9 +1333,10 @@ def prefabs() -> None:
     imgui.set_next_item_width(-hello_imgui.em_size(6.5))
     _, pf["search"] = imgui.input_text_with_hint("##search", "Search types", pf["search"])
     imgui.same_line()
-    _, pf["used"] = imgui.checkbox("In stock", pf["used"])
+    _, pf["used"] = imgui.checkbox("Placeable", pf["used"])
     if imgui.is_item_hovered():
-        theme.tip("Only types that stock levels place")
+        theme.tip("Only types Studio can place: decoded ones, and ones with a stock entry to copy (their own, or "
+                  "one of a type that shares their behaviour)")
     below = 0.0 if wide else _details_height(avail.x)
     imgui.begin_child("types", imgui.ImVec2(0, -below))
     if imgui.tree_node_ex("Groups", imgui.TreeNodeFlags_.default_open):
@@ -1344,9 +1346,9 @@ def prefabs() -> None:
     search = pf["search"].lower()
     groups: dict[str, list] = {}
     for oid, t in S.objtypes.items():
-        if pf["used"] and not t.get("uses"):
-            continue
         schema = obj.schema_for_id(oid, S.schemas, S.behaviours)
+        if pf["used"] and not t.get("examples") and not (schema and schema.status == "decoded"):
+            continue
         category, fold = _prefab_place(t, schema)
         if search and search not in t["name"].lower() and search not in f"0x{oid:x}" and not (
                 schema and search in schema.name.lower()) and search not in (fold or "").lower():
@@ -1390,7 +1392,29 @@ def _prefab_rows(rows) -> None:
     for oid, t, schema, _ in sorted(rows, key=lambda r: r[1]["name"].lower()):
         tip = (f"{schema.name}: {schema.description}" if schema else "Fields not decoded: placed as a copy of a "
                "stock entry") + f"\nbehaviour {t['behaviour']}, used {t.get('uses', 0)} times"
-        _prefab_row(oid, f"{t['name']}  0x{oid:X}", tip)
+        variants = _variants(oid, schema)
+        if not variants:
+            _prefab_row(oid, f"{t['name']}  0x{oid:X}", tip)
+        for value, label in variants:  # one row per named value (the health pickup's sizes)
+            _prefab_row(VARIANT_BASE + (oid << 4) + value, f"{t['name']} ({label})  0x{oid:X}", tip)
+
+
+def _variants(oid: int, schema: obj.Schema | None) -> list[tuple[int, str]]:
+    """(value, name) of the field a type is listed once per value of (schema "variants"), or []."""
+    v = schema.variants if schema else None
+    f = schema.field(v["field"]) if v else None
+    if not f or oid not in [int(i, 0) for i in v["ids"]]:
+        return []
+    return [(value, label) for value, label in sorted(f.enum.items()) if 0 <= value < 16]
+
+
+def _split(pid: int) -> tuple[int, dict | None]:
+    """A prefab id of a type -> (object id, the fields its variant sets, or None)."""
+    if pid < VARIANT_BASE:
+        return pid, None
+    oid, value = divmod(pid - VARIANT_BASE, 16)
+    schema = obj.schema_for_id(oid, S.schemas, S.behaviours)
+    return oid, {schema.variants["field"]: value}
 
 
 def _prefab_place(t: dict, schema: obj.Schema | None) -> tuple[str, str | None]:
@@ -1418,14 +1442,14 @@ def _details_height(width: float) -> float:
     text = HINT if pid is None else GROUPS[pid][1] if pid in (-2, -3) else "x" * 60 if pid <= KIND_BASE else ""
     wrapped = imgui.calc_text_size(text, False, max(width, 1.0)).y + imgui.get_style().item_spacing.y if text else 0
     rows = 0 if pid is None else 4 if pid == -1 else 1 if pid < 0 else 2
-    if pid is not None and pid >= 0 and S.sprite(pid):
+    if pid is not None and pid >= 0 and S.sprite(_split(pid)[0]):
         rows += hello_imgui.em_size(4) / row
     return wrapped + rows * row + imgui.get_style().item_spacing.y * 2 + 2
 
 
 def _sprite_image(oid: int, height: float) -> bool:
     """A sprite type's picture `height` tall at the cursor (the Prefabs window's thumbnails); False if it has none."""
-    info = S.sprite(oid) if oid >= 0 else None
+    info = S.sprite(_split(oid)[0]) if oid >= 0 else None
     thumb = S.view.thumbnail(info["png"]) if info else None
     if thumb is None:
         return False
@@ -1471,19 +1495,23 @@ def _prefab_details() -> None:
             f"{S.objtypes[d]['name']} 0x{d:X}" for d in doors])
         _, pf["members"] = imgui.slider_int("Members", pf["members"], 1, 8)
     elif pid >= 0:
-        if S.sprite(pid):
+        oid = _split(pid)[0]
+        if S.sprite(oid):
             _sprite_image(pid, hello_imgui.em_size(4))
             imgui.same_line()
             _muted("Drawn by the game as this sprite (its first frame), always facing the camera.")
-        t = S.objtypes.get(pid, {})
-        schema = obj.schema_for_id(pid, S.schemas, S.behaviours)
-        options = [_example_label(*e) for e in t.get("examples", [])]
+        t = S.objtypes.get(oid, {})
+        schema = obj.schema_for_id(oid, S.schemas, S.behaviours)
+        like = f"like {S.type_name(int(t['borrowed'], 16))}: " if t.get("borrowed") else ""
+        options = [like + _example_label(*e) for e in t.get("examples", [])]
         if schema and schema.status == "decoded":
             options.append("defaults (no stock entry)")
         if options:
             _, pf["example"] = imgui.combo("Start from", min(pf["example"], len(options) - 1), options)
             if imgui.is_item_hovered():
-                theme.tip("A stock entry to copy (its fields not set in the Inspector keep the game's values)")
+                theme.tip("A stock entry to copy (its fields not set in the Inspector keep the game's values)" + (
+                    "\nNo stock level places this type: it copies an entry of a type with the same behaviour and "
+                    "keeps its own id" if like else ""))
         else:
             imgui.text_colored(theme.colour("ERROR"), "No stock entry to start from.")
     elif pid <= KIND_BASE:
@@ -1573,10 +1601,11 @@ def _place(pid: int, pos) -> None:
         elif pid == -3:
             placer.region(pos)
         else:
-            examples = S.objtypes.get(pid, {}).get("examples", [])
+            oid, fields = _split(pid)
+            examples = S.objtypes.get(oid, {}).get("examples", [])
             chosen = pf["example"] if pid == pf["oid"] else 0
-            placer.single(pid, pos, tuple(examples[chosen]) if chosen < len(examples) else None,
-                          name=S.type_name(pid))
+            placer.single(oid, pos, tuple(examples[chosen]) if chosen < len(examples) else None,
+                          name=S.type_name(oid), fields=fields)
     except ValueError as e:
         S.message = f"Can't place it: {e}"
         return
@@ -1585,7 +1614,7 @@ def _place(pid: int, pos) -> None:
             y = S.view.mesh.floor_height(o["pos"][0], o["pos"][2], below=o["pos"][1] + 60)
             if y is not None:
                 o["pos"][1] = obj.on_ground(y, S.schema(o))
-    what = "kind" if pid <= KIND_BASE else GROUPS[pid][0] if pid < 0 else S.type_name(pid)
+    what = "kind" if pid <= KIND_BASE else GROUPS[pid][0] if pid < 0 else S.type_name(_split(pid)[0])
     h.add(placer.made, f"place {what}")
     S.selection = {o["uid"] for o in placer.made}
     S.message = f"Placed {len(placer.made)} object{'s' if len(placer.made) > 1 else ''}"

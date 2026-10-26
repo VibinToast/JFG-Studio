@@ -229,6 +229,9 @@ class Session:
             t = self._types[oid]
             out.update({"gameName": t["name"], "behaviour": t["behaviour"], "uses": t.get("uses", 0),
                         "examples": t.get("examples", [])})
+            if t.get("borrowed"):
+                out["examplesFrom"] = (f"{t['borrowed']}: no stock level places this type, so a new one copies an "
+                                       "entry of that type (same behaviour) and keeps its own id")
             size = self.model_size(oid)
             if size:
                 out["modelSize"] = size

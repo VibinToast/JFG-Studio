@@ -52,6 +52,7 @@ class Schema:
     category: str = "Other"  # the Prefabs window's group
     hidden: bool = False  # not drawn in game (zones, lights, markers): the Scene draws a marker, not a model
     value_scale: dict | None = None  # {"field", "scales": {value: factor}}: a size that follows a field's value
+    variants: dict | None = None  # {"field", "ids"}: Prefabs lists those types once per named value of the field
     min_size: int = field(init=False)
 
     def __post_init__(self):
@@ -93,7 +94,7 @@ def load_schemas() -> dict[str, Schema]:
         out[doc["key"]] = Schema(doc["key"], doc["name"], [int(i, 0) for i in doc.get("ids", [])],
                                  doc.get("behaviour"), fields, doc.get("status", "decoded"), doc.get("description", ""),
                                  int(doc.get("minSize", "0"), 0), doc.get("category", "Other"),
-                                 doc.get("hidden", False), doc.get("valueScale"))
+                                 doc.get("hidden", False), doc.get("valueScale"), doc.get("variants"))
     return out
 
 

@@ -19,7 +19,7 @@ from pathlib import Path
 from jfgstudio import formats, rom, settings
 
 OBJINDEX_ASSET, OBJDEF_TABLE, OBJDEF_DATA = 0x30, 0x2E, 0x2F
-CATALOG_FORMAT = 3  # the catalog is rebuilt when objtypes.json is older
+CATALOG_FORMAT = 4  # the catalog is rebuilt when objtypes.json is older
 # header fields the Level window offers stock values of (music, sky, fog, ambient loops ...)
 LEVEL_PROPS = ("tune", "tuneChannelMask", "voiceLimit", "ambientSounds", "fogNear", "fogFar", "fog3", "fogR", "fogG",
                "fogB", "clearR", "clearG", "clearB", "weather", "fov", "nightVision", "dayLength", "lights",
@@ -113,6 +113,16 @@ class Catalog:
                     t["uses"] = t.get("uses", 0) + 1
                     if len(t.setdefault("examples", [])) < EXAMPLES:
                         t["examples"].append([n, i])
+        # A type no stock list places starts from the entry of one that shares its behaviour (the behaviour's init
+        # reads the entry; the build writes the type's own id): the seven key colours, most weapon pickups ...
+        by_behaviour = {}
+        for oid, t in sorted(types.items(), key=lambda kv: -kv[1].get("uses", 0)):
+            if t.get("examples") and t["behaviour"] > 0:
+                by_behaviour.setdefault(t["behaviour"], oid)
+        for t in types.values():
+            donor = by_behaviour.get(t["behaviour"])
+            if not t.get("examples") and donor is not None:
+                t["examples"], t["borrowed"] = list(types[donor]["examples"]), f"0x{donor:X}"
         self._write("objtypes.json", {"format": CATALOG_FORMAT,
                                       "types": {f"0x{k:X}": v for k, v in types.items()}})
         self._write("map.json", self.mapdata.decode_map(bytearray(self.image)))
