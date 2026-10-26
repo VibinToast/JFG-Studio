@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- JFG-Studio's icon: a planet with an orbit over an editor's grid, in the launcher palette (gui/theme.py).
+       Original art (GPL-2.0-or-later with the rest of Studio). Rendered to icon.png / icon.ico by tools/make_icons.py -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#12285A"/>
+      <stop offset="1" stop-color="#050B1C"/>
+    </linearGradient>
+    <radialGradient id="planet" cx="0.36" cy="0.32" r="0.78">
+      <stop offset="0" stop-color="#B8F0FF"/>
+      <stop offset="0.28" stop-color="#3CC8FF"/>
+      <stop offset="0.7" stop-color="#1E6FD0"/>
+      <stop offset="1" stop-color="#0A2660"/>
+    </radialGradient>
+    <linearGradient id="grid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3CC8FF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3CC8FF" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFD36B"/>
+      <stop offset="0.5" stop-color="#FFB21A"/>
+      <stop offset="1" stop-color="#E07A00"/>
+    </linearGradient>
+    <clipPath id="tileclip"><rect x="8" y="8" width="240" height="240" rx="52"/></clipPath>
+    <clipPath id="front"><rect x="0" y="134" width="256" height="122"/></clipPath>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#tile)"/>
+  <g clip-path="url(#tileclip)" stroke="url(#grid)" stroke-width="3" fill="none">
+    <!-- the editor's floor grid, in perspective -->
+    <path d="M8 196 H248 M8 214 H248 M8 236 H248"/>
+    <path d="M128 178 L128 256 M128 178 L76 256 M128 178 L180 256 M128 178 L24 256 M128 178 L232 256
+             M128 178 L-28 256 M128 178 L284 256"/>
+  </g>
+  <!-- the orbit behind the planet -->
+  <ellipse cx="128" cy="134" rx="104" ry="30" transform="rotate(-18 128 134)" fill="none" stroke="url(#ring)"
+           stroke-width="11" opacity="0.85"/>
+  <circle cx="128" cy="128" r="64" fill="url(#planet)"/>
+  <!-- bands on the planet -->
+  <path d="M74 112 Q128 98 182 112" stroke="#B8F0FF" stroke-opacity="0.35" stroke-width="6" fill="none"
+        stroke-linecap="round"/>
+  <path d="M68 140 Q128 126 188 140" stroke="#0A2660" stroke-opacity="0.35" stroke-width="7" fill="none"
+        stroke-linecap="round"/>
+  <!-- the orbit in front of it -->
+  <g clip-path="url(#front)">
+    <ellipse cx="128" cy="134" rx="104" ry="30" transform="rotate(-18 128 134)" fill="none" stroke="url(#ring)"
+             stroke-width="11"/>
+  </g>
+  <!-- a spark: a four-pointed star -->
+  <path d="M62 44 L68 62 L86 68 L68 74 L62 92 L56 74 L38 68 L56 62 Z" fill="#FFE7A8"/>
+  <circle cx="198" cy="58" r="5" fill="#E8F3FF" opacity="0.9"/>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="none" stroke="#3CC8FF" stroke-opacity="0.35"
+        stroke-width="3"/>
+</svg>

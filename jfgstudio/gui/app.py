@@ -2240,6 +2240,7 @@ def run(project_path: str | None = None, screenshot: str | None = None, frames: 
                 S.selection = {uid}
     params = hello_imgui.RunnerParams()
     params.app_window_params.window_title = f"JFG-Studio {__version__}"
+    hello_imgui.set_assets_folder(str(Path(__file__).resolve().parent.parent / "assets"))  # app_settings/icon.png
     params.app_window_params.window_geometry.size = (1600, 960)
     params.imgui_window_params.default_imgui_window_type = (
         hello_imgui.DefaultImGuiWindowType.provide_full_screen_dock_space)

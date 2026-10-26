@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" width="1280" height="320">
+  <!-- The README's banner: the icon (jfgstudio/assets/icon.svg) and the name over a starfield and an editor grid.
+       Original art; rendered to banner.png by tools/make_icons.py -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B1733"/>
+      <stop offset="1" stop-color="#050B1C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.22" cy="0.5" r="0.45">
+      <stop offset="0" stop-color="#1E90E8" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#1E90E8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="grid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3CC8FF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3CC8FF" stop-opacity="0.45"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#9FE4FF"/>
+    </linearGradient>
+    <clipPath id="frame"><rect width="1280" height="320" rx="24"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="320" fill="url(#sky)"/>
+    <rect width="1280" height="320" fill="url(#glow)"/>
+    <g fill="#E8F3FF">
+      <circle cx="420" cy="42" r="1.6" opacity="0.8"/><circle cx="512" cy="88" r="1.1" opacity="0.6"/>
+      <circle cx="640" cy="30" r="1.4" opacity="0.7"/><circle cx="760" cy="70" r="1" opacity="0.5"/>
+      <circle cx="905" cy="40" r="1.8" opacity="0.8"/><circle cx="1010" cy="96" r="1.2" opacity="0.6"/>
+      <circle cx="1120" cy="34" r="1.5" opacity="0.7"/><circle cx="1210" cy="80" r="1.1" opacity="0.5"/>
+      <circle cx="1250" cy="150" r="1.4" opacity="0.6"/><circle cx="1180" cy="200" r="1" opacity="0.4"/>
+      <circle cx="860" cy="128" r="1" opacity="0.45"/><circle cx="1060" cy="160" r="1.3" opacity="0.5"/>
+      <circle cx="70" cy="40" r="1.3" opacity="0.6"/><circle cx="330" cy="120" r="1" opacity="0.5"/>
+      <circle cx="40" cy="250" r="1.1" opacity="0.4"/><circle cx="1240" cy="260" r="1.2" opacity="0.4"/>
+    </g>
+    <!-- the editor's floor grid, running to a horizon -->
+    <g stroke="url(#grid)" stroke-width="2" fill="none">
+      <path d="M0 252 H1280 M0 270 H1280 M0 292 H1280 M0 318 H1280"/>
+      <path d="M640 236 L640 320 M640 236 L520 320 M640 236 L760 320 M640 236 L400 320 M640 236 L880 320
+               M640 236 L280 320 M640 236 L1000 320 M640 236 L160 320 M640 236 L1120 320 M640 236 L40 320
+               M640 236 L1240 320 M640 236 L-80 320 M640 236 L1360 320"/>
+    </g>
+    <!-- the icon -->
+    <svg x="64" y="40" width="240" height="240" viewBox="0 0 256 256">
+      <defs>
+        <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#12285A"/><stop offset="1" stop-color="#050B1C"/>
+        </linearGradient>
+        <radialGradient id="planet" cx="0.36" cy="0.32" r="0.78">
+          <stop offset="0" stop-color="#B8F0FF"/><stop offset="0.28" stop-color="#3CC8FF"/>
+          <stop offset="0.7" stop-color="#1E6FD0"/><stop offset="1" stop-color="#0A2660"/>
+        </radialGradient>
+        <linearGradient id="igrid" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#3CC8FF" stop-opacity="0"/><stop offset="1" stop-color="#3CC8FF" stop-opacity="0.55"/>
+        </linearGradient>
+        <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#FFD36B"/><stop offset="0.5" stop-color="#FFB21A"/>
+          <stop offset="1" stop-color="#E07A00"/>
+        </linearGradient>
+        <clipPath id="tileclip"><rect x="8" y="8" width="240" height="240" rx="52"/></clipPath>
+        <clipPath id="front"><rect x="0" y="134" width="256" height="122"/></clipPath>
+      </defs>
+      <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#tile)"/>
+      <g clip-path="url(#tileclip)" stroke="url(#igrid)" stroke-width="3" fill="none">
+        <path d="M8 196 H248 M8 214 H248 M8 236 H248"/>
+        <path d="M128 178 L128 256 M128 178 L76 256 M128 178 L180 256 M128 178 L24 256 M128 178 L232 256
+                 M128 178 L-28 256 M128 178 L284 256"/>
+      </g>
+      <ellipse cx="128" cy="134" rx="104" ry="30" transform="rotate(-18 128 134)" fill="none" stroke="url(#ring)"
+               stroke-width="11" opacity="0.85"/>
+      <circle cx="128" cy="128" r="64" fill="url(#planet)"/>
+      <path d="M74 112 Q128 98 182 112" stroke="#B8F0FF" stroke-opacity="0.35" stroke-width="6" fill="none"
+            stroke-linecap="round"/>
+      <path d="M68 140 Q128 126 188 140" stroke="#0A2660" stroke-opacity="0.35" stroke-width="7" fill="none"
+            stroke-linecap="round"/>
+      <g clip-path="url(#front)">
+        <ellipse cx="128" cy="134" rx="104" ry="30" transform="rotate(-18 128 134)" fill="none" stroke="url(#ring)"
+                 stroke-width="11"/>
+      </g>
+      <path d="M62 44 L68 62 L86 68 L68 74 L62 92 L56 74 L38 68 L56 62 Z" fill="#FFE7A8"/>
+      <circle cx="198" cy="58" r="5" fill="#E8F3FF" opacity="0.9"/>
+      <rect x="8" y="8" width="240" height="240" rx="52" fill="none" stroke="#3CC8FF" stroke-opacity="0.35"
+            stroke-width="3"/>
+    </svg>
+    <!-- the name -->
+    <text x="350" y="160" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="104"
+          font-weight="800" letter-spacing="1" fill="url(#title)">JFG<tspan fill="#FFB21A">-</tspan>Studio</text>
+    <text x="356" y="214" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="30"
+          font-weight="600" fill="#8FD8FF" letter-spacing="0.5">Level &amp; modpack editor for Jet Force Gemini: Recompiled</text>
+    <rect x="356" y="182" width="120" height="4" rx="2" fill="#FFB21A"/>
+    <rect x="1" y="1" width="1278" height="318" rx="23" fill="none" stroke="#1F3D73" stroke-width="2"/>
+  </g>
+</svg>

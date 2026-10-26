@@ -1,4 +1,4 @@
-# JFG-Studio
+<h1 align="center"><img src="docs/images/banner.png" alt="JFG-Studio" width="100%"></h1>
 
 A standalone level and modpack editor for
 **[Jet Force Gemini: Recompiled](https://github.com/VibinToast/JetForceGemini-Recomp)**. It builds `.nrm` packs the
