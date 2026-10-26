@@ -20,6 +20,11 @@ SIDES = ((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 0.0, -1.0))
 # pad on noise terrain, play-tested). The game's own sit on flat floor.
 FLAT_BASE = {"refuel": 45, "damagecrate": 30, "chest": 45, "door": 60, "startpoint": 25, "exit": 40, "key": 15}
 TILT = 10  # the floor under such a base may differ by this much
+# Pickups and things you walk up to, and how far round them must be clear: closer to a rock or wall they clip into it
+# (a health gem half inside a boulder, play-tested).
+CLEAR = {"health": 35, "ammo": 35, "key": 30, "chest": 50, "collectable": 30, "token": 30, "refuel": 40,
+         "damagecrate": 40, "startpoint": 40, "exit": 40}
+CLIP = 25  # a floor this far above an object's own, within its CLEAR radius, is something it clips into
 RING = ((1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7))
 ENCLOSED = 200  # solid this close above and on all four sides: inside something (a block raised around it)
 
@@ -83,6 +88,13 @@ def check(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = No
             out.append(finding)
             continue
         target = obj.on_ground(f, s)
+        clear = CLEAR.get(s.key) if s else None
+        if clear is not None:
+            near = [mesh.floor_height(x + dx * clear, z + dz * clear) for dx, dz in RING]
+            if any(h is not None and h > f + CLIP for h in near):
+                finding.update({"problem": "clipping into geometry"})
+                out.append(finding)  # move it clear of the rock or wall beside it
+                continue
         half = FLAT_BASE.get(s.key) if s else None
         if half is not None:
             if s.key == "refuel":
