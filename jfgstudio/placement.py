@@ -10,8 +10,8 @@ from jfgstudio import objects as obj
 from jfgstudio.gui.viewport import floor_of, raycast
 
 STANDS = {"startpoint", "squadron", "squadmember", "health", "ammo", "key", "chest", "collectable", "token", "door",
-          "doorswitch", "onoffswitch", "cellswitch", "damagecrate", "refuel", "exit", "regionpoint", "patrolpoint",
-          "staticprop"}
+          "doorswitch", "onoffswitch", "cellswitch", "damagecrate", "refuel", "exit", "patrolpoint", "staticprop"}
+# Not region corners: a region is 2D and the game ignores their height (decomp MSR mod #6), so they may sit in a hill.
 RISE = 40  # a floor up to this far above an object is still its own: the ground it stood on rose
 FLOAT = 24  # more than this above where it would stand: floating
 UP = (0.0, 1.0, 0.0)

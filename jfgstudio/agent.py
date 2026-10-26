@@ -317,6 +317,30 @@ class Session:
                 "world": lv["world"], "textures": rows,
                 "note": "the picture shows them in this order, left to right, with each id under it"}
 
+    def _layout_of(self, mesh) -> tuple[dict, bytes]:
+        from jfgstudio import layout_study
+        found = layout_study.study(mesh.collision)
+        if found is None:
+            raise AgentError("the level has too little floor to measure")
+        return found
+
+    def stock_level_layout(self, level) -> dict:
+        """How a game level is laid out: a floor map from above (brighter = higher, darker = roofed, orange = narrow
+        passages; up is -z) and its numbers: footprint, walkable area, roofed share, floor heights and tiers, the
+        share of passages (up to 400 wide), rooms (up to 1000) and open ground, the passages' width and the
+        clearance under its roofs. Study the game's levels of the kind you are making before laying yours out."""
+        if self.catalog() is None:
+            raise AgentError(f"the catalog is not available ({self._catalog_error})")
+        lv = self._catalog.levels()[_as_int(level, "level")]
+        from jfgstudio.gui.viewport import TrackMesh
+        stats, png = self._layout_of(TrackMesh(str(self._catalog.track_glb(lv["track"]))))
+        return {"png": png, "level": f"{lv['id']}: {lv['name']}", "world": lv["world"], **stats}
+
+    def level_layout(self, level: str) -> dict:
+        """stock_level_layout for a level of the project: compare your layout with the game's."""
+        stats, png = self._layout_of(self._mesh(level))
+        return {"png": png, "level": level, **stats}
+
     def texture_sheet(self, ids) -> dict:
         """A picture of game textures side by side, each id (hex) under it."""
         lib = self._library()
@@ -1700,6 +1724,12 @@ def _paint(w: int, h: int, colour, accent, pattern: str, seed: int) -> bytes:
                                  / 3.5))
             px += bytes(round(c + (a - c) * t) for c, a in zip(colour, accent, strict=True)) + bytes((255,))
     return bytes(px)
+
+
+def design_guide() -> str:
+    """Level design for agents (level_design.md): outdoor and indoor levels as the game builds them, with its
+    numbers, room-graph templates and the process."""
+    return resources.files("jfgstudio").joinpath("level_design.md").read_text(encoding="utf-8")
 
 
 def guide() -> str:

@@ -22,7 +22,7 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender, **version 0.4.0 or newer** (`jfg64.__version__`): it knows the game's
+The jfg64 add-on is **required** in Blender, **version 0.4.1 or newer** (`jfg64.__version__`): it knows the game's
 surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
 Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
 Through a Blender MCP server, run Python in Blender and use it rather than writing your own:
@@ -34,6 +34,12 @@ jfg64.bake_light(obj.data, obj.matrix_world, sun_dir, sun_colour, ambient, tint=
 jfg64.bake_scene(objects, tint=True)                       # several, with the scene's Sun lamp
 jfg64.budgets(objects)                                     # {"triangles", "images", "shrunk", "far", ...}
 jfg64.export("C:/path/level.glb", collection="level_1")    # or objects=[...]; default: everything visible
+level = jfg64.layout("caves", [                            # rooms joined by passages, as the game's levels
+    {"name": "hall", "at": (0, 0), "size": (1100, 700), "shape": "hall", "roof": True},
+    {"name": "cave", "at": (1700, 500), "radius": 450, "shape": "cave", "floor": 150, "roof": True}],
+    [{"from": "hall", "to": "cave", "kind": "tunnel", "wiggle": 0.7, "via": [(900, 150)]}],
+    floor=jfg64.game_texture_material(0x160C), wall=..., ceiling=...)
+jfg64.layout_report(level)                                 # slopes, triangles, walkable share
 ground = jfg64.terrain("valley", size=(2400, 2400), height=110, seed=7, style="hills",   # or ridges, terraces
                        flat=[(0, -900, 220)], paths=[[(0, -900), (150, 300)]], rim=380,
                        material=jfg64.game_texture_material(0x160C))   # a game texture (see Themes)
@@ -76,22 +82,49 @@ player's game shows them from their own ROM. That is how to make "a forest level
 Bake light over them as usual: the game multiplies a texture by the vertex colours, so a warm sun and a cool ambient
 give the level its mood.
 
-## Making a place, not a box
+## Lay it out as the game's levels are
 
-Agents' first levels were flat floors and boxes. A level should feel like somewhere:
+**Read `design_guide` before laying out a level**: outdoor and indoor levels are built differently, and it has the
+game's numbers for each, room-graph templates and the process. In short:
 
-- **Ground**: outdoors, start from `jfg64.terrain` (layered noise): `hills` for meadows and forests, `ridges` for
-  rocky mountains, `terraces` for farmland or ruins. Clear `flat` spots for the start, exits and squads, join them
-  with `paths`, and end the level with a `rim` of hills instead of walls. A new `seed` is a new landscape: never
-  reuse the same one twice in a pack. Keep slopes walkable where the player must go (`terrain_report`: most of
-  the ground under 45 degrees); steep is fine for the rim and for cliffs that block on purpose.
-- **Cover and landmarks**: `jfg64.rock` boulders, pillars, ruined walls, crates where squads fight (they make the
-  holes squads move to: `add_cover`), and one landmark seen from the start (a tower, a big rock, a glow).
-- **Height**: ledges to climb (Ledge surfaces), overlooks, a lower area seen before it is reached, ramps up to 45
-  degrees. A refuel pad next to a climb for the jetpack.
-- **Indoors**: vary the boxes: alcoves, pillars, catwalks, broken walls, rooms of different sizes and heights.
-- **Shape**: two or three distinct areas, loops instead of dead ends, a secret or two (a pickup behind a crate, on
-  a ledge). Each level of a pack its own layout, palette and light.
+Agents' first levels were one flat box or one noise field. The game's levels are rooms of different shapes and sizes
+joined by corridors, tunnels and paths. Its numbers (a study of 274 of its levels, JFG-Modding
+`Docs/STOCK_LEVEL_DESIGN.md`):
+
+- **Floor**: about 2,000 x 2,000 of it (1.9 to 7.9 million square units), in a footprint 2,500 to 6,000 across.
+- **Passages**: about a quarter of the floor is passages under 400 wide (most about 200 wide, 150 to 300).
+- **Roofs**: a level is mostly outdoors or mostly indoors. Indoors, rooms are 600 to 800 high and tunnels about
+  300 high (150 at their tightest).
+- **Height**: floors spread over about 200 to 550 in 2 to 5 tiers, rising in gentle slopes and low steps. Outdoor
+  levels built round climbing go well past 1,000.
+- **Types**: open outdoor areas with paths round a feature; indoor halls with side rooms, alcoves and doors;
+  symmetric arenas with a ring walkway round a pit; tiered basins and amphitheatres with paths climbing their sides;
+  winding tunnel networks opening into small rooms; canyons and riverbeds; clusters of small round rooms; islands
+  reached by jetpack.
+
+How to do it:
+
+1. **Study first.** `stock_levels` finds the game's levels of the kind you are making, and
+   `stock_level_layout(level)` shows one's floor map with its numbers. Its textures are in `stock_level_textures`.
+   Look at two or three before drawing anything.
+2. **Plan rooms and links** on paper: 4 to 8 rooms of different sizes and shapes, each with a purpose (the start,
+   a fight, a key, a view, the exit), at different floor heights. Join them with passages, and add a loop so the
+   player isn't always backtracking.
+3. **Build it** with `jfg64.layout(name, rooms, links, floor=, wall=, ceiling=)`:
+   - **Rooms**: `round`, `cave` or `hall` outlines that wander (`wobble`), each at its own `floor` height, with a
+     `roof` for indoor ones.
+   - **Links**: `tunnel` (roofed), `corridor` or `canyon`, winding through `via` bends and `wiggle`, sloping
+     between the rooms' floors.
+   - **Defaults**: the game's proportions. `layout_report` checks the slopes stay walkable.
+   - **Outdoors**: use `jfg64.terrain` for open ground and rims, with clearings and paths.
+4. **Compare**: `level_layout(level)` measures yours the same way. Aim for the game's ranges, not a copy of one
+   level.
+5. **Dress it**:
+   - **Cover**: `jfg64.rock`, pillars and crates where squads fight (`add_cover` makes them holes).
+   - **A landmark** seen from the start.
+   - **Height**: ledges to climb (Ledge surfaces).
+   - **Fuel**: refuel pads by climbs.
+   - **Variety**: each level of a pack its own layout type, palette and light.
 
 ### What to fill it with
 

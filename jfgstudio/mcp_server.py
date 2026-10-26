@@ -17,7 +17,8 @@ from jfgstudio import project as proj
 
 PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
 INSTRUCTIONS = ("JFG-Studio makes levels and modpacks for Jet Force Gemini: Recompiled. Call guide first (workflow, "
-                "units, limits, gameplay patterns), then open_project or new_project and project_summary. Edits are "
+                "units, limits, gameplay patterns) and design_guide before laying out a level (outdoor and indoor "
+                "levels as the game builds them), then open_project or new_project and project_summary. Edits are "
                 "saved as they are made and can be undone per level. Run validate before play.")
 
 _POS = {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 3,
@@ -56,6 +57,8 @@ def _tool(name, description, run, properties=None, required=()):
 TOOLS = [
     _tool("guide", "How to make levels with these tools: workflow, units, limits, objects, gameplay patterns. Read it "
           "first.", lambda s, a: agent.guide()),
+    _tool("design_guide", "Level design: how the game lays out outdoor and indoor levels (its numbers), room-graph "
+          "templates and the process. Read it before laying out a level.", lambda s, a: agent.design_guide()),
     _tool("open_project", "Open a .jfgproj folder.", lambda s, a: s.open(a["path"]),
           {"path": {"type": "string"}}, ["path"]),
     _tool("new_project", "Create an empty project folder and open it.",
@@ -97,6 +100,13 @@ TOOLS = [
           lambda s, a: s.stock_level_textures(a["level"], a.get("limit", 24)),
           {"level": {"type": "integer", "description": "a game level id (stock_levels)"},
            "limit": {"type": "integer"}}, ["level"]),
+    _tool("stock_level_layout", "How a game level is laid out: a floor map from above (brighter = higher, darker = "
+          "roofed, orange = narrow passages) and its numbers (footprint, roofed share, floor heights and tiers, "
+          "passages / rooms / open ground, passage width, clearance). Study the game's levels before designing.",
+          lambda s, a: s.stock_level_layout(a["level"]),
+          {"level": {"type": "integer", "description": "a game level id (stock_levels)"}}, ["level"]),
+    _tool("level_layout", "The same floor map and numbers for a level of the project, to compare with the game's.",
+          lambda s, a: s.level_layout(a["level"]), {"level": _LEVEL}, ["level"]),
     _tool("texture_sheet", "A picture of game textures side by side, each id under it.",
           lambda s, a: s.texture_sheet(a["ids"]),
           {"ids": {"type": "array", "items": {"type": "string"}, "description": "hex ids, as game_textures gives"}},

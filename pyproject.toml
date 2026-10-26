@@ -26,7 +26,7 @@ jfgstudio = "jfgstudio.cli:main"
 include = ["jfgstudio*"]
 
 [tool.setuptools.package-data]
-jfgstudio = ["schemas/**/*.json", "agent_guide.md"]
+jfgstudio = ["schemas/**/*.json", "agent_guide.md", "level_design.md"]
 
 [tool.ruff]
 line-length = 120
