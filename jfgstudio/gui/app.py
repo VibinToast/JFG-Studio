@@ -17,7 +17,7 @@ import numpy as np
 from imgui_bundle import hello_imgui, imgui, imguizmo
 from imgui_bundle import portable_file_dialogs as pfd
 
-from jfgstudio import __version__, crashlog, edit, refs
+from jfgstudio import __version__, crashlog, edit, refs, stock_edit
 from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
@@ -94,6 +94,8 @@ class State:
         self.stock_entries: dict[tuple, bytes] = {}
         self.squads: dict | None = None  # enemy -> its stock squads (squads.index), read on first use
         self.instances = []  # (uid, model path, matrix) drawn in the last frame, for picking
+        self.menu_click = None  # where a right click in the Scene started (a menu, unless it drags)
+        self.menu_uid = None  # the object the Scene's menu is for
         self.prefab = {"search": "", "used": True, "oid": None, "example": 0, "squad": 0, "door": 0, "members": 2}
 
     # project actions
@@ -249,40 +251,36 @@ class State:
         path = self.model_paths[key]
         return (path, mode) if path else None
 
-    def stock_objects(self) -> list[dict]:
-        """For a stock-level edit: the stock level's own objects (read from the user's catalog), as display-only
-        project objects (uids "stock:<list>:<index>")."""
+    def game_objects(self, removed: bool = False) -> list[dict]:
+        """For a stock-level edit: the game level's own objects (from the user's catalog) with the project's changes
+        on them (stock_edit; uids "stock:<list>:<index>"); the removed ones only with `removed`."""
         if not self.project or self.level not in self.project.levels:
             return []
-        base = self.project.levels[self.level].base
-        if base is None or self.catalog() is None:
+        level = self.project.levels[self.level]
+        if level.base is None or self.catalog() is None:
             return []
-        key = ("stock-objects", base)
-        if key not in self.model_paths:
-            out = []
-            lv = self.cat.levels()[base]
-            for n in sorted({lv["objectList0"], lv["objectList1"]}):
-                try:
-                    entries = self.cat.objlist(n)
-                except (IndexError, ValueError):
-                    continue
-                for i, e in enumerate(entries):
-                    if e is None:
-                        continue
-                    d = obj.decode_entry(e[1])
-                    out.append({"uid": f"stock:{n}:{i}", "type": f"stock:objtype/0x{d['id']:X}", "pos": d["pos"],
-                                "stock": {"list": n, "entry": i}, "name": self.type_name(d["id"])})
-            self.model_paths[key] = out
-        return self.model_paths[key]
+        return [o for o in stock_edit.materialize(level, self.cat) if removed or not o.get("deleted")]
+
+    def game_editable(self) -> bool:
+        return bool(self.project and self.level in self.project.levels
+                    and stock_edit.editable(self.project.levels[self.level]))
+
+    def own_objects(self) -> list[dict]:
+        if not self.project or self.level not in self.project.levels:
+            return []
+        return self.project.levels[self.level].objects["objects"]
+
+    def all_objects(self) -> list[dict]:
+        """The level's own objects and the game level's (shown, and selectable to look at, even when read-only)."""
+        return self.own_objects() + self.game_objects()
 
     def type_name(self, oid: int) -> str:
         t = self.objtypes.get(oid) if self.catalog() else None
         return t["name"] if t else f"0x{oid:X}"
 
     def objects(self) -> list[dict]:
-        if not self.project or self.level not in self.project.levels:
-            return []
-        return self.project.levels[self.level].objects["objects"]
+        """What the tools edit: the level's own objects, and the game level's too when they are editable."""
+        return self.own_objects() + (self.game_objects() if self.game_editable() else [])
 
 
 S = State()
@@ -337,6 +335,14 @@ def _title(text: str) -> None:
         imgui.text_colored(theme.colour("ACCENT"), text)
 
 
+def _short_label(o: dict) -> str:
+    """An object's name, or its type's (the Scene's labels)."""
+    if o.get("name"):
+        return o["name"]
+    oid = obj.stock_id(o)
+    return S.type_name(oid) if stock_edit.is_stock(o["uid"]) and oid is not None else o["uid"]
+
+
 def _object_label(o: dict) -> str:
     if o["type"].startswith("pack:kind/") and S.project:
         kind = S.project.kinds.get(o["type"].split("/", 1)[1])
@@ -356,13 +362,61 @@ def _select(uid: str) -> None:
 
 
 def hierarchy() -> None:
-    objs = S.objects()
+    objs = S.own_objects()
     if not S.project:
         _muted("No project open. File > Open project...")
         return
+    level = S.project.levels.get(S.level)
+    if level is not None and level.base is not None:
+        _game_objects_header(level)
     if not objs:
-        imgui.text_disabled("This level has no objects.")
+        imgui.text_disabled("No objects added yet." if level is not None and level.base is not None
+                            else "This level has no objects.")
+    else:
+        _own_tree(objs)
+    if level is not None and level.base is not None:
+        _game_tree()
+
+
+def _game_objects_header(level) -> None:
+    """The switch that lets the game level's own objects be edited, for a stock-level edit."""
+    h = S.history()
+    on = stock_edit.editable(level)
+    changed, value = imgui.checkbox("Edit the game level's objects", on)
+    if changed and h is not None:
+        h.set_value(edit.LEVEL, ("editStock",), True if value else None,
+                    "edit game objects" if value else "lock game objects")
+        if not value:
+            S.selection = {u for u in S.selection if not stock_edit.is_stock(u)}
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Off: the game level's objects are read-only (listed grey); what you place is added to the "
+                          "level.\nOn: move, change and remove them too. The pack carries only your changes (the "
+                          "port's level patches), and Revert puts an object back as the game has it.")
+    if S.catalog() is None:
+        _muted("The game level's objects need your ROM (File > Settings).")
+    imgui.separator()
+
+
+def _game_tree() -> None:
+    game = S.game_objects(removed=True)
+    if not game:
         return
+    live = [o for o in game if not o.get("deleted")]
+    gone = [o for o in game if o.get("deleted")]
+    edited = sum(stock_edit.changed(o) for o in game)
+    title = f"The game level's objects ({len(live)}{f', {edited} changed' if edited else ''})##game"
+    if imgui.tree_node_ex(title, imgui.TreeNodeFlags_.default_open):
+        locked = not S.game_editable()
+        for o in live:
+            _leaf(o, dim=locked, marked=stock_edit.changed(o))
+        if gone and imgui.tree_node_ex(f"Removed ({len(gone)})##gone"):
+            for o in gone:
+                _leaf(o, dim=True)
+            imgui.tree_pop()
+        imgui.tree_pop()
+
+
+def _own_tree(objs) -> None:
     keys = _keys(objs)
     squads = {o.get("fields", {}).get("squadronId"): o for o in objs if keys[o["uid"]] == "squadron"}
     members = {}
@@ -376,8 +430,12 @@ def hierarchy() -> None:
         if squad["uid"] in S.selection:
             flags |= imgui.TreeNodeFlags_.selected
         is_open = imgui.tree_node_ex(_object_label(squad), flags)
-        if imgui.is_item_clicked():
+        if imgui.is_item_clicked() or imgui.is_item_clicked(imgui.MouseButton_.right) \
+                and squad["uid"] not in S.selection:
             _select(squad["uid"])
+        if imgui.begin_popup_context_item(f"menu##{squad['uid']}"):
+            _object_menu(squad)
+            imgui.end_popup()
         shown.add(squad["uid"])
         if is_open:
             for m in members.get(sid, []):
@@ -395,13 +453,109 @@ def hierarchy() -> None:
             _leaf(o)
 
 
-def _leaf(o: dict) -> None:
+def _leaf(o: dict, dim: bool = False, marked: bool = False) -> None:
     flags = imgui.TreeNodeFlags_.leaf | imgui.TreeNodeFlags_.no_tree_push_on_open
     if o["uid"] in S.selection:
         flags |= imgui.TreeNodeFlags_.selected
-    imgui.tree_node_ex(_object_label(o), flags)
-    if imgui.is_item_clicked():
+    if dim:
+        imgui.push_style_color(imgui.Col_.text, theme.colour("MUTED"))
+    label = _object_label(o)
+    if marked:  # a game object the project changed
+        name, _, tag = label.partition("  ##")
+        label = f"{name} *  ##{tag}"
+    imgui.tree_node_ex(label, flags)
+    if dim:
+        imgui.pop_style_color()
+    if imgui.is_item_clicked() or imgui.is_item_clicked(imgui.MouseButton_.right) and o["uid"] not in S.selection:
         _select(o["uid"])
+    if imgui.begin_popup_context_item(f"menu##{o['uid']}"):
+        _object_menu(o)
+        imgui.end_popup()
+
+
+def _object_menu(o: dict) -> None:
+    """The right-click menu of an object (the Hierarchy's and the Scene's): what makes sense for it."""
+    h = S.history()
+    game = stock_edit.is_stock(o["uid"])
+    writable = h is not None and (not game or S.game_editable())
+    removed = bool(o.get("deleted"))
+    imgui.text_disabled(_short_label(o))
+    imgui.separator()
+    if imgui.menu_item("Frame in Scene", "F", False, not removed)[0]:
+        S.selection = {o["uid"]}
+        frame_selection()
+    sc = S.schema(o)
+    if sc and sc.key in ("squadron", "squadmember"):
+        if imgui.menu_item("Select the whole squad", "", False, True)[0]:
+            S.selection = _squad_uids(o)
+    if removed:
+        if imgui.menu_item("Put back in the level", "", False, writable)[0]:
+            h.set_value(o["uid"], ("deleted",), None, "put back")
+            S.validate()
+        return
+    imgui.separator()
+    if game:
+        if imgui.menu_item("Duplicate" if writable else "Copy into the level", "Ctrl+D", False, h is not None)[0]:
+            S.selection = set(h.duplicate({o["uid"]}))
+            S.validate()
+        if imgui.is_item_hovered() and not writable:
+            imgui.set_tooltip("A copy of it as one of the objects you add: the game's own stays as it is")
+    elif imgui.menu_item("Duplicate", "Ctrl+D", False, writable)[0]:
+        S.selection = set(h.duplicate(S.selection | {o["uid"]}))
+        S.validate()
+    if imgui.menu_item("Drop to floor", "", False, writable and S.view.mesh is not None)[0]:
+        y = S.view.mesh.floor_height(o["pos"][0], o["pos"][2], below=o["pos"][1] + 60)
+        if y is not None:
+            h.set_value(o["uid"], ("pos",), [o["pos"][0], obj.on_ground(y, sc), o["pos"][2]], "drop to floor")
+    if sc and sc.key == "squadron" and imgui.menu_item("Add cover", "", False, writable and S.view.mesh is not None)[0]:
+        level_tools.add_cover(o)
+    if imgui.menu_item("Remove from the level" if game else "Delete", "Del", False, writable)[0]:
+        if o["uid"] not in S.selection:
+            S.selection = {o["uid"]}
+        delete()
+    if game:
+        imgui.separator()
+        if imgui.menu_item("Revert to the game's", "", False, writable and stock_edit.changed(o))[0]:
+            _revert_game([o])
+        level = S.project.levels[S.level]
+        if imgui.menu_item("Edit the game level's objects", "", stock_edit.editable(level), h is not None)[0]:
+            on = not stock_edit.editable(level)
+            h.set_value(edit.LEVEL, ("editStock",), True if on else None,
+                        "edit game objects" if on else "lock game objects")
+
+
+def _squad_uids(o: dict) -> set[str]:
+    """A squadron or member's whole squad: the squadron, its members and its region's corners."""
+    objs = S.all_objects()
+    keys = _keys(objs)
+    sid = o.get("fields", {}).get("squadronId" if keys[o["uid"]] == "squadron" else "squadron")
+    sq = next((x for x in objs if keys[x["uid"]] == "squadron" and S.fields(x, S.schema(x)).get("squadronId") == sid),
+              None)
+    if sq is None:
+        return {o["uid"]}
+    region = S.fields(sq, S.schema(sq)).get("region")
+    out = {sq["uid"]}
+    for x in objs:
+        f = S.fields(x, S.schema(x)) if keys[x["uid"]] in ("squadmember", "regionpoint") else {}
+        if keys[x["uid"]] == "squadmember" and f.get("squadron") == sid or \
+                keys[x["uid"]] == "regionpoint" and region is not None and f.get("region") == region:
+            out.add(x["uid"])
+    return out
+
+
+def _revert_game(objs: list[dict]) -> None:
+    """Game objects back as the game has them, as one undo step."""
+    h = S.history()
+    changes = []
+    for o in objs:
+        g = o["game"]
+        for path, old, new in ((("pos",), list(o["pos"]), list(g["pos"])),
+                               (("fields",), dict(o.get("fields", {})), {}),
+                               (("name",), o.get("name"), None), (("deleted",), o.get("deleted"), None)):
+            if old != new and not (old in (None, {}) and new in (None, {})):
+                changes.append(edit.Change(o["uid"], path, old, new))
+    h.do(edit.Command("revert to the game's", changes))
+    S.validate()
 
 
 def _keys(objs) -> dict:
@@ -517,7 +671,7 @@ def scene() -> None:
     objs = S.objects()
     keys = _keys(objs)
     instances, boxes = _instances(objs)
-    stock = S.stock_objects()  # a stock-level edit: the stock level's own objects, drawn but not editable
+    stock = [] if S.game_editable() else S.game_objects()  # read-only game objects: drawn grey, not editable
     if stock:
         stock_keys = _keys(stock)
         stock_inst, stock_boxes = _instances(stock, pickable=False)
@@ -546,16 +700,18 @@ def scene() -> None:
         if o["uid"] in boxes:
             top = max(c[1] for c in boxes[o["uid"]])
             p = vp.project(S.camera, (w, h), (o["pos"][0], top + 6, o["pos"][2])) if o["uid"] in S.selection else None
-        if p and keys.get(o["uid"]) != "regionpoint":
+        quiet = stock_edit.is_stock(o["uid"]) and o["uid"] not in S.selection and not o.get("name")
+        if p and keys.get(o["uid"]) != "regionpoint" and not quiet:  # the game's own: named when selected
             colour = theme.colour("HIGHLIGHT" if o["uid"] in S.selection else "MUTED")
             draw.add_text(imgui.ImVec2(origin.x + p[0] + 4, origin.y + p[1] - 14), imgui.get_color_u32(colour),
-                          o.get("name") or o["uid"])
+                          _short_label(o))
     if S.tool in ("region", "water", "patrol"):
         if S.drag is not None:
             _end_drag(objs)
         level_tools.scene_tool(origin, w, h, hovered)
         _camera_input(hovered, objs)
         return
+    _scene_menu(origin, w, h, objs, hovered)
     using = _gizmo(origin, w, h, objs)
     if S.gizmo_note:
         draw.add_text(imgui.ImVec2(origin.x + 10, origin.y + 8), imgui.get_color_u32(theme.colour("HIGHLIGHT")),
@@ -567,6 +723,30 @@ def scene() -> None:
         mouse = imgui.get_mouse_pos()
         S.box_start = (mouse.x - origin.x, mouse.y - origin.y)
     _box_select(origin, w, h, objs, draw, using)
+
+
+def _scene_menu(origin, w, h, objs, hovered: bool) -> None:
+    """A right click (not a drag: that flies the camera) on an object opens its menu."""
+    io = imgui.get_io()
+    if hovered and imgui.is_mouse_clicked(imgui.MouseButton_.right):
+        S.menu_click = (io.mouse_pos.x, io.mouse_pos.y)
+    if imgui.is_mouse_released(imgui.MouseButton_.right) and S.menu_click is not None:
+        x0, y0 = S.menu_click
+        S.menu_click = None
+        if math.hypot(io.mouse_pos.x - x0, io.mouse_pos.y - y0) < 4:
+            uid = _hit(origin, w, h, objs)
+            if uid is not None:
+                if uid not in S.selection:
+                    S.selection = {uid}
+                S.menu_uid = uid
+                imgui.open_popup("scene menu")
+    if imgui.begin_popup("scene menu"):
+        o = next((x for x in S.all_objects() if x["uid"] == S.menu_uid), None)
+        if o is None:
+            imgui.close_current_popup()
+        else:
+            _object_menu(o)
+        imgui.end_popup()
 
 
 def _box_select(origin, w, h, objs, draw, using: bool) -> None:
@@ -601,7 +781,17 @@ def _box_select(origin, w, h, objs, draw, using: bool) -> None:
 
 
 def _pick(origin, w, h, objs, keys) -> None:
-    """Selects what is under the mouse: a marker within 14 pixels, else the nearest model the ray hits."""
+    """Selects what is under the mouse (_hit), or clears the selection."""
+    best = _hit(origin, w, h, objs)
+    if best is None:
+        if not (imgui.get_io().key_ctrl or imgui.get_io().key_shift):
+            S.selection = set()
+    else:
+        _select(best)
+
+
+def _hit(origin, w, h, objs) -> str | None:
+    """What is under the mouse: a marker within 14 pixels, else the nearest model the ray hits."""
     mouse = imgui.get_mouse_pos()
     mx, my = mouse.x - origin.x, mouse.y - origin.y
     best, best_d = None, 14.0 ** 2
@@ -624,11 +814,7 @@ def _pick(origin, w, h, objs, keys) -> None:
             t = vp.raycast(S.view.model(path).visible, (inv @ np.array([*ray_o, 1.0]))[:3], inv[:3, :3] @ ray_d)
             if t is not None and t < best_t + 1.0:
                 best, best_t = uid, t
-    if best is None:
-        if not (imgui.get_io().key_ctrl or imgui.get_io().key_shift):
-            S.selection = set()
-    else:
-        _select(best)
+    return best
 
 
 def _role_field(o: dict, role: str) -> obj.Field | None:
@@ -761,11 +947,31 @@ def frame_selection() -> None:
 
 
 def inspector() -> None:
-    sel = [o for o in S.objects() if o["uid"] in S.selection]
+    sel = [o for o in S.all_objects() + S.game_objects(removed=True) if o["uid"] in S.selection]
+    sel = list({o["uid"]: o for o in sel}.values())
     h = S.history()
     if not sel or h is None:
         _muted("Select an object in the Hierarchy or the Scene.")
         return
+    game = [o for o in sel if stock_edit.is_stock(o["uid"])]
+    locked = bool(game) and not S.game_editable()
+    if game:
+        _muted("One of the game level's own objects: read-only. Turn on \"Edit the game level's objects\" in the "
+               "Hierarchy to change it, or right-click > Copy into the level." if locked else
+               "One of the game level's own objects: the pack carries only what you change.")
+        if len(game) == 1 and stock_edit.changed(game[0]):
+            imgui.begin_disabled(locked)
+            if imgui.button("Revert to the game's"):
+                _revert_game(game)
+            imgui.end_disabled()
+    imgui.begin_disabled(locked)
+    try:
+        _inspector_body(sel, h)
+    finally:
+        imgui.end_disabled()
+
+
+def _inspector_body(sel: list[dict], h) -> None:
     if len(sel) > 1:
         imgui.text(f"{len(sel)} objects selected")
         _muted("W moves them together; Delete removes them; Ctrl+D duplicates them.")
@@ -1507,6 +1713,8 @@ def play(launch: bool = True) -> None:
     for o in S.objects():
         if o["uid"] in S.selection and (sc := S.schema(o)) and sc.key == "startpoint":
             start_point = S.fields(o, sc).get("startPoint", 0)
+    for lv in S.project.levels.values():
+        stock_edit.sync(lv)  # the game objects' changes, as the build reads them
     project = copy.deepcopy(S.project)
     level, hero = S.level, S.play_character
     S.play_log = [f"{'Play' if launch else 'Build'}: {project.meta['name']}"
@@ -1547,8 +1755,9 @@ def duplicate() -> None:
 
 def delete() -> None:
     h = S.history()
-    if h and S.selection:
-        h.delete(S.selection)
+    uids = {u for u in S.selection if not stock_edit.is_stock(u) or S.game_editable()}
+    if h and uids:
+        h.delete(uids)
         S.selection = set()
         S.validate()
 

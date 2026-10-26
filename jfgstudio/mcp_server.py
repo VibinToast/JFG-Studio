@@ -279,7 +279,20 @@ TOOLS = [
            "on_floor": {"type": "boolean"}, "name": {"type": "string"}, "target": {"type": "string"},
            "facing": _FACING},
           ["level", "uid"]),
-    _tool("delete_objects", "Delete objects by uid.", lambda s, a: s.delete_objects(a["level"], a["uids"]),
+    _tool("game_objects", "In a level that edits one of the game's (edit_stock_level): the game level's own objects "
+          "(uids stock:<list>:<index>), with what the project changed. Read-only until edit_game_objects.",
+          lambda s, a: s.game_objects(a["level"], a.get("type"), a.get("include_removed", False)),
+          {"level": _LEVEL, "type": _TYPE, "include_removed": {"type": "boolean"}}, ["level"]),
+    _tool("edit_game_objects", "Let the game level's own objects be moved, changed (update_object) and removed "
+          "(delete_objects), or make them read-only again (editable false; changes stay). The pack carries only the "
+          "changes.",
+          lambda s, a: s.edit_game_objects(a["level"], a.get("editable", True)),
+          {"level": _LEVEL, "editable": {"type": "boolean"}}, ["level"]),
+    _tool("revert_game_objects", "Put the game level's objects (uids, or all) back as the game has them.",
+          lambda s, a: s.revert_game_objects(a["level"], a.get("uids")),
+          {"level": _LEVEL, "uids": {"type": "array", "items": {"type": "string"}}}, ["level"]),
+    _tool("delete_objects", "Delete objects by uid (the game level's own: removed from it, with edit_game_objects "
+          "on).", lambda s, a: s.delete_objects(a["level"], a["uids"]),
           {"level": _LEVEL, "uids": {"type": "array", "items": {"type": "string"}}}, ["level", "uids"]),
     _tool("undo", "Undo a level's last change.", lambda s, a: s.undo(a["level"]), {"level": _LEVEL}, ["level"]),
     _tool("redo", "Redo a level's last undone change.", lambda s, a: s.redo(a["level"]), {"level": _LEVEL},

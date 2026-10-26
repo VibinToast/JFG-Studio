@@ -20,7 +20,7 @@ HOLE = 1  # RegionInfo flags: a hole of the area it links to (decomp MSR mod #6)
 COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obstacle, made a hole of its region
 COVER_STEP = 20  # the grid obstacles() looks on
 COVER_MAX = 12  # holes Placer.cover makes at most per region
-COVER_MIN = 40  # an obstacle narrower than this both ways is too small to hide behind: no hole (a trial's rocks gave 20)
+COVER_MIN = 40  # an obstacle narrower than this both ways is too small to hide behind: no hole (a trial gave 20s)
 
 
 def winding(points) -> float:

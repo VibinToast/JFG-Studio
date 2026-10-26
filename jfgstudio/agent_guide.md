@@ -359,6 +359,13 @@ on the planet map as soon as one of its planets is open. So a pack is reachable 
   map once the portal was used. An edit adds to the game level: `level_info` lists the game level's own start points
   and exits (`baseLevel`) and `level_preview` draws them grey; never reuse their start point numbers (`connect`
   avoids them, `validate` says when one clashes), or the game's own arrivals there, a new game's included, break.
+- **Changing a game level's own objects** (moving its enemies and pickups, changing or removing them): in a level
+  made with `edit_stock_level`, `game_objects(level)` lists them (uids `stock:<list>:<index>`), read-only until
+  `edit_game_objects(level, true)`. Then `update_object` and `delete_objects` take those uids, and
+  `revert_game_objects` puts one (or all) back as the game has it. The project keeps only what you changed and the
+  pack carries only that (the port's level patches, each checked against the object's type), so other mods can
+  change the same level too. A game object list can be shared by several game levels: `game_objects` says so, and a
+  change shows in all of them. Leave the level read-only when you only add to it.
 `validate` warns about a planet nothing leads to. The planet's `disc` is its look on the map: `index` the game disc
 whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `radius`, and optional `colour`.
 `set_planet` and `set_galaxy` take the files' full formats, with every key described.

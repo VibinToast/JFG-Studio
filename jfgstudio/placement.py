@@ -98,7 +98,10 @@ def check(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = No
             near = [mesh.floor_height(x + dx * clear, z + dz * clear) for dx, dz in RING]
             # and a wall with nothing behind it (a level's outer wall has no floor past it to rise)
             walls = [raycast(mesh.collision, (x, f + CLIP, z), (dx, 0.0, dz)) for dx, dz in RING]
-            if any(h is not None and h > f + CLIP for h in near) or                     any(d is not None and d < clear * math.hypot(dx, dz) for d, (dx, dz) in zip(walls, RING)):
+            hit_floor = any(h is not None and h > f + CLIP for h in near)
+            hit_wall = any(d is not None and d < clear * math.hypot(dx, dz)
+                           for d, (dx, dz) in zip(walls, RING, strict=True))
+            if hit_floor or hit_wall:
                 finding.update({"problem": "clipping into geometry"})
                 out.append(finding)  # move it clear of the rock or wall beside it
                 continue

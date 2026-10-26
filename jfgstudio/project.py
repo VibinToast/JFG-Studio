@@ -92,8 +92,10 @@ class Project:
         return self.path / "music" / f"{name}.ogg"
 
     def save(self) -> None:
+        from jfgstudio import stock_edit  # the game level's objects' changes, kept as "stockEdits"
         write_json(self.path / "project.json", self.meta)
         for level in self.levels.values():
+            stock_edit.sync(level)
             write_json(self.path / "levels" / level.name / "level.json", level.level)
             write_json(self.path / "levels" / level.name / "objects.json", level.objects)
         for name, planet in self.planets.items():

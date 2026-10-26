@@ -22,7 +22,7 @@ from pathlib import Path
 import jsonschema
 import numpy as np
 
-from jfgstudio import edit, formats, importer, placement, prefabs, preview, refs, rom, scripts, squads
+from jfgstudio import edit, formats, importer, placement, prefabs, preview, refs, rom, scripts, squads, stock_edit
 from jfgstudio import objects as obj
 from jfgstudio import project as proj
 from jfgstudio import validate as val
@@ -37,13 +37,13 @@ NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way 
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = squads.PATROL_NEAR  # place_patrol moves a squadron farther than this from its route to its first node
-EXPLOSIVE_DRUM, DRUM_SIZE = 0x168, 24
+EXPLOSIVE_DRUM, DRUM_SIZE = 0x168, 24  # most of the game's explosive drums are size 24 (its crates 39)
 CLIMB, CLIMB_STEP = 100, 70  # a key higher than this over every floor round it is out of reach; steps to give
 REACH_RING = (100, 160, 220, 300)  # how far round a key to look for a floor to climb from
 FOLD = 12  # a downward face this close to a floor: the floor folded over
 WATER_BANK, WATER_HOVER = 12, 8  # past a water edge by this much, a floor lower than this under it: hovering water
 DOOR_SLACK = 40  # a passage more than this much wider than its door: the player walks round it
-DOOR_OVERLAP = 10  # a door covers its opening's edges by at least this much (both sides together), or gaps show  # most of the game's explosive drums are size 24 (its crates 39)
+DOOR_OVERLAP = 10  # a door covers its opening's edges by at least this much (both sides together), or gaps show
 FLYER_CRUISE = 150  # flying squads cruise this far over the floor (the game's: about 150)
 FLYER_ROOM = 60  # and stay this far under a roof
 PATROL_BEHAVIOUR, PATROL_MODE = squads.PATROL_BEHAVIOUR, squads.PATROL_MODE
@@ -137,7 +137,16 @@ class Session:
         level = self.p.levels.get(name)
         if level is None:
             raise AgentError(f"no level {name!r}; the project's levels: {', '.join(self.p.levels) or '(none)'}")
+        if level.base is not None and self.catalog() is not None:
+            stock_edit.materialize(level, self._catalog)  # the game level's own objects, with the project's changes
         return level
+
+    def _writable(self, lv: proj.Level, uids) -> None:
+        """The game level's own objects change only with the level's editStock on (edit_game_objects)."""
+        game = [u for u in uids if stock_edit.is_stock(u)]
+        if game and not stock_edit.editable(lv):
+            raise AgentError(f"{game[0]} is one of the game level's own objects, read-only in {lv.name}: "
+                             f"edit_game_objects({lv.name!r}, true) lets you change and remove them")
 
     def _history(self, level: proj.Level) -> edit.History:
         h = self.histories.get(level.name)
@@ -1819,6 +1828,7 @@ class Session:
                       name: str | None = None, target: str | None = None, facing: float | None = None) -> dict:
         """Changes an object's fields (merged), position, name or exit target, as one undo step."""
         lv = self._level(level)
+        self._writable(lv, [uid])
         o = self._object(lv, uid)
         schema = obj.schema_for(o, self.schemas, self._behaviours())
         changes = []
@@ -1843,12 +1853,79 @@ class Session:
         return self._describe(o)
 
     def delete_objects(self, level: str, uids: list[str]) -> dict:
+        """The level's own objects are deleted; the game level's (with editStock on) are removed from it, which
+        revert_game_objects undoes."""
         lv = self._level(level)
+        self._writable(lv, uids)
         for u in uids:
             self._object(lv, u)
         self._history(lv).delete(set(uids))
         self._save()
         return {"deleted": list(uids)}
+
+    def game_objects(self, level: str, type=None, include_removed: bool = False) -> dict:
+        """A stock-level edit's game level objects (uids "stock:<list>:<index>"), with the project's changes on them:
+        each one's type, name (from the player's game), position and whether it was changed or removed. `type`
+        filters by object type."""
+        lv = self._level(level)
+        if lv.base is None:
+            raise AgentError(f"{level} is a level of the pack's own: it has no game objects (edit_stock_level makes "
+                             "a level that edits one of the game's)")
+        if self.catalog() is None:
+            raise AgentError(f"the catalog is not available ({self._catalog_error}): it holds the game's objects")
+        want = self._type(type)[0] if type is not None else None
+        out = []
+        for o in stock_edit.live(lv):
+            oid = o["game"]["id"]
+            if (want is not None and oid != want) or (o.get("deleted") and not include_removed):
+                continue
+            t = (self._types or {}).get(oid) or {}
+            d = {"uid": o["uid"], "type": f"0x{oid:X}", "name": o.get("name") or t.get("name", ""),
+                 "pos": [round(v) for v in o["pos"]]}
+            key = self._key(o)
+            if key:
+                d["schema"] = key
+            if o.get("deleted"):
+                d["removed"] = True
+            elif stock_edit.changed(o):
+                d["changed"] = True
+            out.append(d)
+        lists = sorted({o["game"]["list"] for o in stock_edit.live(lv)})
+        shared = {n: stock_edit.sharing(self._catalog, lv.base, n) for n in lists}
+        return {"editable": stock_edit.editable(lv), "objects": out[:LIST_LIMIT * 4],
+                "more": max(0, len(out) - LIST_LIMIT * 4),
+                "note": "read-only until edit_game_objects(level, true); then update_object and delete_objects take "
+                        "these uids. The pack carries only the changes."
+                        + ("".join(f" The game's list {n} is also level(s) {', '.join(map(str, s[:5]))}'s: its "
+                                   "changes show there too." for n, s in shared.items() if s))}
+
+    def edit_game_objects(self, level: str, editable: bool = True) -> dict:
+        """Lets the game level's own objects be changed and removed (or makes them read-only again; their changes
+        stay), as one undo step."""
+        lv = self._level(level)
+        if lv.base is None:
+            raise AgentError(f"{level} is a level of the pack's own: it has no game objects")
+        self._history(lv).set_value(edit.LEVEL, ("editStock",), True if editable else None,
+                                    "edit game objects" if editable else "lock game objects")
+        self._save()
+        return {"level": level, "editable": stock_edit.editable(lv)}
+
+    def revert_game_objects(self, level: str, uids: list[str] | None = None) -> dict:
+        """Puts the game level's objects (`uids`, or all of them) back as the game has them: position, fields,
+        name, and removed ones back in the level. One undo step."""
+        lv = self._level(level)
+        targets = [o for o in stock_edit.live(lv) if (uids is None or o["uid"] in uids) and stock_edit.changed(o)]
+        changes = []
+        for o in targets:
+            g = o["game"]
+            for path, old, new in ((("pos",), list(o["pos"]), list(g["pos"])),
+                                   (("fields",), dict(o.get("fields", {})), {}),
+                                   (("name",), o.get("name"), None), (("deleted",), o.get("deleted"), None)):
+                if old != new and not (old in (None, {}) and new in (None, {})):
+                    changes.append(edit.Change(o["uid"], path, old, new))
+        self._history(lv).do(edit.Command("revert game objects", changes))
+        self._save()
+        return {"reverted": [o["uid"] for o in targets]}
 
     def undo(self, level: str) -> dict:
         lv = self._level(level)
@@ -1928,6 +2005,8 @@ class Session:
                                             "clearing in the geometry)" if f["problem"] == "on a slope" else ""),
                                          f["uid"]) for f in findings]
             for name, lv in self.p.levels.items():
+                if not lv.level.get("track", "").startswith("pack:"):
+                    continue  # the game's own track: its water and floors are the game's
                 try:
                     mesh = self._mesh(name)
                     hovering, folded = self._hovering_water(mesh), self._folded_floors(mesh)

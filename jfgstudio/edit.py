@@ -30,6 +30,8 @@ def find(level: Level, uid: str) -> dict | None:
     """An object by uid, or the level's settings (level.json) for LEVEL."""
     if uid == LEVEL:
         return level.level
+    if uid.startswith("stock:"):  # one of the game level's own objects (stock_edit), while it is live
+        return next((o for o in level.__dict__.get("stock_live") or () if o["uid"] == uid), None)
     return next((o for o in level.objects["objects"] if o["uid"] == uid), None)
 
 
@@ -175,16 +177,23 @@ class History:
         self.do(Command(label, added=[(n + k, o) for k, o in enumerate(objs)]))
 
     def delete(self, uids: set, label: str = "delete") -> None:
+        """The level's own objects are taken out; the game level's (stock_edit) are marked removed."""
         objs = self.level.objects["objects"]
         removed = [(i, copy.deepcopy(o)) for i, o in enumerate(objs) if o["uid"] in uids]
-        self.do(Command(label, removed=removed))
+        game = [Change(u, ("deleted",), None, True) for u in sorted(uids) if u.startswith("stock:")
+                and (o := find(self.level, u)) is not None and not o.get("deleted")]
+        self.do(Command(label, game, removed=removed))
 
     def duplicate(self, uids: set, offset=(20, 0, 20)) -> list[str]:
         copies = []
-        for o in self.level.objects["objects"]:
+        game = [o for o in self.level.__dict__.get("stock_live") or () if o["uid"] in uids]
+        for o in [*self.level.objects["objects"], *game]:
             if o["uid"] in uids:
                 c = copy.deepcopy(o)
-                c["uid"] = new_uid(self.level, o["uid"].rstrip("0123456789") or "obj")
+                for k in ("game", "deleted"):  # a copy of a game object is one of the level's own
+                    c.pop(k, None)
+                stem = o.get("name") or "copy" if o["uid"].startswith("stock:") else o["uid"].rstrip("0123456789")
+                c["uid"] = new_uid(self.level, stem or "obj")
                 c["pos"] = [p + d for p, d in zip(o["pos"], offset, strict=True)]
                 copies.append(c)
                 self.level.objects["objects"].append(c)  # so the next new_uid sees it

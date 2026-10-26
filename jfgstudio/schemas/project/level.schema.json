@@ -17,6 +17,7 @@
    "properties": {"slot0": {"type": "integer", "minimum": 0}, "slot1": {"type": "integer", "minimum": 0}}
   },
   "track": {"type": "string", "description": "pack:track/<name> (geometry/<name>.glb) or stock:track/<n>"},
+  "editStock": {"type": "boolean", "description": "an edit of a stock level: its own objects may be changed and removed too (objects.json stockEdits); off, they are read-only and only added objects change it"},
   "sky": {"type": "integer", "minimum": -1, "description": "sky object id (header +0x58), -1 = none (black)"},
   "header": {
    "type": "object",

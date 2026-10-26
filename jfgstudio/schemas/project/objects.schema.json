@@ -33,6 +33,24 @@
      "group": {"type": "string", "description": "editor grouping (Hierarchy)"}
     }
    }
+  },
+  "stockEdits": {
+   "type": "array",
+   "description": "a stock-level edit: changes to the game level's own objects (only what changed; the objects come from the player's catalog)",
+   "items": {
+    "type": "object",
+    "required": ["list", "index", "id"],
+    "additionalProperties": false,
+    "properties": {
+     "list": {"type": "integer", "minimum": 0, "description": "the game's object list"},
+     "index": {"type": "integer", "minimum": 0, "description": "the object's place in that list"},
+     "id": {"type": "integer", "minimum": 0, "maximum": 65535, "description": "its object id: the port skips the change if the player's data has another"},
+     "pos": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}},
+     "fields": {"type": "object", "additionalProperties": {"type": "integer"}},
+     "name": {"type": "string", "description": "editor label only"},
+     "deleted": {"type": "boolean", "description": "removed from the level"}
+    }
+   }
   }
  }
 }

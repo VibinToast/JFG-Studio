@@ -94,8 +94,9 @@ def _check_flags(project: Project, schemas) -> list[Problem]:
                                        f"{problem[1]} (game flag 0x2F + n: give it {PACK_FLAGS[0] - UPGRADE_FLAG}-"
                                        f"{PACK_FLAGS[-1] - UPGRADE_FLAG})", o["uid"]))
                 elif UPGRADE_FLAG + n in seen:
-                    out.append(Problem(WARNING, "game-flag", of, f"the health upgrade's game flag {UPGRADE_FLAG + n} is "
-                                       f"also {seen[UPGRADE_FLAG + n]}'s: taking one counts as taking both", o["uid"]))
+                    out.append(Problem(WARNING, "game-flag", of,
+                                       f"the health upgrade's game flag {UPGRADE_FLAG + n} is also "
+                                       f"{seen[UPGRADE_FLAG + n]}'s: taking one counts as taking both", o["uid"]))
                 seen.setdefault(UPGRADE_FLAG + n, o["uid"])
                 continue
             if _key(o, schemas) != "target":

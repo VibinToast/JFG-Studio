@@ -22,7 +22,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from jfgstudio import bps, formats, prefabs, refs, rom
+from jfgstudio import bps, formats, prefabs, refs, rom, stock_edit
 from jfgstudio import objects as obj
 from jfgstudio import validate as val
 from jfgstudio.catalog import Catalog
@@ -372,7 +372,8 @@ class _Builder:
 
     def patches(self) -> list[dict]:
         """The port's level patches for stock-level edits: the objects appended to the stock level's own list (slot 1,
-        header +0x56), the header fields written over the stock header."""
+        header +0x56), its own objects changed or removed (stockEdits: "set" and "delete" checked by object id), the
+        header fields written over the stock header."""
         out = []
         stock = self.catalog.levels()
         fields = {name: (off, fmt) for off, fmt, name in self.lv.FIELDS}
@@ -389,9 +390,32 @@ class _Builder:
                 if fixups:
                     op["fixups"] = fixups
                 ops.append(op)
+            by_list: dict[int, list[dict]] = {}  # the game level's own objects changed or removed (stock_edit)
+            for e in level.objects.get("stockEdits", []):
+                try:
+                    original = self.catalog.stock_entry(e["list"], e["index"])
+                except IndexError:
+                    raise BuildError([f"levels/{name}/objects.json: the game's object list {e['list']} has no "
+                                      f"object {e['index']}"]) from None
+                if obj.decode_entry(original)["id"] != e["id"]:
+                    raise BuildError([f"levels/{name}/objects.json: object {e['index']} of list {e['list']} is not "
+                                      f"0x{e['id']:X} in this game data: the change was made for another"])
+                try:
+                    by_list.setdefault(e["list"], []).extend(stock_edit.patch_ops(e, original, self.schemas))
+                except ValueError as err:
+                    raise BuildError([f"levels/{name}/objects.json: list {e['list']}: {err}"]) from None
+            appended = stock[level.base]["objectList1"]
             if ops:
-                out.append({"table": self.lv.OBJLIST_TABLE, "data": self.lv.OBJLIST_DATA,
-                            "entry": stock[level.base]["objectList1"], "objlist": ops})
+                by_list.setdefault(appended, []).extend(ops)
+            for list_id, list_ops in sorted(by_list.items()):
+                out.append({"table": self.lv.OBJLIST_TABLE, "data": self.lv.OBJLIST_DATA, "entry": list_id,
+                            "objlist": list_ops})
+                shared = stock_edit.sharing(self.catalog, level.base, list_id)
+                own_changes = len(list_ops) - (len(ops) if list_id == appended else 0)
+                if shared and own_changes:
+                    self.log(f"level {name}: the game's object list {list_id} is also level(s) "
+                             f"{', '.join(map(str, shared[:6]))}'s: its changes show there too")
+            changed = sum(len(v) for v in by_list.values()) - len(ops)
             sets = []
             for key, value in sorted(level.level["header"].items()):
                 if key not in fields:
@@ -403,6 +427,7 @@ class _Builder:
                 out.append({"table": self.lv.HEADER_TABLE, "data": self.lv.HEADER_DATA, "entry": level.base,
                             "set": sets})
             self.log(f"level {name}: adds {len(ops)} objects to stock level {level.base}"
+                     + (f", changes or removes {changed} of its own" if changed else "")
                      + (f" and changes {len(sets)} header fields" if sets else ""))
         return out
 
