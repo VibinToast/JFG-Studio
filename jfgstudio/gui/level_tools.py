@@ -11,6 +11,7 @@ from imgui_bundle import imgui
 
 from jfgstudio import edit, geometry, refs, squads
 from jfgstudio import prefabs as pre
+from jfgstudio import project as proj
 from jfgstudio.gui import theme
 from jfgstudio.gui import viewport as vp
 
@@ -473,14 +474,27 @@ def start_points_of(target: str) -> list[int]:
     return S.cat.start_points(r.number()) if S.catalog() is not None else []
 
 
+def exit_target(o: dict, values: dict) -> str:
+    """The level an exit leads to: the one Studio set ("target"), or for an entry copied from the game (one of the
+    game level's own, or placed from a stock entry) the level its bytes name (levelLow, levelHigh; 0xFF = the low
+    byte alone). "" when none is set."""
+    if o.get("target"):
+        return o["target"]
+    if "stock" not in o or values.get("levelLow") is None:
+        return ""
+    low, high = values["levelLow"], values.get("levelHigh", 0xFF)
+    return f"stock:level/{low if high == 0xFF else (high << 8) | low}"
+
+
 def exit_picker(o: dict) -> None:
     A = _app()
     S = A.S
     h = S.history()
     uid = o["uid"]
-    choices = level_choices()
+    game = "game" in o  # one of the game level's own: its edits are bytes, so it leads to a game level
+    choices = [c for c in level_choices() if not game or c[0].startswith("stock:")]
     names = dict(choices)
-    current = o.get("target", "")
+    current = exit_target(o, S.fields(o, S.schema(o)))
     if imgui.begin_combo("Leads to", names.get(current, current or "(pick a level)"), imgui.ComboFlags_.height_large):
         if imgui.is_window_appearing():
             imgui.set_keyboard_focus_here()
@@ -490,9 +504,17 @@ def exit_picker(o: dict) -> None:
             if S.exit_filter and S.exit_filter.lower() not in text.lower():
                 continue
             if imgui.selectable(text, value == current)[0]:
-                h.set_value(uid, ("target",), value, "exit target")
+                if game:
+                    n = refs.parse(value, "level").number()
+                    h.set_value(uid, ("fields", "levelLow"), n & 0xFF, "exit target")
+                    h.set_value(uid, ("fields", "levelHigh"), 0xFF if n < 0x100 else n >> 8, "exit target")
+                else:
+                    h.set_value(uid, ("target",), value, "exit target")
                 S.validate()
         imgui.end_combo()
+    if game and imgui.is_item_hovered():
+        theme.tip("One of the game level's own exits: it leads to one of the game's levels (a stock-level edit of "
+                  "yours is one of those)")
     if not current:
         return
     points = start_points_of(current)
@@ -512,6 +534,51 @@ def exit_picker(o: dict) -> None:
     if r.is_pack and imgui.is_item_hovered():
         theme.tip("Adds an exit in the target level that leads back here, and a start point next to this exit "
                           "to arrive at")
+    _go_button(current, sp)
+
+
+def _go_button(target: str, start_point: int) -> None:
+    """Go to the level an exit leads to, with its arrival start point selected and framed: the pack's level, the
+    pack's edit of that game level, or (asked) a new edit of it."""
+    A = _app()
+    S = A.S
+    r = refs.parse(target, "level")
+    if r.is_pack:
+        name = r.name if r.name in S.project.levels else None
+    else:
+        name = next((k for k, lv in S.project.levels.items() if lv.base == r.number()), None)
+    if name == S.level:
+        return
+    if name is not None:
+        if imgui.button(f"Go to {S.project.levels[name].level['name']}"):
+            open_level_at(name, start_point)
+        if imgui.is_item_hovered():
+            theme.tip("Opens that level with this exit's start point selected")
+        return
+    if r.is_pack or S.catalog() is None:
+        return
+    lv = next((x for x in S.cat.levels() if x["id"] == r.number()), None)
+    if lv is not None and imgui.button(f"Edit {lv['name']} and go there"):
+        try:
+            proj.edit_stock_level(S.project, f"stock{lv['id']}", lv["id"], lv["name"], lv["track"])
+        except proj.ProjectError as e:
+            S.message = "; ".join(e.problems)
+            return
+        S.planets_dirty = True
+        open_level_at(f"stock{lv['id']}", start_point)
+    if lv is not None and imgui.is_item_hovered():
+        theme.tip("That game level isn't in the project: adds a stock-level edit of it (Edit a stock level) and "
+                  "opens it with this exit's start point selected")
+
+
+def open_level_at(name: str, start_point: int) -> None:
+    """Opens a level of the project with the start point numbered `start_point` selected, framed in the Scene."""
+    S = _app().S
+    S.level, S.selection = name, set()
+    S.selection = {o["uid"] for o in S.all_objects() if (sc := S.schema(o)) is not None and sc.key == "startpoint"
+                   and S.fields(o, sc).get("startPoint", 0) == start_point}
+    S.frame_on_open = bool(S.selection)
+    S.validate()
 
 
 def create_return_exit(o: dict, target_name: str) -> None:

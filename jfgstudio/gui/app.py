@@ -55,6 +55,7 @@ class State:
         self.view = vp.Viewport()
         self.camera = vp.Camera()
         self.framed_level = None
+        self.frame_on_open = False  # frame the selection once the level's Scene is shown (an exit's Go to)
         self.snap_floor = True
         self.drag = None  # uid -> start position, while the gizmo moves the selection
         self.scene_rect = (0.0, 0.0, 1.0, 1.0)
@@ -718,8 +719,9 @@ def scene() -> None:
     if S.framed_level != S.level and S.view.mesh is not None:
         S.camera.look_from_above(S.view.mesh.bounds)
         S.framed_level = S.level
-        if os.environ.get("JFGSTUDIO_FRAME"):  # screenshots: start framed on the selection
+        if os.environ.get("JFGSTUDIO_FRAME") or S.frame_on_open:  # screenshots, Go to: framed on the selection
             frame_selection()
+            S.frame_on_open = False
     _, S.view.show_fog = imgui.checkbox("Fog", S.view.show_fog)
     imgui.same_line()
     _, S.view.show_hidden = imgui.checkbox("Invisible colliders", S.view.show_hidden)

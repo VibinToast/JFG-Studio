@@ -1,4 +1,5 @@
-"""Where the Prefabs window lists a type: its category and the fold of its kind (made-up types, no ROM)."""
+"""Where the Prefabs window lists a type (its category and the fold of its kind), and where an exit leads (made-up
+data, no ROM)."""
 
 import unittest
 
@@ -20,6 +21,16 @@ class Folds(unittest.TestCase):
         self.assertEqual(app._plural("Exit (loading zone)"), "Exits (loading zone)")
         self.assertEqual(app._plural("Ammo"), "Ammo")
         self.assertEqual(app._plural("Breakable glass"), "Breakable glass")
+
+
+class ExitTarget(unittest.TestCase):
+    def test_the_level_its_bytes_name(self):
+        from jfgstudio.gui import level_tools
+        game = {"uid": "stock:1:2", "stock": {"list": 1, "entry": 2}}
+        self.assertEqual(level_tools.exit_target(game, {"levelLow": 26, "levelHigh": 255}), "stock:level/26")
+        self.assertEqual(level_tools.exit_target(game, {"levelLow": 4, "levelHigh": 1}), "stock:level/260")
+        self.assertEqual(level_tools.exit_target({**game, "target": "pack:level/x"}, {}), "pack:level/x")
+        self.assertEqual(level_tools.exit_target({"uid": "exit1"}, {"levelLow": 0}), "")  # a new one: unset
 
 
 if __name__ == "__main__":
