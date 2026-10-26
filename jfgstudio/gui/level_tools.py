@@ -9,7 +9,7 @@ import math
 
 from imgui_bundle import imgui
 
-from jfgstudio import edit, geometry, refs
+from jfgstudio import edit, geometry, refs, squads
 from jfgstudio import prefabs as pre
 from jfgstudio.gui import theme
 from jfgstudio.gui import viewport as vp
@@ -398,6 +398,27 @@ def add_cover(squadron: dict) -> None:
                      + (f" ({got['edge']} touch its edge: cut the outline round them)" if got["edge"] else "")
                      + ". Put a block or crate in it, draw a hole with the Region tool's Hole mode, or give the "
                      "region an inward notch")
+    S.validate()
+
+
+def make_patrol(squadron: dict) -> None:
+    """The Inspector's Patrol: the squadron put in patrol mode as the agent's place_patrol does (one undo step)."""
+    S = _app().S
+    h = S.history()
+    if h is None:
+        return
+    if S.squads is None:
+        S.squads = squads.index(S.cat) if S.catalog() is not None else {}
+
+    def key(o):
+        sc = S.schema(o)
+        return sc.key if sc else None
+
+    h.do(edit.Command("patrol", squads.patrol(h.level, squadron, S.squads, key, S.cat)))
+    S.message = "Squadron set to patrol: it walks the patrol points nearest to it"
+    if not squads.near_patrol(h.level, squadron, key):
+        S.message += (f". No patrol point within {squads.PATROL_NEAR} of it: it never finds the route. Place one "
+                      "next to it with the Patrol tool (P)")
     S.validate()
 
 

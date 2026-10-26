@@ -92,6 +92,7 @@ class State:
         self.list_levels: dict[int, list[str]] = {}  # stock object list -> the levels using it
         self.model_paths: dict[int, str | None] = {}
         self.stock_entries: dict[tuple, bytes] = {}
+        self.squads: dict | None = None  # enemy -> its stock squads (squads.index), read on first use
         self.instances = []  # (uid, model path, matrix) drawn in the last frame, for picking
         self.prefab = {"search": "", "used": True, "oid": None, "example": 0, "squad": 0, "door": 0, "members": 2}
 
@@ -187,6 +188,7 @@ class State:
 
     def reset_catalog(self) -> None:
         self.cat, self.cat_error, self.objtypes, self.behaviours = None, "", {}, {}
+        self.squads = None
         self.prefab.pop("squads", None)
         self.list_levels, self.model_paths, self.stock_entries = {}, {}, {}
         self.map_doc = None
@@ -808,6 +810,13 @@ def inspector() -> None:
             imgui.set_tooltip("Makes the blocks, crates and pillars inside the squad's region holes of it: smart squad "
                               "members only move to the corners of holes and inward corners of their region, and "
                               "stand and fire without them. Draw one by hand with the Region tool's Hole mode")
+        imgui.same_line()
+        if imgui.button("Patrol"):
+            level_tools.make_patrol(o)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Walks the patrol points nearest to it (the Patrol tool, P) and fights once it sees the "
+                              "hero: patrol mode (kind 6), the game's own patrol squad of its enemy copied, behaviour "
+                              "2, alert and hurt behaviour 0x11. Keep a patrol point within 300 of it")
     is_exit = bool(schema and schema.key == "exit")
     if is_exit and imgui.collapsing_header("Destination", imgui.TreeNodeFlags_.default_open):
         level_tools.exit_picker(o)

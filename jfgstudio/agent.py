@@ -22,7 +22,7 @@ from pathlib import Path
 import jsonschema
 import numpy as np
 
-from jfgstudio import edit, formats, importer, placement, prefabs, preview, refs, rom, scripts
+from jfgstudio import edit, formats, importer, placement, prefabs, preview, refs, rom, scripts, squads
 from jfgstudio import objects as obj
 from jfgstudio import project as proj
 from jfgstudio import validate as val
@@ -36,10 +36,9 @@ LIST_LIMIT = 150  # catalog types listed at once
 NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way back to the game
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
-PATROL_NEAR = 300  # place_patrol moves a squadron farther than this from its route to the route's first node
-PATROL_BEHAVIOUR = 2  # squadron +0x0D: walk the patrol nodes (MSR mod #6)
-SMART, SENTRY = 0x11, 9  # squadron behaviours (+0x0D): walks to the hero in its region; never walks (MSR mod #6)
-PATROL_MODE = 6  # a squadron's kind (low 4 bits) that walks the patrol network (decomp: "Squad patrol network")
+PATROL_NEAR = squads.PATROL_NEAR  # place_patrol moves a squadron farther than this from its route to its first node
+PATROL_BEHAVIOUR, PATROL_MODE = squads.PATROL_BEHAVIOUR, squads.PATROL_MODE
+SMART, SENTRY = squads.SMART, squads.SENTRY
 IMAGE_PIXELS = 2048  # a new image is stored as one 16-bit texture of at most 4 KB: bigger ones are shrunk
 LAVA_FLOOR_DEPTH = 100  # lava needs a solid floor at most this far under it, or Juno falls through
 DOOR_CLEARANCE = 120  # doors, exits and start points placed by [x, z]: the lowest floor with this much room above
@@ -1249,15 +1248,10 @@ class Session:
         if sq is not None and min(math.dist(n["pos"][::2], sq["pos"][::2]) for n in nodes) > PATROL_NEAR:
             made += self._move_squad(lv, sq, nodes[0]["pos"])
         if sq is not None:
-            kind = sq.get("fields", {}).get("kind")
-            if kind is None and sq.get("stock") and self.catalog() is not None:
-                kind = self._catalog.stock_entry(sq["stock"]["list"], sq["stock"]["entry"])[0x24]
-            self.update_object(lv.name, squadron, fields={"kind": ((kind or 0) & 0xF0) | PATROL_MODE})
-            if self.squad_examples(sq["fields"].get("baddyType", -1), PATROL_MODE) is not None:
-                self.fix_squad(lv.name, squadron)  # the game's own patrol squad of this enemy: its other bytes fit
-            # walk the nodes; once alerted (the hero seen), fight like a smart squad
-            self.update_object(lv.name, squadron, fields={"behaviour": PATROL_BEHAVIOUR, "alertBehaviour": SMART,
-                                                          "hurtBehaviour": SMART})
+            self.catalog()
+            changes = squads.patrol(lv, sq, self._squad_index(), self._key, self._catalog)
+            self._history(lv).do(edit.Command(f"patrol {squadron}", changes))
+            self._save()
             made.append(self._describe(sq))
             others = [o for o in lv.objects["objects"] if self._key(o) == "patrolpoint" and o not in nodes]
             mine = min(math.dist(n["pos"], sq["pos"]) for n in nodes)
@@ -1267,26 +1261,9 @@ class Session:
         return made
 
     def _squad_index(self) -> dict:
-        """Every stock squadron by its enemy: [(mode, moves, member entry or None, (list, entry), behaviour)]."""
+        """Every stock squadron by its enemy (squads.index)."""
         if self._squads is None:
-            import struct
-            self._squads = {}
-            try:
-                lv = self._catalog.levels_mod
-                lists = self._catalog.pair(lv.OBJLIST_TABLE, lv.OBJLIST_DATA)
-            except Exception:  # noqa: BLE001 (no lists to read: no matches)
-                lists = []
-            for n, raw in enumerate(lists):
-                entries = lv.objlist_entries(raw)
-                for i, e in enumerate(entries):
-                    if not e or e[0] != SQUADRON_ID or len(e[1]) < 0x40:
-                        continue
-                    data = e[1]
-                    baddy, sid = struct.unpack_from(">H", data, 0x36)[0], data[0x2D]
-                    member = next((j for j, m in enumerate(entries) if m and m[0] == baddy and len(m[1]) > 0x11
-                                   and m[1][0x11] == sid), None)
-                    moves = struct.unpack_from(">b", data, 0x38)[0] > 0
-                    self._squads.setdefault(baddy, []).append((data[0x24] & 0xF, moves, member, (n, i), data[0x0D]))
+            self._squads = squads.index(self._catalog) if self._catalog is not None else {}
         return self._squads
 
     def squad_examples(self, member_oid: int, mode: int | None = None):
@@ -1299,16 +1276,7 @@ class Session:
         None when the game has no squad of that enemy in that mode, or there is no catalog."""
         if self.catalog() is None:
             return None
-        found = self._squad_index().get(member_oid, [])
-        if not found:
-            return None
-        if mode is None:
-            mode = Counter(f[0] for f in found).most_common(1)[0][0]
-        same = [f for f in found if f[0] == mode]
-        if not same:
-            return None
-        best = max(same, key=lambda f: (f[4] == SMART, f[4] != SENTRY, f[1], f[2] is not None))
-        return best[3], (best[3][0], best[2]) if best[2] is not None else None
+        return squads.examples(self._squad_index(), member_oid, mode)
 
     def fix_squad(self, level: str, uid: str) -> dict:
         """Points a squadron (and its members) at a stock squad of its own enemy, keeping every field set, makes it
@@ -1318,34 +1286,14 @@ class Session:
         sq = self._object(lv, uid)
         if self._key(sq) != "squadron":
             raise AgentError(f"{uid!r} is not a squadron of {level}")
-        oid = sq.get("fields", {}).get("baddyType")
-        kind = sq.get("fields", {}).get("kind")
-        matched = self.squad_examples(oid, kind & 0xF if kind is not None else None) if oid is not None else None
-        if matched is None and kind is not None and oid is not None:
-            matched = self.squad_examples(oid)  # no stock squad in its mode (a patrol): its enemy's usual one
-        if matched is None:
-            raise AgentError(f"the game has no squad of 0x{oid or 0:X} to copy from")
-        changes = [edit.Change(uid, ("stock",), copy.deepcopy(sq.get("stock")),
-                               {"list": matched[0][0], "entry": matched[0][1]})]
-        members = [o for o in lv.objects["objects"] if self._key(o) == "squadmember"
-                   and o.get("fields", {}).get("squadron") == sq["fields"].get("squadronId")]
-        if matched[1] is not None:
-            changes += [edit.Change(m["uid"], ("stock",), copy.deepcopy(m.get("stock")),
-                                    {"list": matched[1][0], "entry": matched[1][1]}) for m in members]
-        trigger = sq["fields"].get("trigger")
-        changes.append(edit.Change(uid, ("fields", "trigger"), trigger, prefabs.TRIGGER_AT_ONCE))
-        region = sq["fields"].get("region")
-        corners = [o for o in lv.objects["objects"] if self._key(o) == "regionpoint"
-                   and o.get("fields", {}).get("region") == region]
-        corners.sort(key=lambda o: o["fields"].get("corner", 0))
-        rewound = len(corners) >= 3 and prefabs.winding([(o["pos"][0], o["pos"][2]) for o in corners]) < 0
-        if rewound:  # corner 0 stays, the rest go the other way round
-            changes += [edit.Change(o["uid"], ("fields", "corner"), k, (len(corners) - k) % len(corners))
-                        for k, o in enumerate(corners)]
+        self.catalog()
+        try:
+            changes, fixed = squads.fix(lv, sq, self._squad_index(), self._key)
+        except ValueError as e:
+            raise AgentError(str(e)) from e
         self._history(lv).do(edit.Command(f"fix squad {uid}", changes))
         self._save()
-        return {"squadron": uid, "stock": changes[0].new, "members": len(members) if matched[1] is not None else 0,
-                "regionRewound": rewound}
+        return fixed
 
     def mismatched_squads(self) -> list[tuple[str, str, int, int]]:
         """(level, uid, the squad's enemy, the copied stock squadron's enemy) for squadrons copying another enemy's, one
