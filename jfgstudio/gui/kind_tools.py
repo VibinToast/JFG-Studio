@@ -89,13 +89,13 @@ def kinds_window() -> None:
         k["scale"] = round(scale, 2)
         S.planets_dirty = True
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Times the base's size. A squad member is drawn at its squadron's size (the squadron's "
+        theme.tip("Times the base's size. A squad member is drawn at its squadron's size (the squadron's "
                           "Size field), so for those the build multiplies the squadrons that use this kind")
     imgui.separator_text("Texture slots of the base model")
     if imgui.button("Export base textures (to paint over)"):
         export_base_textures(S.kind, oid)
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Writes the base model's textures as PNG into kinds/" + S.kind + "/ (from your ROM: for "
+        theme.tip("Writes the base model's textures as PNG into kinds/" + S.kind + "/ (from your ROM: for "
                           "your own editing, not for sharing as they are)")
     textures = k.setdefault("textures", {})
     for slot, (w, h, _) in enumerate(model_textures(oid)):

@@ -94,6 +94,21 @@ def _port_font(*parts: str) -> Path | None:
     return None
 
 
+TOOLTIP_WIDTH = 26  # tooltips wrap at this many font heights
+TOOLTIP_SCALE = 0.88  # and are a little smaller than the window text
+
+
+def tip(text: str) -> None:
+    """A tooltip as a box of wrapped, slightly smaller text (imgui.set_tooltip is one long line)."""
+    imgui.begin_tooltip()
+    imgui.push_font(None, imgui.get_style().font_size_base * TOOLTIP_SCALE)
+    imgui.push_text_wrap_pos(imgui.get_font_size() * TOOLTIP_WIDTH)
+    imgui.text_unformatted(text)
+    imgui.pop_text_wrap_pos()
+    imgui.pop_font()
+    imgui.end_tooltip()
+
+
 def load_fonts() -> None:
     """hello_imgui's load_additional_fonts callback."""
     global TITLE_FONT

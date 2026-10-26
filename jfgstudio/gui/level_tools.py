@@ -81,7 +81,7 @@ def level_window() -> None:
     if changed:
         set_header("world", int(min(max(world, 0), 15)))
     if imgui.is_item_hovered():
-        imgui.set_tooltip("The planet this level belongs to (0-15); a new planet is 15")
+        theme.tip("The planet this level belongs to (0-15); a new planet is 15")
     if h.level.base is None:
         planets = [(n, p["displayName"]["en"]) for n, p in sorted(S.project.planets.items())]
         picked = _combo("Planet", lv.get("planet"), planets, "none (no region)")
@@ -89,7 +89,7 @@ def level_window() -> None:
             h.set_value(edit.LEVEL, ("planet",), None if picked == -1 else picked, "level planet")
             S.validate()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("The planet's region: leaving the planet by an exit shows the game's stats screen, and "
+            theme.tip("The planet's region: leaving the planet by an exit shows the game's stats screen, and "
                               "entering it shows its name and the continues. None: no stats, no continues")
     tracks = [(f"pack:track/{f.stem}", f"{f.stem}  (geometry/{f.name})")
               for f in sorted((S.project.path / "geometry").glob("*.glb"))]
@@ -100,7 +100,7 @@ def level_window() -> None:
         h.set_value(edit.LEVEL, ("track",), picked, "level track")
         S.validate()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("The level's geometry: a .glb in the project (File > Import geometry adds one)")
+        theme.tip("The level's geometry: a .glb in the project (File > Import geometry adds one)")
 
     if imgui.collapsing_header("Music and sound", imgui.TreeNodeFlags_.default_open):
         tunes = _stock_choices(lambda lv: lv["header"].get("tune"))
@@ -119,7 +119,7 @@ def level_window() -> None:
             h.do(edit.Command("level music", [c for c in changes if c.old != c.new]))
             S.validate()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("A stock tune, or one of the pack's OGG files (music/), which the port streams in place "
+            theme.tip("A stock tune, or one of the pack's OGG files (music/), which the port streams in place "
                               "of the game's tune")
         if imgui.button("Add OGG music..."):
             add_music()
@@ -168,7 +168,7 @@ def level_window() -> None:
                 if changed:
                     set_header(k, v, merge=True)
                 if imgui.is_item_hovered():
-                    imgui.set_tooltip(tip)
+                    theme.tip(tip)
 
     if imgui.collapsing_header("Camera and effects"):
         for k, label, lo, hi, tip in (
@@ -182,7 +182,7 @@ def level_window() -> None:
             if changed:
                 set_header(k, v, merge=True)
             if imgui.is_item_hovered():
-                imgui.set_tooltip(tip)
+                theme.tip(tip)
         for k, label in (("nightVision", "Night vision"), ("refract", "Refraction"), ("blur", "Blur")):
             changed, v = imgui.checkbox(label, bool(hd.get(k, 0)))
             if changed:
@@ -510,7 +510,7 @@ def exit_picker(o: dict) -> None:
     if r.is_pack and r.name != S.level and imgui.button("Create return exit"):
         create_return_exit(o, r.name)
     if r.is_pack and imgui.is_item_hovered():
-        imgui.set_tooltip("Adds an exit in the target level that leads back here, and a start point next to this exit "
+        theme.tip("Adds an exit in the target level that leads back here, and a start point next to this exit "
                           "to arrive at")
 
 

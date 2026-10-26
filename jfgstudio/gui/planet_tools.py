@@ -187,14 +187,14 @@ def _draw_map(doc: dict | None, p: dict) -> None:
         mx, my = (mouse.x - ox) / scale, (mouse.y - origin.y) / scale
         if hovered_planet is not None:
             free = _free_dirs_from(f"pack:world/{hovered_planet}", doc)
-            imgui.set_tooltip(f"planet {hovered_planet}\nclick: the route leaves from here (free: "
+            theme.tip(f"planet {hovered_planet}\nclick: the route leaves from here (free: "
                               f"{', '.join(free) or 'none'})")
         elif hovered_point is not None:
-            imgui.set_tooltip(f"map point {hovered_point}: "
+            theme.tip(f"map point {hovered_point}: "
                               f"{_world_label(doc, doc['points'][hovered_point]['world'])}\nclick: the route leaves "
                               f"from here (free: {', '.join(_free_dirs(doc, hovered_point)) or 'none'})")
         else:
-            imgui.set_tooltip(f"({mx:.0f}, {my:.0f})\nclick: put the planet's disc here")
+            theme.tip(f"({mx:.0f}, {my:.0f})\nclick: put the planet's disc here")
         if imgui.is_item_clicked():
             source = (f"pack:world/{hovered_planet}" if hovered_planet is not None
                       else f"stock:mappoint/{hovered_point}" if hovered_point is not None else None)
@@ -210,7 +210,7 @@ def _draw_map(doc: dict | None, p: dict) -> None:
             S.validate()
         return
     if doc and imgui.is_item_hovered() and hovered_point is not None:
-        imgui.set_tooltip(f"map point {hovered_point}: {_world_label(doc, doc['points'][hovered_point]['world'])}"
+        theme.tip(f"map point {hovered_point}: {_world_label(doc, doc['points'][hovered_point]['world'])}"
                           "\nclick: this planet takes it over")
         if imgui.is_item_clicked():
             p["replaces"] = f"stock:mappoint/{hovered_point}"
@@ -236,7 +236,7 @@ def _planet_fields(p: dict, doc: dict | None) -> None:
         p["displayName"]["en"] = name.strip()
         dirty()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Shown next to the planet on the map")
+        theme.tip("Shown next to the planet on the map")
     own = worldmap.is_registry(p)
     if imgui.radio_button("A point of its own", own) and not own:
         p.pop("replaces", None)
@@ -266,7 +266,7 @@ def _planet_fields(p: dict, doc: dict | None) -> None:
             p["fixedWorld"] = int(min(max(world, 0), 15))
             dirty()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("The world number the planet's levels use (15 is free in the stock game)")
+            theme.tip("The world number the planet's levels use (15 is free in the stock game)")
     imgui.separator_text("Entry level")
     choices = level_tools.level_choices()
     labels = dict(choices)
@@ -301,7 +301,7 @@ def _galaxy_fields(p: dict, dirty) -> None:
             dirty()
         imgui.end_combo()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("The game's own planet map, or a planet map of this pack's own: the player switches between "
+        theme.tip("The game's own planet map, or a planet map of this pack's own: the player switches between "
                           "galaxies with L and R on the planet map")
     if current == worldmap.MAIN or current not in galaxies:
         return
@@ -377,7 +377,7 @@ def _own_point_fields(p: dict, doc: dict | None, dirty) -> None:
     if c:
         dirty()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("The stock disc whose textures it wears")
+        theme.tip("The stock disc whose textures it wears")
     has = "colour" in disc
     c, has = imgui.checkbox("Top colour", has)
     if c:
@@ -447,7 +447,7 @@ def _unlock_fields(p: dict, dirty) -> None:
                 dirty()
         imgui.end_combo()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A hidden planet shows on the map once it opens. 'Completed' waits for a 'complete planet' "
+        theme.tip("A hidden planet shows on the map once it opens. 'Completed' waits for a 'complete planet' "
                           "action in the Triggers window (for example at a world's final exit)")
     if isinstance(unlock, dict) and kind != "discovered":
         current = unlock[kind]

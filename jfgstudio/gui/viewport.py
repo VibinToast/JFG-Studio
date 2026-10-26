@@ -67,6 +67,65 @@ OTHER_COLOUR = (0.75, 0.80, 0.90, 1.0)
 HOLE_COLOUR = (1.0, 0.35, 0.75, 1.0)  # a hole of a region (an obstacle squads take cover behind)
 SELECTED_COLOUR = (1.0, 1.0, 0.2, 1.0)
 MARKER_HEIGHT = 40.0
+PICKUP_KINDS = {"health": (0.95, 0.25, 0.25, 1.0), "ammo": (1.0, 0.80, 0.25, 1.0), "key": (1.0, 0.95, 0.30, 1.0),
+                "collectable": (0.85, 0.50, 1.0, 1.0), "token": (0.85, 0.50, 1.0, 1.0)}
+# Objects with no model of their own (the game draws them as sprites, which jfgformats can't read yet) get a shape:
+# a capsule the size of a hero facing the way it faces, or a floating diamond in their colour.
+SHAPES = {"startpoint": "capsule", **{k: "diamond" for k in PICKUP_KINDS}}
+
+
+class ShapeMesh:
+    """A made-up model for an object the Scene can't draw from the game: TrackMesh's parts, triangles and bounds,
+    shaded by a fixed light in its vertex colours."""
+
+    def __init__(self, shape: str, colour):
+        t = np.array(_capsule() if shape == "capsule" else _diamond(), "f8").reshape(-1, 3, 3)
+        n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+        centre = np.array([0.0, t[:, :, 1].mean(), 0.0])
+        inward = np.einsum("ij,ij->i", n, t.mean(axis=1) - centre) < 0  # convex: every face looks away from the middle
+        t[inward] = t[inward][:, ::-1]
+        n[inward] = -n[inward]
+        pos = t.reshape(-1, 3)
+        n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-9)
+        light = np.clip(n @ np.array([0.3, 0.8, -0.5]) / np.linalg.norm([0.3, 0.8, -0.5]), 0, 1) * 0.55 + 0.45
+        col = np.repeat(np.array([[*(np.array(colour[:3]) * k), 1.0] for k in light]), 3, axis=0)
+        self.parts = [(pos, np.zeros((len(pos), 2)), col, None, (0, 0), "solid")]
+        self.visible = self.collision = t
+        self.bounds = (pos.min(axis=0), pos.max(axis=0))
+        self.images = {}
+
+
+def _capsule(r: float = 16.0, height: float = 60.0, sides: int = 12) -> list:
+    """A hero-sized capsule standing on its position, with a nose at head height pointing the way it faces (-z)."""
+    rings = []  # (y, radius) from the bottom up: a half sphere, the body, a half sphere
+    for k in range(4):
+        a = math.pi / 2 * k / 3
+        rings.append((r - r * math.cos(a), r * math.sin(a)))
+    for k in range(4):
+        a = math.pi / 2 * k / 3
+        rings.append((height - r + r * math.sin(a), r * math.cos(a)))
+    tris = []
+    for (y0, r0), (y1, r1) in zip(rings, rings[1:], strict=False):
+        for i in range(sides):
+            a0, a1 = 2 * math.pi * i / sides, 2 * math.pi * (i + 1) / sides
+            p00, p01 = (math.sin(a0) * r0, y0, math.cos(a0) * r0), (math.sin(a1) * r0, y0, math.cos(a1) * r0)
+            p10, p11 = (math.sin(a0) * r1, y1, math.cos(a0) * r1), (math.sin(a1) * r1, y1, math.cos(a1) * r1)
+            tris += [(p00, p10, p11), (p00, p11, p01)]
+    y, w = height - r, 6.0  # the nose: a wedge out of the face
+    tip, a, b, c = (0, y, -r - 18), (-w, y + w, -r + 2), (w, y + w, -r + 2), (0, y - w, -r + 2)
+    tris += [(a, tip, b), (b, tip, c), (c, tip, a), (a, b, c)]
+    return tris
+
+
+def _diamond(r: float = 13.0, lift: float = 24.0) -> list:
+    """An octahedron floating over its position, as the game's pickups bob over the floor."""
+    top, bottom = (0, lift + r * 1.3, 0), (0, lift - r * 1.3, 0)
+    ring = [(r, lift, 0), (0, lift, r), (-r, lift, 0), (0, lift, -r)]
+    tris = []
+    for i in range(4):
+        a, b = ring[i], ring[(i + 1) % 4]
+        tris += [(a, top, b), (b, bottom, a)]
+    return tris
 
 
 def perspective(fov_y: float, aspect: float, near: float, far: float) -> np.ndarray:
@@ -363,10 +422,15 @@ class Viewport:
         except Exception as e:  # shown in the Scene window, not raised into the editor
             self.error = f"can't show {path}: {e}"
 
-    def model(self, path: str) -> "TrackMesh | None":
-        """A model .glb, read once."""
+    def model(self, path: str) -> "TrackMesh | ShapeMesh | None":
+        """A model .glb, read once; "shape:<shape>:<kind>" a made-up shape (ShapeMesh) in that kind's colour."""
         if path not in self.models:
             try:
+                if path.startswith("shape:"):
+                    _, shape, kind = path.split(":", 2)
+                    self.models[path] = ShapeMesh(shape, PICKUP_KINDS.get(kind) or KIND_COLOURS.get(kind,
+                                                                                                 OTHER_COLOUR))
+                    return self.models[path]
                 self.models[path] = TrackMesh(path, surfaces=False)
             except Exception:  # an unreadable model is drawn as a marker
                 self.models[path] = None

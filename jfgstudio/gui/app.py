@@ -335,12 +335,26 @@ def _title(text: str) -> None:
         imgui.text_colored(theme.colour("ACCENT"), text)
 
 
+def _squad_title(o: dict) -> str | None:
+    """A squadron by what it holds: "Tribal (<type>)" for a Tribal to rescue, else "<enemy> squad"."""
+    schema = S.schema(o)
+    if schema is None or schema.key != "squadron":
+        return None
+    baddy = S.fields(o, schema).get("baddyType")
+    if not baddy:
+        return None
+    name = S.type_name(baddy)
+    return f"Tribal ({name})" if baddy in pre.TRIBAL_TYPES else f"{name} squad"
+
+
 def _short_label(o: dict) -> str:
     """An object's name, or its type's (the Scene's labels)."""
     if o.get("name"):
         return o["name"]
     oid = obj.stock_id(o)
-    return S.type_name(oid) if stock_edit.is_stock(o["uid"]) and oid is not None else o["uid"]
+    if stock_edit.is_stock(o["uid"]) and oid is not None:
+        return _squad_title(o) or S.type_name(oid)
+    return o["uid"]
 
 
 def _object_label(o: dict) -> str:
@@ -350,7 +364,8 @@ def _object_label(o: dict) -> str:
             return f"{o.get('name') or kind['name']}  ##{o['uid']}"
     oid = obj.stock_id(o)
     schema = S.schema(o)
-    kind = S.type_name(oid) if oid is not None else (schema.name if schema else o["type"].split("/", 1)[-1])
+    kind = _squad_title(o) or (S.type_name(oid) if oid is not None else
+                               schema.name if schema else o["type"].split("/", 1)[-1])
     return f"{o.get('name') or kind}  ##{o['uid']}"
 
 
@@ -389,7 +404,7 @@ def _game_objects_header(level) -> None:
         if not value:
             S.selection = {u for u in S.selection if not stock_edit.is_stock(u)}
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Off: the game level's objects are read-only (listed grey); what you place is added to the "
+        theme.tip("Off: the game level's objects are read-only (listed grey); what you place is added to the "
                           "level.\nOn: move, change and remove them too. The pack carries only your changes (the "
                           "port's level patches), and Revert puts an object back as the game has it.")
     if S.catalog() is None:
@@ -499,7 +514,7 @@ def _object_menu(o: dict) -> None:
             S.selection = set(h.duplicate({o["uid"]}))
             S.validate()
         if imgui.is_item_hovered() and not writable:
-            imgui.set_tooltip("A copy of it as one of the objects you add: the game's own stays as it is")
+            theme.tip("A copy of it as one of the objects you add: the game's own stays as it is")
     elif imgui.menu_item("Duplicate", "Ctrl+D", False, writable)[0]:
         S.selection = set(h.duplicate(S.selection | {o["uid"]}))
         S.validate()
@@ -619,16 +634,36 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
     if pickable:
         S.instances = []
     squad_sizes = _squad_sizes(objs)
+    with_members = {S.fields(o, sc).get("squadron") for o in objs
+                    if (sc := S.schema(o)) is not None and sc.key == "squadmember"}
     for o in objs:
         oid = kind_tools.base_oid(o)
         schema = S.schema(o)
-        if oid is None or (schema and schema.hidden):
+        if oid is None:
             continue
-        path = S.model_path(oid)
-        mesh = S.view.model(path) if path else None
-        if mesh is None or not mesh.parts:
-            continue
-        m = _matrix(o, schema, oid, squad_sizes)
+        key = schema.key if schema else None
+        values = S.fields(o, schema) if key == "squadron" else {}
+        if key == "squadron" and values.get("squadronId") not in with_members and values.get("baddyType"):
+            # It spawns its own members (flyers, drones, a Tribal): drawn as its enemy, at the squad's size
+            baddy = values["baddyType"]
+            path = S.model_path(baddy)
+            mesh = S.view.model(path) if path else None
+            if mesh is None or not mesh.parts:
+                continue
+            yaw_f = schema.role("yaw")
+            yaw = obj.angle_of(yaw_f, values.get(yaw_f.name, yaw_f.default)) if yaw_f else 0.0
+            m = vp.object_matrix([float(v) for v in o["pos"]], yaw=yaw,
+                                 scale=squad_sizes.get(values.get("squadronId"), 1.0))
+        else:
+            # a hidden type (the game draws nothing for it) shows only as its shape, if it has one
+            path = None if schema and schema.hidden else S.model_path(oid)
+            shape = path is None and key in vp.SHAPES  # drawn by the game as a sprite, or not at: a shape stands in
+            if shape:
+                path = f"shape:{vp.SHAPES[key]}:{key}"
+            mesh = S.view.model(path) if path else None
+            if mesh is None or not mesh.parts:
+                continue
+            m = _matrix(o, schema, None if shape else oid, squad_sizes)  # a shape is its own size, not the type's
         if o["type"].startswith("pack:kind/") and not (schema and schema.key == "squadmember"):
             kind = S.project.kinds.get(o["type"].split("/", 1)[1], {})
             m = m @ np.diag([kind.get("scale", 1.0)] * 3 + [1.0])
@@ -657,6 +692,8 @@ def scene() -> None:
     if S.framed_level != S.level and S.view.mesh is not None:
         S.camera.look_from_above(S.view.mesh.bounds)
         S.framed_level = S.level
+        if os.environ.get("JFGSTUDIO_FRAME"):  # screenshots: start framed on the selection
+            frame_selection()
     _, S.view.show_fog = imgui.checkbox("Fog", S.view.show_fog)
     imgui.same_line()
     _, S.view.show_hidden = imgui.checkbox("Invisible colliders", S.view.show_hidden)
@@ -948,7 +985,7 @@ def _camera_input(hovered: bool, objs) -> None:
 
 
 def frame_selection() -> None:
-    sel = [o["pos"] for o in S.objects() if o["uid"] in S.selection]
+    sel = [o["pos"] for o in S.all_objects() if o["uid"] in S.selection]
     if sel:
         S.camera.frame(np.mean(sel, axis=0), 500.0)
     elif S.view.mesh is not None:
@@ -1017,7 +1054,7 @@ def _inspector_body(sel: list[dict], h, light_shown: bool = False) -> None:
             if y is not None:
                 h.set_value(uid, ("pos",), [o["pos"][0], obj.on_ground(y, S.schema(o)), o["pos"][2]], "drop to floor")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Onto the floor below, a little above it (enemies and start points a bit more), so it "
+            theme.tip("Onto the floor below, a little above it (enemies and start points a bit more), so it "
                               "doesn't spawn inside a slope and fall through")
     if schema and schema.key == "doorswitch" and not light_shown:
         _light_link(o)
@@ -1027,14 +1064,14 @@ def _inspector_body(sel: list[dict], h, light_shown: bool = False) -> None:
             level_tools.add_cover(o)
         imgui.end_disabled()
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip("Makes the blocks, crates and pillars inside the squad's region holes of it: smart squad "
+            theme.tip("Makes the blocks, crates and pillars inside the squad's region holes of it: smart squad "
                               "members only move to the corners of holes and inward corners of their region, and "
                               "stand and fire without them. Draw one by hand with the Region tool's Hole mode")
         imgui.same_line()
         if imgui.button("Patrol"):
             level_tools.make_patrol(o)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Walks the patrol points nearest to it (the Patrol tool, P) and fights once it sees the "
+            theme.tip("Walks the patrol points nearest to it (the Patrol tool, P) and fights once it sees the "
                               "hero: patrol mode (kind 6), the game's own patrol squad of its enemy copied, behaviour "
                               "2, alert and hurt behaviour 0x11. Keep a patrol point within 300 of it")
     is_exit = bool(schema and schema.key == "exit")
@@ -1090,7 +1127,7 @@ def _light_link(o: dict) -> None:
                               f"##lock{x['uid']}", False)[0]:
             S.selection = _squad_uids(x) if kind == "squad" else {x["uid"]}
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Click to select it. A squad locks every door with its door id until all its members are "
+        theme.tip("Click to select it. A squad locks every door with its door id until all its members are "
                           "dead; set the door id on the squadron (Inspector) to tie another squad to this door.")
 
 
@@ -1122,7 +1159,7 @@ def _field_input(uid: str, f: obj.Field, value: int, own: bool) -> None:
     if not own:
         tip += "\n(from the stock entry)"
     if tip and imgui.is_item_hovered():
-        imgui.set_tooltip(tip)
+        theme.tip(tip)
 
 
 def _new_level() -> None:
@@ -1241,7 +1278,7 @@ def prefabs() -> None:
     imgui.same_line()
     _, pf["used"] = imgui.checkbox("In stock", pf["used"])
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Only types that stock levels place")
+        theme.tip("Only types that stock levels place")
     below = 0.0 if wide else _details_height(avail.x)
     imgui.begin_child("types", imgui.ImVec2(0, -below))
     if imgui.tree_node_ex("Groups", imgui.TreeNodeFlags_.default_open):
@@ -1303,7 +1340,7 @@ def _prefab_row(pid: int, label: str, tip: str) -> None:
     if imgui.selectable(f"{label}##pf{pid}", S.prefab["oid"] == pid)[0]:
         S.prefab["oid"], S.prefab["example"] = pid, 0
     if imgui.is_item_hovered():
-        imgui.set_tooltip(tip)
+        theme.tip(tip)
     if imgui.begin_drag_drop_source():
         imgui.set_drag_drop_payload_py_id(PREFAB_PAYLOAD, pid)
         imgui.text(f"Place {label}")
@@ -1340,7 +1377,7 @@ def _prefab_details() -> None:
         if options:
             _, pf["example"] = imgui.combo("Start from", min(pf["example"], len(options) - 1), options)
             if imgui.is_item_hovered():
-                imgui.set_tooltip("A stock entry to copy (its fields not set in the Inspector keep the game's values)")
+                theme.tip("A stock entry to copy (its fields not set in the Inspector keep the game's values)")
         else:
             imgui.text_colored(theme.colour("ERROR"), "No stock entry to start from.")
     elif pid <= KIND_BASE:
@@ -1511,7 +1548,7 @@ def toolbar() -> None:
         if active:
             imgui.pop_style_color()
         if imgui.is_item_hovered():
-            imgui.set_tooltip(tip)
+            theme.tip(tip)
         imgui.same_line()
     imgui.text("|")
     imgui.same_line()
@@ -1521,7 +1558,7 @@ def toolbar() -> None:
     imgui.same_line()
     _, S.snap_floor = imgui.checkbox("Floor", S.snap_floor)
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Moved objects drop onto the floor under them")
+        theme.tip("Moved objects drop onto the floor under them")
     imgui.same_line()
     imgui.set_next_item_width(hello_imgui.em_size(5))
     _, S.grid = imgui.input_float("##grid", S.grid, 0, 0, "%.0f")
@@ -1529,13 +1566,13 @@ def toolbar() -> None:
         imgui.same_line()
         _, S.region_hole = imgui.checkbox("Hole", S.region_hole)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Draw a hole of the region around it: an obstacle squads keep out of and take cover "
+            theme.tip("Draw a hole of the region around it: an obstacle squads keep out of and take cover "
                               "behind (wound clockwise, with a region setting linking it to the area)")
     if S.tool == "water":
         imgui.same_line()
         _, S.water_auto = imgui.checkbox("Auto height", S.water_auto)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("The surface goes 15 units above the floor where the drag starts")
+            theme.tip("The surface goes 15 units above the floor where the drag starts")
         imgui.same_line()
         imgui.set_next_item_width(hello_imgui.em_size(5))
         imgui.begin_disabled(S.water_auto)
@@ -1549,7 +1586,7 @@ def toolbar() -> None:
         play()
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip("Build the pack, install it in the port and start the game in this level (at the selected "
+        theme.tip("Build the pack, install it in the port and start the game in this level (at the selected "
                           "start point, else start point 0). The output is in the Console")
     imgui.same_line()
     imgui.set_next_item_width(hello_imgui.em_size(5.5))

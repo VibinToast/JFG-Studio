@@ -122,7 +122,7 @@ def triggers_window() -> None:
                 c, when["door"] = imgui.input_int("Door id", int(when.get("door", 1)))
                 changed |= c
                 if imgui.is_item_hovered():
-                    imgui.set_tooltip("The door's id (doorId): fires when it opens after being locked, e.g. once the "
+                    theme.tip("The door's id (doorId): fires when it opens after being locked, e.g. once the "
                                       "squadrons that lock it are dead")
             elif when["kind"] == "flag":
                 c, when["flag"] = imgui.input_int("Game flag", int(when.get("flag", 0)))
@@ -209,7 +209,7 @@ def _action_fields(a: dict) -> bool:
         c, a["type"] = imgui.input_text("type##spawn", a.get("type", ""))
         changed |= c
         if imgui.is_item_hovered():
-            imgui.set_tooltip("stock:objtype/<id>: the Inspector shows a selected object's type. Its fields can be set "
+            theme.tip("stock:objtype/<id>: the Inspector shows a selected object's type. Its fields can be set "
                               "in triggers.json (\"fields\")")
         imgui.same_line()
         imgui.set_next_item_width(hello_imgui.em_size(12))
@@ -227,7 +227,7 @@ def _action_fields(a: dict) -> bool:
                     changed = True
             imgui.end_combo()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Completing a world opens the planets set to open after it (the Planet window's Unlock)")
+            theme.tip("Completing a world opens the planets set to open after it (the Planet window's Unlock)")
     elif kind == "lines":
         lines = a.setdefault("lines", [])
         text = "\n".join(lines)
@@ -237,7 +237,7 @@ def _action_fields(a: dict) -> bool:
             a["lines"] = [line for line in text.split("\n")]
             changed = True
         if imgui.is_item_hovered():
-            imgui.set_tooltip("One line per row: each time the trigger fires the next one shows (the last repeats)")
+            theme.tip("One line per row: each time the trigger fires the next one shows (the last repeats)")
     elif kind == "warp":
         from jfgstudio.gui import level_tools
         names = dict(level_tools.level_choices())
@@ -307,7 +307,7 @@ def weapons_window() -> None:
                 S.weapons_dirty = True
             imgui.end_disabled()
             if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-                imgui.set_tooltip(WEAPON_HELP[name] if name in used
+                theme.tip(WEAPON_HELP[name] if name in used
                                   else f"{title} doesn't use this (the port ignores it)")
         imgui.pop_id()
     for k in [k for k, v in S.weapons.items() if not v]:

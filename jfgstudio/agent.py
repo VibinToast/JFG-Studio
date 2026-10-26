@@ -1883,6 +1883,16 @@ class Session:
             d = {"uid": o["uid"], "type": f"0x{oid:X}", "name": o.get("name") or t.get("name", ""),
                  "pos": [round(v) for v in o["pos"]]}
             key = self._key(o)
+            if key == "squadron":  # named by what it holds: its enemy, or a Tribal to rescue
+                g = o["game"]
+                schema = self.schemas["squadron"]
+                baddy = {**obj.decode_entry(self._catalog.stock_entry(g["list"], g["index"]), schema)["fields"],
+                         **o.get("fields", {})}.get("baddyType")
+                if baddy:
+                    name = ((self._types or {}).get(baddy) or {}).get("name", f"0x{baddy:X}")
+                    d["holds"] = f"0x{baddy:X}"
+                    if not o.get("name"):
+                        d["name"] = f"Tribal ({name})" if baddy in prefabs.TRIBAL_TYPES else f"{name} squad"
             if key:
                 d["schema"] = key
             if o.get("deleted"):
