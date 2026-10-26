@@ -22,13 +22,14 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from jfgstudio import bps, formats, refs, rom
+from jfgstudio import bps, formats, prefabs, refs, rom
 from jfgstudio import objects as obj
 from jfgstudio import validate as val
 from jfgstudio.catalog import Catalog
 from jfgstudio.project import Project
 
 GAME_ID = "jet-force-gemini"
+SQUADRON = 0x4F
 DEFAULT_MIN_RECOMP = "1.1.8"
 HEROES = ("vela", "juno", "lupus")
 STOCK_LEVELS = 412  # the US ROM's level count (the catalog's level_count); appended levels are numbered from here
@@ -337,6 +338,16 @@ class _Builder:
         """The new levels in a planet's region, in the order of their regionIndex."""
         return sorted(n for n, lv in self.p.levels.items() if lv.base is None and lv.level.get("planet") == planet)
 
+    def tribals(self, planet: str) -> int:
+        """The Tribals to rescue in a planet's levels: its Tribal squads' members."""
+        n = 0
+        for name in self.region_levels(planet):
+            for o in self.p.levels[name].objects["objects"]:
+                f = o.get("fields", {})
+                if f.get("baddyType") in prefabs.TRIBAL_TYPES and o.get("type") == f"stock:objtype/0x{SQUADRON:X}":
+                    n += max(1, f.get("count", 1))
+        return n
+
     def regions(self) -> list[dict]:
         """The port's regions (jfg_assets.json "regions"): one per planet that levels name, called by the planet's
         name, with its galaxy's name as the world line of the area title."""
@@ -345,8 +356,12 @@ class _Builder:
                               if lv.base is None and lv.level.get("planet")}):
             p = self.p.planets[planet]
             galaxy = self.p.galaxies.get(p.get("galaxy", ""), {})
-            out.append({"append": f"region_{planet}", "name": p["displayName"]["en"],
-                        "world": galaxy.get("name", p["displayName"]["en"])})
+            region = {"append": f"region_{planet}", "name": p["displayName"]["en"],
+                      "world": galaxy.get("name", p["displayName"]["en"])}
+            tribals = self.tribals(planet)
+            if tribals:
+                region["tribals"] = tribals  # the port's count for the HUD and the stats screen (port 14)
+            out.append(region)
             self.log(f"planet {planet}: region with levels {', '.join(self.region_levels(planet))}")
         return out
 

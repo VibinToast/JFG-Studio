@@ -185,6 +185,13 @@ TOOLS = [
            "member_example": _EXAMPLE,
            "face": {**_XZ, "description": "the point members face until they see the player (default: the "
                                           "level's start point 0)"}}, ["level", "centre", "member_type"]),
+    _tool("place_tribal", "A Tribal to rescue (the player touches it): a reward for exploring. The level must be on "
+          "a planet, whose region keeps the count apart from the game's own Tribals.",
+          lambda s, a: s.place_tribal(a["level"], a["pos"], a.get("type", "0x11C"), a.get("name")),
+          {"level": _LEVEL, "pos": _XZ, "type": {"type": "string", "description": "a Tribal type: 0x11C man (default), "
+                                                                             "0x11D woman, 0x11E boy, 0x11F girl, "
+                                                                             "0x120 baby"},
+           "name": {"type": "string"}}, ["level", "pos"]),
     _tool("place_glass", "A breakable glass pane filling a square window opening in a wall: a and b are the "
           "opening's sides along the wall, bottom its sill height. The game's glass is square and nothing holds it, "
           "so model the opening square (100-520 across).",

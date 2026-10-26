@@ -13,6 +13,9 @@ from jfgstudio.project import Level
 EXIT_ID, START_ID, REGIONPOINT_ID, SQUADRON_ID = 0x0B, 0x0D, 0x05, 0x4F
 PATROL_POINT_ID, PATROL_PATH_ID = 0x61, 0x60
 REGIONINFO_ID = 0x69
+# The rescuable Tribals (squadsIsTribal, decomp MSR mod #6 "Rescuable Tribals in pack levels"): a squad of one of
+# these types is a Tribal; its number in the room is its squadron id & 15.
+TRIBAL_TYPES = (0x11C, 0x11D, 0x11E, 0x11F, 0x120, 0x66, 0x70, 0x90, 0x97, 0x157, 0xA5)
 HOLE = 1  # RegionInfo flags: a hole of the area it links to (decomp MSR mod #6)
 COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obstacle, made a hole of its region
 COVER_STEP = 20  # the grid obstacles() looks on

@@ -1153,6 +1153,36 @@ class Session:
         out.update({"y": round(y), "offsetY": max(-128, min(127, round((cruise - y) / 16)))})
         return out
 
+    def place_tribal(self, level: str, pos, type="0x11C", name: str | None = None) -> list[dict]:
+        """A Tribal to rescue at `pos` ([x, z]): the player touches it and it's saved. One squad of one, copied from
+        the game's own Tribal squads (they stand still, behaviour 9). The level must be on a planet: its region keeps
+        the count apart from the game's own Tribals (the port's HUD count and stats screen, port request 14). Each
+        Tribal of a level needs its own number (squadron id & 15), so 16 at most per level."""
+        lv = self._level(level)
+        oid, _, _ = self._type(type)
+        if oid not in prefabs.TRIBAL_TYPES:
+            raise AgentError(f"{type!r} is not a Tribal type ({', '.join(f'0x{t:X}' for t in prefabs.TRIBAL_TYPES)})")
+        taken = {o["fields"].get("squadronId", 0) & 0xF for o in lv.objects["objects"] if self._key(o) == "squadron"
+                 and o.get("fields", {}).get("baddyType") in prefabs.TRIBAL_TYPES}
+        if len(taken) >= 16:
+            raise AgentError("a level holds 16 Tribals at most (their numbers are squadron id & 15)")
+        x, z = float(pos[0]), float(pos[-1])
+        made = self.place_squad(level, [x, z], f"0x{oid:X}", members=1, spread=0, name=name or "tribal",
+                                region=[[x - 120, z - 120], [x + 120, z - 120], [x + 120, z + 120], [x - 120, z + 120]])
+        sq = next(o for o in made if o.get("schema") == "squadron")
+        # Stand and wait, as the game's own Tribals (behaviour 9 in every set), whatever squad was copied.
+        self.update_object(level, sq["uid"], fields={"behaviour": SENTRY, "alertBehaviour": SENTRY,
+                                                     "hurtBehaviour": SENTRY})
+        if sq["fields"]["squadronId"] & 0xF in taken:  # another Tribal has its number: the next free id that doesn't
+            used = {o["fields"].get("squadronId") for o in lv.objects["objects"] if self._key(o) == "squadron"}
+            new = next(i for i in range(1, 256) if i not in used and i & 0xF not in taken and i & 0xF)
+            self.update_object(level, sq["uid"], fields={"squadronId": new})
+        if not lv.level.get("planet"):
+            made.append({"warning": "the level is on no planet: its Tribals count into no region of their own. Give "
+                                    "it a planet (set_level planet) before release"})
+        return [o for o in made if "no cover to move to" not in str(o.get("warning", ""))
+                and "member entries" not in str(o.get("note", ""))]
+
     def place_glass(self, level: str, a, b, bottom: float, hit_points: int | None = None) -> list[dict]:
         """A breakable glass pane filling a square window opening in a wall: `a` and `b` ([x, z]) are the opening's
         sides along the wall, `bottom` its sill height. The pane is as tall as it is wide (the game's glass is
@@ -1528,7 +1558,9 @@ class Session:
                 fits = best is not None
                 # a sentry (never walks or turns) copied where the game has a squad of that enemy that walks
                 behaviour = o.get("fields", {}).get("behaviour", e[0x0D])
-                sentry = fits and behaviour == SENTRY and self._catalog.stock_entry(*best[0])[0x0D] != SENTRY
+                stands = ours in prefabs.TRIBAL_TYPES  # Tribals stand on purpose
+                sentry = fits and behaviour == SENTRY and not stands and \
+                    self._catalog.stock_entry(*best[0])[0x0D] != SENTRY
                 if stock_baddy is not None and (ours != stock_baddy or (fits and e[0x24] & 0xF != runs) or sentry):
                     out.append((lv.name, o["uid"], ours, stock_baddy))
         return out

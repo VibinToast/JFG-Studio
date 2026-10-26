@@ -550,6 +550,21 @@ class Prefabs(AgentTest):
         with self.assertRaises(agent.AgentError):
             self.s.place_glass("home", [0, 0], [10, 0], 0)
 
+    def test_tribals_count_into_their_planets_region(self):
+        self.with_catalog()
+        self.s._squads[0x11C] = [(2, True, None, (15, 1), 9)]
+        made = self.s.place_tribal("home", [0, -300])
+        uid = next(o["uid"] for o in made if o.get("schema") == "squadron")
+        sq = next(o for o in self.s.p.levels["home"].objects["objects"] if o["uid"] == uid)
+        self.assertEqual((sq["fields"]["baddyType"], sq["fields"]["count"], sq["fields"]["behaviour"]), (0x11C, 1, 9))
+        second = next(o for o in self.s.place_tribal("home", [300, -300]) if o.get("schema") == "squadron")
+        tribals = [o for o in self.s.p.levels["home"].objects["objects"]
+                   if o.get("fields", {}).get("baddyType") == 0x11C]
+        self.assertEqual(len({o["fields"]["squadronId"] & 0xF for o in tribals}), 2)  # each its own number
+        self.assertTrue(second)
+        with self.assertRaises(agent.AgentError):
+            self.s.place_tribal("home", [0, 0], "0x29")  # not a Tribal
+
     def test_switch_doors(self):
         self.with_catalog()
         first = self.s.place_switch_door("home", [0, -200], door="new", door_type="0x1AD", door_pos=[0, 0],
