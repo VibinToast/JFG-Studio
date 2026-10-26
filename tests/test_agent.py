@@ -250,6 +250,16 @@ class Reach(AgentTest):
         self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + block + steps, (), KILL)
         self.assertNotIn(key, [f["uid"] for f in self.s.check_placement("home")])
 
+    def test_folded_floor(self):
+        self.assertNotIn("folded", self.s.geometry_info("home"))
+        fold = [[(0, 1, 0), (100, 1, 0), (0, 1, 100)]]  # a face turned down, 1 over the ground
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + fold, (), KILL)
+        self.assertEqual(self.s.geometry_info("home")["folded"]["count"], 1)
+        self.assertIn("folded-floor", [p["rule"] for p in self.s.validate()["problems"]])
+        under = [[(0, -5, 0), (100, -5, 0), (0, -5, 100)]]  # under the ground: hidden, no matter
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + under, (), KILL)
+        self.assertNotIn("folded", self.s.geometry_info("home"))
+
     def test_water_must_meet_its_bank(self):
         bank = (_quad(-1000, -1000, 1000, -200, 0) + _quad(-1000, 200, 1000, 1000, 0) + _quad(-1000, -200, -200, 200, 0)
                 + _quad(200, -200, 1000, 200, 0) + _quad(-200, -200, 200, 200, -30))  # a hollow 30 deep

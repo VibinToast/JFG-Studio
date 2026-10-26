@@ -40,6 +40,7 @@ PATROL_NEAR = squads.PATROL_NEAR  # place_patrol moves a squadron farther than t
 EXPLOSIVE_DRUM, DRUM_SIZE = 0x168, 24
 CLIMB, CLIMB_STEP = 100, 70  # a key higher than this over every floor round it is out of reach; steps to give
 REACH_RING = (100, 160, 220, 300)  # how far round a key to look for a floor to climb from
+FOLD = 12  # a downward face this close to a floor: the floor folded over
 WATER_BANK, WATER_HOVER = 12, 8  # past a water edge by this much, a floor lower than this under it: hovering water
 DOOR_SLACK = 40  # a passage more than this much wider than its door: the player walks round it
 DOOR_OVERLAP = 10  # a door covers its opening's edges by at least this much (both sides together), or gaps show  # most of the game's explosive drums are size 24 (its crates 39)
@@ -587,6 +588,12 @@ class Session:
             out["shrunk"] = shrunk  # the game stores them smaller: draw them at 64 x 32, 32 x 64 ...
         if far > 32767:
             out["problem"] = "a vertex is farther than 32767 units from the origin: the game can't hold it"
+        folded = self._folded_floors(mesh)
+        if folded:
+            out["folded"] = {"count": len(folded), "at": folded[:3],
+                             "problem": "floor folded over: a face turned down lies on the floor, and the hero is "
+                                        "falling all the time there. Fix the geometry (jfg64 0.5.5's layout doesn't "
+                                        "fold passages at slanted doorways)"}
         hovering = self._hovering_water(mesh)
         if hovering:
             out["water"] = {"hovering": len(hovering), "at": hovering[:3],
@@ -731,6 +738,31 @@ class Session:
                 if o.get("name"):
                     finding["name"] = o["name"]
                 out.append(finding)
+        return out
+
+    @staticmethod
+    def _folded_floors(mesh) -> list[list[float]]:
+        """Where a floor is folded over: a solid triangle facing down lying on (within FOLD of) a floor. The game
+        takes it for the ground's underside and the hero is falling all the time there (a passage's first piece
+        folded back over a room's floor, play-tested)."""
+        import numpy as np
+
+        from jfgstudio.gui.viewport import floor_of
+        t = mesh.collision
+        if not len(t):
+            return []
+        n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+        length = np.linalg.norm(n, axis=1)
+        down = t[(length > 1e-6) & (n[:, 1] < -0.7 * np.maximum(length, 1e-9))]
+        floors = t[n[:, 1] > 0]
+        out = []
+        for tri in down:
+            centre = tri.mean(0)
+            for px, py, pz in [centre, *(v + (centre - v) * 0.2 for v in tri)]:  # its middle and near each corner
+                h = floor_of(floors, float(px), float(pz), float(py) + FOLD)
+                if h is not None and -2 <= py - h <= FOLD:  # on it or just over it (under the floor: hidden)
+                    out.append([round(float(c)) for c in centre])
+                    break
         return out
 
     def _hovering_water(self, mesh) -> list[list[float]]:
@@ -1897,9 +1929,15 @@ class Session:
                                          f["uid"]) for f in findings]
             for name, lv in self.p.levels.items():
                 try:
-                    hovering = self._hovering_water(self._mesh(name))
+                    mesh = self._mesh(name)
+                    hovering, folded = self._hovering_water(mesh), self._folded_floors(mesh)
                 except AgentError:
-                    hovering = []
+                    hovering, folded = [], []
+                if folded:
+                    problems.append(val.Problem(val.WARNING, "folded-floor", f"levels/{name}/level.json",
+                                                f"the floor is folded over at {len(folded)} place(s) (one at "
+                                                f"{folded[0]}): a face turned down lies on it, and the hero is "
+                                                "falling all the time there"))
                 if hovering:
                     problems.append(val.Problem(val.WARNING, "water", f"levels/{name}/level.json",
                                                 f"water hovers over the floor at {len(hovering)} edge(s) (one at "
