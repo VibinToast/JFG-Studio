@@ -228,8 +228,10 @@ def scene_tool(origin, w: int, h: int, hovered: bool) -> None:
 
     if S.tool == "region":
         pts = S.region_draft
-        note = (f"Region: {len(pts)} corners. Click to add, Enter or click the first corner to finish, "
-                "Backspace removes the last, Esc cancels")
+        note = (f"{'Hole' if S.region_hole else 'Region'}: {len(pts)} corners. Click to add, Enter or click the "
+                "first corner to finish, Backspace removes the last, Esc cancels")
+        if S.region_hole:
+            colour = imgui.get_color_u32(imgui.ImVec4(*vp.HOLE_COLOUR))
         if hovered and imgui.is_mouse_clicked(imgui.MouseButton_.left) and hit is not None and not io.key_alt:
             first = screen(pts[0]) if pts else None
             if len(pts) >= 3 and first and math.hypot(first.x - mouse.x, first.y - mouse.y) < CLOSE_PX:
@@ -354,12 +356,48 @@ def finish_region() -> None:
     if h is None or len(pts) < 3:
         return
     placer = pre.Placer(h.level, S.schemas, S.behaviours)
-    n = placer.polygon(pts)
-    h.add(placer.made, f"region {n}")
+    if S.region_hole:
+        cx, cz = sum(p[0] for p in pts) / len(pts), sum(p[2] for p in pts) / len(pts)
+        area = placer.area_at(cx, cz)
+        if area is None:
+            S.message = "Hole: draw it inside a navigation region (the area it is cut from)"
+            return
+        n = placer.hole(pts, area)
+        message = f"Hole {n} in region {area}: {len(pts)} corners (squads take cover at its corners)"
+    else:
+        n = placer.polygon(pts)
+        message = f"Region {n}: {len(pts)} corners (give its id to a squadron)"
+    h.add(placer.made, f"{'hole' if S.region_hole else 'region'} {n}")
     S.selection = {o["uid"] for o in placer.made}
     S.region_draft = []
     S.tool = "move"
-    S.message = f"Region {n}: {len(pts)} corners (give its id to a squadron)"
+    S.message = message
+    S.validate()
+
+
+def add_cover(squadron: dict) -> None:
+    """The Inspector's Add cover: the obstacles inside a squadron's region made holes of it (one undo step)."""
+    S = _app().S
+    h = S.history()
+    if h is None or S.view.mesh is None:
+        return
+    placer = pre.Placer(h.level, S.schemas, S.behaviours)
+    try:
+        got = placer.cover(S.view.mesh, squadron)
+    except ValueError as e:
+        S.message = f"Add cover: {e}"
+        return
+    if placer.made:
+        h.add(placer.made, "cover")
+        S.selection = {o["uid"] for o in placer.made}
+        S.message = f"{got['holes']} hole(s) added to region {got['region']} for cover"
+    elif got["old"]:
+        S.message = f"Region {got['region']} has its holes already ({got['old']})"
+    else:
+        S.message = (f"Region {got['region']}: no obstacle inside it"
+                     + (f" ({got['edge']} touch its edge: cut the outline round them)" if got["edge"] else "")
+                     + ". Put a block or crate in it, draw a hole with the Region tool's Hole mode, or give the "
+                     "region an inward notch")
     S.validate()
 
 

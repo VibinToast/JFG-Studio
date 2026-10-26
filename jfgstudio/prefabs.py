@@ -14,10 +14,75 @@ EXIT_ID, START_ID, REGIONPOINT_ID, SQUADRON_ID = 0x0B, 0x0D, 0x05, 0x4F
 PATROL_POINT_ID, PATROL_PATH_ID = 0x61, 0x60
 REGIONINFO_ID = 0x69
 HOLE = 1  # RegionInfo flags: a hole of the area it links to (decomp MSR mod #6)
+COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obstacle, made a hole of its region
+COVER_STEP = 20  # the grid obstacles() looks on
+COVER_MAX = 12  # holes Placer.cover makes at most per region
+
+
 def winding(points) -> float:
     """Twice the signed area of a polygon of (x, z) corners in order: positive is counter-clockwise, the way the game
     wants a region (IsPointInRegion finds nothing inside a clockwise one; decomp MSR mod #6)."""
     return sum(x0 * z1 - x1 * z0 for (x0, z0), (x1, z1) in zip(points, points[1:] + points[:1], strict=True))
+
+
+def inside(poly, x: float, z: float) -> bool:
+    """(x, z) inside the polygon of (x, z) corners (even-odd rule)."""
+    hit = False
+    for (x0, z0), (x1, z1) in zip(poly, poly[1:] + poly[:1], strict=True):
+        if (z0 > z) != (z1 > z) and x < x0 + (z - z0) * (x1 - x0) / (z1 - z0):
+            hit = not hit
+    return hit
+
+
+def convex(poly) -> bool:
+    """Every corner of the polygon of (x, z) corners turns the same way (no inward corner)."""
+    turns = [(b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
+             for a, b, c in zip(poly, poly[1:] + poly[:1], poly[2:] + poly[:2], strict=True)]
+    return all(t >= 0 for t in turns) or all(t <= 0 for t in turns)
+
+
+def hole_regions(objects, key) -> dict[int, int]:
+    """Hole region -> the area it is a hole of, from the RegionInfos with flags HOLE among `objects` (`key`: an
+    object's schema key)."""
+    return {o["fields"]["region"]: o["fields"].get("link") for o in objects if key(o) == "regioninfo"
+            and o.get("fields", {}).get("flags", 0) & HOLE and "region" in o["fields"]}
+
+
+def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float, float]], int]:
+    """The obstacles inside a region of (x, z) corners (blocks, crates, pillars: up-facing solid COVER_RISE or more
+    over `ground`), each as the box (x0, z0, x1, z1) around it, and how many touch the region's edge (left out: cut
+    the outline round them instead)."""
+    from jfgstudio.gui.viewport import heights_at
+    xs, zs = [p[0] for p in poly], [p[1] for p in poly]
+    nx, nz = int((max(xs) - min(xs)) // COVER_STEP) + 1, int((max(zs) - min(zs)) // COVER_STEP) + 1
+
+    def at(i, j):
+        return min(xs) + (i + 0.5) * COVER_STEP, min(zs) + (j + 0.5) * COVER_STEP
+
+    cells = {(i, j) for i in range(nx) for j in range(nz) if inside(poly, *at(i, j))}
+    blocked = {c for c in cells if (heights_at(mesh.collision, *at(*c), facing=1) > ground + COVER_RISE).any()}
+    seen, boxes, edge = set(), [], 0
+    for c in sorted(blocked):
+        if c in seen:
+            continue
+        group, todo, touches = [], [c], False
+        seen.add(c)
+        while todo:
+            i, j = todo.pop()
+            group.append((i, j))
+            for n in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                if n not in cells:
+                    touches = True
+                elif n in blocked and n not in seen:
+                    seen.add(n)
+                    todo.append(n)
+        if touches:
+            edge += 1
+            continue
+        x0, z0 = at(min(g[0] for g in group), min(g[1] for g in group))
+        x1, z1 = at(max(g[0] for g in group), max(g[1] for g in group))
+        boxes.append((x0 - COVER_STEP / 2, z0 - COVER_STEP / 2, x1 + COVER_STEP / 2, z1 + COVER_STEP / 2))
+    return boxes, edge
 
 
 TRIGGER_AT_ONCE = 3  # squadron +0x29: spawn at level start (a stock squad's 1 waits in its own level's zone)
@@ -33,6 +98,29 @@ class Placer:
 
     def _all(self) -> list[dict]:
         return self.level.objects["objects"] + self.made
+
+    def key(self, o: dict) -> str | None:
+        s = obj.schema_for(o, self.schemas, self.behaviours)
+        return s.key if s else None
+
+    def corners(self, region) -> list[dict]:
+        """The RegionPoints of a region (in the level and made so far), in corner order."""
+        out = [o for o in self._all() if self.key(o) == "regionpoint" and o.get("fields", {}).get("region") == region]
+        return sorted(out, key=lambda o: o["fields"].get("corner", 0))
+
+    def holes_of(self, area) -> list[int]:
+        """The regions that are holes of region `area` (a RegionInfo with flags HOLE linking them to it)."""
+        return [r for r, a in hole_regions(self._all(), self.key).items() if a == area]
+
+    def area_at(self, x: float, z: float) -> int | None:
+        """The region (not a hole) that (x, z) is inside, the smallest when they overlap; None when there is none."""
+        holes = hole_regions(self._all(), self.key)
+        best, best_size = None, None
+        for region in {o["fields"].get("region") for o in self._all() if self.key(o) == "regionpoint"} - set(holes):
+            poly = [(o["pos"][0], o["pos"][2]) for o in self.corners(region)]
+            if len(poly) >= 3 and inside(poly, x, z) and (best_size is None or abs(winding(poly)) < best_size):
+                best, best_size = region, abs(winding(poly))
+        return best
 
     def uid(self, stem: str) -> str:
         used = {o["uid"] for o in self._all()}
@@ -100,6 +188,30 @@ class Placer:
                                                                     "anchored": 0})
         return n
 
+    def cover(self, mesh, squadron: dict) -> dict:
+        """Makes the obstacles inside a squad's region holes of it (obstacles()). A smart squad's members only move
+        to the corners of holes and inward corners of their region, where the hero can't see them; in a rectangle
+        over open floor they stand and fire (decomp MSR mod #6). Obstacles a hole already covers are left. Returns
+        {"region", "holes": made, "edge": obstacles touching the edge, "old": holes it had, "convex"}."""
+        region = squadron.get("fields", {}).get("region")
+        corners = self.corners(region)
+        if len(corners) < 3:
+            raise ValueError(f"the squadron's region {region} has no corners here")
+        poly = [(o["pos"][0], o["pos"][2]) for o in corners]
+        sx, sy, sz = squadron["pos"]
+        ground = mesh.floor_height(sx, sz, sy + COVER_RISE)
+        ground = sy if ground is None else ground
+        boxes, edge = obstacles(mesh, poly, ground)
+        holes = self.holes_of(region)
+        old = [(o["pos"][0], o["pos"][2]) for h in holes for o in self.corners(h)]
+        made = 0
+        for x0, z0, x1, z1 in boxes:
+            if any(x0 <= x <= x1 and z0 <= z <= z1 for x, z in old) or made >= COVER_MAX:
+                continue  # a hole is there already
+            self.hole([(x0, ground, z0), (x0, ground, z1), (x1, ground, z1), (x1, ground, z0)], region)
+            made += 1
+        return {"region": region, "holes": made, "edge": edge, "old": len(holes), "convex": convex(poly)}
+
     def patrol_point(self, pos, example) -> dict:
         """A patrol point with the next free node number (they run 1..N with no gaps)."""
         node = self.free("patrolpoint", "node")
@@ -118,15 +230,16 @@ class Placer:
                            fields={"nodeA": na, "nodeB": nb, "weight": 1, "flags": 0xC0})
 
     def squad(self, pos, squadron_example, member_oid: int, member_example, members: int = 2,
-              door_oid: int | None = None, door_example=None) -> list[dict]:
-        """A squadron with its members, a region to keep to and, when given, a door it keeps locked."""
+              door_oid: int | None = None, door_example=None, mesh=None) -> list[dict]:
+        """A squadron with its members, a region to keep to and, when given, a door it keeps locked; with the level's
+        `mesh`, the obstacles in the region made holes for cover (cover())."""
         squadron_id = self.free("squadron", "squadronId")
         door_id = self.free("door", "doorId") if door_oid is not None else 0
         x, y, z = pos
         region = self.region(pos)
-        self.single(SQUADRON_ID, pos, squadron_example, name=f"squad{squadron_id}",
-                    fields={"squadronId": squadron_id, "doorId": door_id, "region": region, "count": members,
-                            "baddyType": member_oid, "trigger": TRIGGER_AT_ONCE})
+        squadron = self.single(SQUADRON_ID, pos, squadron_example, name=f"squad{squadron_id}",
+                               fields={"squadronId": squadron_id, "doorId": door_id, "region": region,
+                                       "count": members, "baddyType": member_oid, "trigger": TRIGGER_AT_ONCE})
         for k in range(members):
             m = self.single(member_oid, (x + 160 * (k - (members - 1) / 2), y, z), member_example,
                             fields={"squadron": squadron_id})
@@ -134,6 +247,8 @@ class Placer:
         if door_oid is not None:
             d = self.single(door_oid, (x, y, z + REGION_HALF + 100), door_example, fields={"doorId": door_id})
             d["schema"] = "door"
+        if mesh is not None:
+            self.cover(mesh, squadron)
         return self.made
 
     def exit_pair(self, pos) -> list[dict]:

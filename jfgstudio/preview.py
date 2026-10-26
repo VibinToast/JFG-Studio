@@ -32,6 +32,7 @@ MARKS = {  # schema key -> (colour, shape, size in pixels)
 }
 OTHER = ((200, 120, 255), "dot", 2)
 REGION_RGB = (255, 110, 110)
+HOLE_RGB = (255, 90, 200)  # a hole of a region: an obstacle squads take cover behind
 BASE_RGB = (150, 150, 150)
 
 
@@ -155,6 +156,16 @@ def _mark(c: Canvas, o: dict, key: str | None, schema) -> None:
             c.line((x - fy * size + fx, y + fx * size + fy), (x + fy * size + fx, y - fx * size + fy), rgb)
 
 
+def hole_regions(objects: list[dict], schemas: dict, behaviours: dict | None = None) -> dict[int, int]:
+    """Hole region -> the area it is cut from (prefabs.hole_regions)."""
+    from jfgstudio import prefabs
+
+    def key(o):
+        s = obj.schema_for(o, schemas, behaviours)
+        return s.key if s else None
+    return prefabs.hole_regions(objects, key)
+
+
 def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = None, size: int = 512,
            colours: bool = False) -> tuple[bytes, dict]:
     """(PNG bytes, legend) of a level from above. Objects with "base" are a game level's own (drawn grey);
@@ -172,10 +183,16 @@ def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = N
             corners.setdefault(f.get("region", 0), []).append((f.get("corner", 0), c.px(o["pos"][0], o["pos"][2])))
         else:
             keyed.append((o, key, s))
-    for pts in corners.values():
-        pts = [p for _, p in sorted(pts)]
+    holes = hole_regions(objects, schemas, behaviours)
+    for region, pts in corners.items():
+        pts = [p for _, p in sorted(pts, key=lambda q: q[0])]
+        rgb = HOLE_RGB if region in holes else REGION_RGB
         for a, b in zip(pts, pts[1:] + pts[:1], strict=True):
-            c.line(a, b, REGION_RGB)
+            c.line(a, b, rgb)
+        if region in holes and len(pts) >= 4:  # crossed, as the editor draws it
+            half = len(pts) // 2
+            c.line(pts[0], pts[half], rgb)
+            c.line(pts[half // 2], pts[half + (len(pts) - half) // 2], rgb)
     for o, key, s in sorted(keyed, key=lambda t: t[1] not in ("light", "glow")):  # lights under the rest
         _mark(c, o, key, s)
     legend = {"up": "-z", "right": "+x", "unitsPerPixel": round(1 / c.scale, 2),
@@ -183,6 +200,7 @@ def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = N
               "surfaces": {k: f"rgb{SURFACE_RGB[k]}" for k in DRAW_ORDER}, "shading": "brighter = higher",
               "marks": {"start point": "white square with an arrow (its facing)", "exit": "cyan ring (its radius)",
                         "squad": "red square (squadron) and red dots (members), red outline (their region)",
+                        "hole": "pink crossed outline: a hole of a region, where squads take cover",
                         "door": "yellow bar across its facing", "key": "gold diamond",
                         "pickups": "green dots", "lights": "pale yellow dots", "other": "purple dots",
                         "grey": "the game level's own start points and exits, under an edit of it"}}

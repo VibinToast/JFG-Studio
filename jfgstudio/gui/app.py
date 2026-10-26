@@ -59,6 +59,7 @@ class State:
         self.gizmo_note = ""
         self.box_start = None  # where a box selection drag started (Scene pixels)
         self.region_draft: list[list[float]] = []  # the Region tool's corners so far
+        self.region_hole = False  # the Region tool draws a hole (an obstacle) of the region around it
         self.water_draft = None  # where a Water drag started
         self.patrol_last = None  # the Patrol tool's last point (uid), which the next one links to
         self.water_height = 10.0
@@ -798,6 +799,15 @@ def inspector() -> None:
         if imgui.is_item_hovered():
             imgui.set_tooltip("Onto the floor below, a little above it (enemies and start points a bit more), so it "
                               "doesn't spawn inside a slope and fall through")
+    if schema and schema.key == "squadron":
+        imgui.begin_disabled(S.view.mesh is None)
+        if imgui.button("Add cover"):
+            level_tools.add_cover(o)
+        imgui.end_disabled()
+        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            imgui.set_tooltip("Makes the blocks, crates and pillars inside the squad's region holes of it: smart squad "
+                              "members only move to the corners of holes and inward corners of their region, and "
+                              "stand and fire without them. Draw one by hand with the Region tool's Hole mode")
     is_exit = bool(schema and schema.key == "exit")
     if is_exit and imgui.collapsing_header("Destination", imgui.TreeNodeFlags_.default_open):
         level_tools.exit_picker(o)
@@ -1149,7 +1159,7 @@ def _place(pid: int, pos) -> None:
             doors = _door_types()
             door = doors[pf["door"] - 1] if 0 < pf["door"] <= len(doors) else None
             placer.squad(pos, example, baddy, member_examples[0], pf["members"], door,
-                         S.objtypes[door]["examples"][0] if door is not None else None)
+                         S.objtypes[door]["examples"][0] if door is not None else None, mesh=S.view.mesh)
         elif pid == -2:
             placer.exit_pair(pos)
         elif pid == -3:
@@ -1171,6 +1181,11 @@ def _place(pid: int, pos) -> None:
     h.add(placer.made, f"place {what}")
     S.selection = {o["uid"] for o in placer.made}
     S.message = f"Placed {len(placer.made)} object{'s' if len(placer.made) > 1 else ''}"
+    if pid == -1 and S.view.mesh is not None:
+        holes = sum(placer.key(o) == "regioninfo" for o in placer.made)
+        S.message += (f", {holes} hole(s) for cover" if holes else
+                      " (no obstacle in its region: a smart squad stands and fires; put a crate in it, then Add cover, "
+                      "or draw a hole with the Region tool)")
     S.validate()
 
 
@@ -1245,6 +1260,12 @@ def toolbar() -> None:
     imgui.same_line()
     imgui.set_next_item_width(hello_imgui.em_size(5))
     _, S.grid = imgui.input_float("##grid", S.grid, 0, 0, "%.0f")
+    if S.tool == "region":
+        imgui.same_line()
+        _, S.region_hole = imgui.checkbox("Hole", S.region_hole)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Draw a hole of the region around it: an obstacle squads keep out of and take cover "
+                              "behind (wound clockwise, with a region setting linking it to the area)")
     if S.tool == "water":
         imgui.same_line()
         _, S.water_auto = imgui.checkbox("Auto height", S.water_auto)

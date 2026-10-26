@@ -37,9 +37,6 @@ NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way 
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = 300  # place_patrol moves a squadron farther than this from its route to the route's first node
-COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obstacle, made a hole of its region
-COVER_STEP = 20  # the grid add_cover looks for obstacles on
-COVER_MAX = 12  # holes add_cover makes at most per region
 PATROL_BEHAVIOUR = 2  # squadron +0x0D: walk the patrol nodes (MSR mod #6)
 SMART, SENTRY = 0x11, 9  # squadron behaviours (+0x0D): walks to the hero in its region; never walks (MSR mod #6)
 PATROL_MODE = 6  # a squadron's kind (low 4 bits) that walks the patrol network (decomp: "Squad patrol network")
@@ -935,9 +932,7 @@ class Session:
         return made
 
     def _region_corners(self, lv: proj.Level, region) -> list[dict]:
-        out = [o for o in lv.objects["objects"] if self._key(o) == "regionpoint"
-               and o.get("fields", {}).get("region") == region]
-        return sorted(out, key=lambda o: o["fields"].get("corner", 0))
+        return prefabs.Placer(lv, self.schemas, self._behaviours()).corners(region)
 
     def _behaviour(self, sq: dict) -> int | None:
         """A squadron's normal behaviour (+0x0D): its field, else its stock entry's; None when unknown."""
@@ -950,71 +945,30 @@ class Session:
         return behaviour
 
     def _holes_of(self, lv: proj.Level, region) -> list[int]:
-        return [o["fields"]["region"] for o in lv.objects["objects"] if self._key(o) == "regioninfo"
-                and o.get("fields", {}).get("link") == region and o["fields"].get("flags", 0) & prefabs.HOLE]
+        return prefabs.Placer(lv, self.schemas, self._behaviours()).holes_of(region)
 
     def add_cover(self, level: str, squadron: str) -> list[dict]:
-        """Makes the obstacles inside a squad's region (blocks, crates, pillars: up-facing solid COVER_RISE or more
-        over the squad's ground) holes of it. A smart squad's members only move to the corners of holes and inward
-        corners of their region, where the hero can't see them; in a rectangle over open floor they stand and fire
-        (decomp MSR mod #6). Each hole is the box around one obstacle; obstacles touching the region's edge are left
-        (cut the outline round them instead). Warns when the region still gives no cover."""
-        from jfgstudio.gui.viewport import heights_at
+        """Makes the obstacles inside a squad's region holes of it (prefabs.Placer.cover): a smart squad's members
+        only move to the corners of holes and inward corners of their region (decomp MSR mod #6). Each hole is the box
+        around one obstacle; obstacles touching the region's edge are left (cut the outline round them instead).
+        Warns when the region still gives no cover."""
         lv = self._level(level)
         sq = self._object(lv, squadron)
         if self._key(sq) != "squadron":
             raise AgentError(f"{squadron!r} is not a squadron of {level}")
-        region = sq.get("fields", {}).get("region")
-        corners = self._region_corners(lv, region)
-        if len(corners) < 3:
-            raise AgentError(f"the squadron's region {region} has no corners here")
         mesh = self._mesh(level)
-        poly = [(o["pos"][0], o["pos"][2]) for o in corners]
-        sx, sy, sz = sq["pos"]
-        ground = self._floor(mesh, sx, sz, sy + COVER_RISE)
-        ground = sy if ground is None else ground
-        xs, zs = [p[0] for p in poly], [p[1] for p in poly]
-        nx, nz = int((max(xs) - min(xs)) // COVER_STEP) + 1, int((max(zs) - min(zs)) // COVER_STEP) + 1
-
-        def at(i, j):
-            return min(xs) + (i + 0.5) * COVER_STEP, min(zs) + (j + 0.5) * COVER_STEP
-
-        inside = {(i, j) for i in range(nx) for j in range(nz) if _inside(poly, *at(i, j))}
-        blocked = {c for c in inside if (heights_at(mesh.collision, *at(*c), facing=1) > ground + COVER_RISE).any()}
-        old = [(o["pos"][0], o["pos"][2]) for h in self._holes_of(lv, region) for o in self._region_corners(lv, h)]
         placer = prefabs.Placer(lv, self.schemas, self._behaviours())
-        seen, made_holes, edge = set(), 0, 0
-        for c in sorted(blocked):
-            if c in seen:
-                continue
-            group, todo, touches = [], [c], False
-            seen.add(c)
-            while todo:
-                i, j = todo.pop()
-                group.append((i, j))
-                for n in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
-                    if n not in inside:
-                        touches = True
-                    elif n in blocked and n not in seen:
-                        seen.add(n)
-                        todo.append(n)
-            if touches:
-                edge += 1
-                continue
-            x0, z0 = at(min(g[0] for g in group), min(g[1] for g in group))
-            x1, z1 = at(max(g[0] for g in group), max(g[1] for g in group))
-            x0, z0, x1, z1 = x0 - COVER_STEP / 2, z0 - COVER_STEP / 2, x1 + COVER_STEP / 2, z1 + COVER_STEP / 2
-            if any(x0 <= x <= x1 and z0 <= z <= z1 for x, z in old) or made_holes >= COVER_MAX:
-                continue  # a hole is there already
-            placer.hole([(x0, ground, z0), (x0, ground, z1), (x1, ground, z1), (x1, ground, z0)], region)
-            made_holes += 1
+        try:
+            got = placer.cover(mesh, sq)
+        except ValueError as e:
+            raise AgentError(str(e)) from e
         made = self._add(lv, placer.made, "cover") if placer.made else []
-        if not made_holes and not old and _convex(poly) and self._behaviour(sq) == SMART:
-            made.append({"warning": f"region {region} has no obstacle inside it and no inward corner: its smart "
-                                    "squad finds no cover to move to and stands and fires. Put a block or crate in "
-                                    "it (then add_cover), or give the region an inward notch"
-                                    + (f" ({edge} obstacle(s) touch its edge: cut the outline round them)"
-                                       if edge else "")})
+        if not got["holes"] and not got["old"] and got["convex"] and self._behaviour(sq) == SMART:
+            made.append({"warning": f"region {got['region']} has no obstacle inside it and no inward corner: its "
+                                    "smart squad finds no cover to move to and stands and fires. Put a block or crate "
+                                    "in it (then add_cover), or give the region an inward notch"
+                                    + (f" ({got['edge']} obstacle(s) touch its edge: cut the outline round them)"
+                                       if got["edge"] else "")})
         return made
 
     def _dry(self, level: str, x: float, z: float) -> bool:
@@ -1630,7 +1584,7 @@ class Session:
                 corners = self._region_corners(lv, region)
                 if self._behaviour(o) != SMART or len(corners) < 3 or self._holes_of(lv, region):
                     continue
-                if _convex([(c["pos"][0], c["pos"][2]) for c in corners]):
+                if prefabs.convex([(c["pos"][0], c["pos"][2]) for c in corners]):
                     problems.append(val.Problem(val.WARNING, "squad-cover", f"levels/{lv.name}/objects.json",
                                                 f"region {region} is convex with no holes: the smart squad finds no "
                                                 "cover to move to and stands and fires. add_cover makes the "
@@ -1696,22 +1650,6 @@ class Session:
             raise AgentError(f"{e.filename} is in use: the game is probably running with the pack loaded. Ask the "
                              "player to close it, then try again") from e
         return {"installed": str(installed), "log": lines}
-
-
-def _inside(poly, x: float, z: float) -> bool:
-    """(x, z) inside the polygon of (x, z) corners (even-odd rule)."""
-    hit = False
-    for (x0, z0), (x1, z1) in zip(poly, poly[1:] + poly[:1], strict=True):
-        if (z0 > z) != (z1 > z) and x < x0 + (z - z0) * (x1 - x0) / (z1 - z0):
-            hit = not hit
-    return hit
-
-
-def _convex(poly) -> bool:
-    """Every corner of the polygon of (x, z) corners turns the same way (no inward corner)."""
-    turns = [(b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
-             for a, b, c in zip(poly, poly[1:] + poly[:1], poly[2:] + poly[:2], strict=True)]
-    return all(t >= 0 for t in turns) or all(t <= 0 for t in turns)
 
 
 PATTERNS = ("solid", "noise", "stripes", "spots", "heat")

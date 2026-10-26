@@ -64,6 +64,7 @@ KIND_COLOURS = {
     "patrolpath": (1.0, 0.6, 0.25, 1.0), "refuel": (0.6, 0.9, 1.0, 1.0), "animtrigger": (0.85, 0.75, 1.0, 1.0),
 }
 OTHER_COLOUR = (0.75, 0.80, 0.90, 1.0)
+HOLE_COLOUR = (1.0, 0.35, 0.75, 1.0)  # a hole of a region (an obstacle squads take cover behind)
 SELECTED_COLOUR = (1.0, 1.0, 0.2, 1.0)
 MARKER_HEIGHT = 40.0
 
@@ -550,17 +551,25 @@ def marker_lines(objects: list, keys: dict, selection: set, links: list, boxes: 
 
 
 def region_links(objects: list, keys: dict) -> list:
-    """Region polygons (corner to corner) and links: members to their squadron, squadrons to their doors."""
+    """Region polygons (corner to corner; holes in their own colour, crossed) and links: members to their squadron,
+    squadrons to their doors."""
+    from jfgstudio.prefabs import hole_regions
     out = []
+    holes = hole_regions(objects, lambda o: keys.get(o["uid"]))
     regions = {}
     for o in objects:
         if keys.get(o["uid"]) == "regionpoint":
             f = o.get("fields", {})
             regions.setdefault(f.get("region"), []).append((f.get("corner", 0), o["pos"]))
-    for corners in regions.values():
-        pts = [tuple(float(v) for v in p) for _, p in sorted(corners)]
+    for region, corners in regions.items():
+        pts = [tuple(float(v) for v in p) for _, p in sorted(corners, key=lambda c: c[0])]
+        colour = HOLE_COLOUR if region in holes else KIND_COLOURS["regionpoint"]
         for a, b in zip(pts, pts[1:] + pts[:1], strict=True):
-            out.append((a, b, KIND_COLOURS["regionpoint"]))
+            out.append((a, b, colour))
+        if region in holes and len(pts) >= 4:  # crossed, so a hole reads as an obstacle
+            half = len(pts) // 2
+            out.append((pts[0], pts[half], colour))
+            out.append((pts[half // 2], pts[half + (len(pts) - half) // 2], colour))
     nodes = {o.get("fields", {}).get("node"): o for o in objects if keys.get(o["uid"]) == "patrolpoint"}
     for o in objects:
         if keys.get(o["uid"]) == "patrolpath":
