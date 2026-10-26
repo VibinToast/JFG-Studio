@@ -35,4 +35,8 @@ Neighbours in `JetForceGemini/`: the decomp (`Decomp/`, read-only; Studio import
 - Format code comes from the decomp's `jfgformats` (path setting `decomp`); never fork it here.
 - Agents never contact players or modders. Commit author VibinToast, no AI co-author or attribution lines. Ask the
   owner before committing or pushing unless told otherwise. New work on `feature/<name>`.
+- **Sessions you start are yours to close (owner, 2026-10-25).** When a side session you started (a trial, a
+  follow-up task) has finished and you have checked its result (its commit or diff), archive it. Keep one that is
+  still working, waiting for an answer or holding context for an open follow-up. Never archive sessions you didn't
+  start (the branch manager, the Decomp Manager and its bots).
 - Run `ruff check .` and the tests before handing work over; `jfgstudio gui --screenshot x.png` checks the window.
