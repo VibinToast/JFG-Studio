@@ -111,6 +111,11 @@ Write the plan as a list of rooms (purpose, size, shape, floor height) and links
 
 Play-tested lessons (a test valley got all of these wrong):
 
+- **Stay in the game's memory.** A level's track shares the game's 8 MB with its objects: keep it within the game's
+  own sizes (median about 1,200 triangles and 51 KB; 9 in 10 under 2,900 and 121 KB; the largest 5,800 and 247 KB).
+  A 329 KB test level crashed. `import_geometry` warns past 121 KB and refuses past 247 KB. Most of the game's
+  textures don't repeat, and jfg64 cuts faces using them at every repeat: prefer textures that repeat both ways
+  (`game_textures` repeats "both") for big floors and ceilings.
 - **Never let the player out.** Every level is closed. `jfg64.terrain` and `jfg64.layout` add an invisible
   collider wall at the edge and over open walls (`boundary`; keep it on). A level meant to have drops (cliffs,
   islands) needs a kill floor below them.

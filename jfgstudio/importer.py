@@ -49,6 +49,14 @@ def check(path: str | Path, catalog, log=None) -> Report:
            f"{triangles} triangles, {len(track.get('textures', []))} textures "
            f"({len(result.get('newTextures', {}))} new images)",
            f"buffer: {len(result['data'])} bytes unpacked; fits the game's track buffer"]
+    size = len(result["data"])
+    if size > TRACK_LARGEST:
+        out.append(f"error: {size // 1024} KB unpacked is more than the game's largest level ({TRACK_LARGEST // 1024} "
+                   "KB): the level's objects then find no memory and the game crashes (play-tested at 329 KB). Use "
+                   "fewer triangles: coarser walls, textures that repeat (game_textures repeats both), fewer props")
+    elif size > TRACK_LARGE:
+        out.append(f"warning: {size // 1024} KB unpacked: bigger than 9 in 10 of the game's levels "
+                   f"({TRACK_LARGE // 1024} KB); keep its objects few, or use fewer triangles")
     if used:
         out.append(f"game textures: {len(set(used))} of the game's level textures, named by number (the pack carries "
                    "none of them)")
@@ -62,7 +70,7 @@ def check(path: str | Path, catalog, log=None) -> Report:
         out.append(f"error: {lost} colliding triangles come after non-colliding (nocollide) ones in their segment: the "
                    "game gives them no collision (the player falls through). The importer puts them last within a draw "
                    "pass: make the see-through surfaces after them colliding, or the decoration solid")
-    report = Report(not lost and not art, out)
+    report = Report(not lost and not art and size <= TRACK_LARGEST, out)
     try:
         from jfgstudio.gui.viewport import TrackMesh  # numpy only; no window needed
         mesh = TrackMesh(str(path))
@@ -74,6 +82,9 @@ def check(path: str | Path, catalog, log=None) -> Report:
     return report
 
 
+# The game's own levels' tracks, unpacked: 9 in 10 are under TRACK_LARGE, the largest is TRACK_LARGEST. The track
+# shares the game's 8 MB heap with the level's objects: a 329 KB one left them no room and crashed (play-tested).
+TRACK_LARGE, TRACK_LARGEST = 121 * 1024, 247 * 1024
 NO_COLLISION = 0x80  # a triangle flag: drawn, not solid
 
 
