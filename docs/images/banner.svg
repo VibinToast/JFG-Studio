@@ -31,6 +31,10 @@
     <filter id="shadow" x="-5%" y="-20%" width="110%" height="150%">
       <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#000" flood-opacity="0.6"/>
     </filter>
+    <mask id="slice" maskUnits="userSpaceOnUse" x="-20" y="-20" width="876" height="140">
+      <rect x="-20" y="-20" width="876" height="140" fill="#fff"/>
+      <rect x="-20" y="49" width="876" height="3.5" fill="#000"/>
+    </mask>
     <clipPath id="frame"><rect width="1280" height="320" rx="24"/></clipPath>
   </defs>
   <g clip-path="url(#frame)">
@@ -56,15 +60,24 @@
     <!-- the icon -->
     <image href="../../jfgstudio/assets/icon.svg" x="56" y="28" width="264" height="264"/>
     <!-- the name, in the JFG font -->
-    <g font-family="'JFG Black', 'Segoe UI', sans-serif" font-size="104" filter="url(#shadow)" stroke-linejoin="round"
-       xml:space="preserve">
-      <text x="352" y="166" stroke="#06112A" stroke-width="14" fill="#06112A">JFG STUDIO</text>
-      <text x="352" y="166" stroke-width="1.5"><tspan fill="url(#chrome)" stroke="#BFEFFF">JFG</tspan> <tspan
-            fill="url(#amber)" stroke="#FFE6A0">STUDIO</tspan></text>
+    <!-- the name: lettered by hand (sci-fi capitals with cut corners, a slice through the word; the J after the
+         JFG font's), cap height 100 scaled to 96 -->
+    <g transform="translate(352 68) scale(0.96)" fill-rule="evenodd" filter="url(#shadow)">
+      <g mask="url(#slice)">
+        <g fill="#06112A" stroke="#06112A" stroke-width="12" stroke-linejoin="round">
+          <path transform="translate(0 0)" d="M0 0 H68 L84 16 V84 L68 100 H16 L0 84 V58 H18 V82 H66 V18 H0 Z"/><path transform="translate(98 0)" d="M0 16 L16 0 H78 V18 H18 V41 H64 V59 H18 V100 H0 Z"/><path transform="translate(190 0)" d="M16 0 H86 V18 H18 V82 H68 V64 H46 V46 H86 V84 L70 100 H16 L0 84 V16 Z"/><path transform="translate(310 0)" d="M16 0 H84 V18 H18 V41 H68 L84 57 V84 L68 100 H0 V82 H66 V59 H16 L0 43 V16 Z"/><path transform="translate(408 0)" d="M0 0 H84 V18 H51 V100 H33 V18 H0 Z"/><path transform="translate(506 0)" d="M0 0 H18 V82 H66 V0 H84 V84 L68 100 H16 L0 84 Z"/><path transform="translate(604 0)" d="M0 0 H66 L86 20 V80 L66 100 H0 Z M18 18 V82 H60 L68 74 V26 L60 18 Z"/><path transform="translate(704 0)" d="M0 0 H18 V100 H0 Z"/><path transform="translate(736 0)" d="M16 0 H70 L86 16 V84 L70 100 H16 L0 84 V16 Z M18 18 V82 H68 V18 Z"/>
+        </g>
+        <g fill="url(#chrome)" stroke="#D8F6FF" stroke-width="1.6" stroke-linejoin="round">
+          <path transform="translate(0 0)" d="M0 0 H68 L84 16 V84 L68 100 H16 L0 84 V58 H18 V82 H66 V18 H0 Z"/><path transform="translate(98 0)" d="M0 16 L16 0 H78 V18 H18 V41 H64 V59 H18 V100 H0 Z"/><path transform="translate(190 0)" d="M16 0 H86 V18 H18 V82 H68 V64 H46 V46 H86 V84 L70 100 H16 L0 84 V16 Z"/>
+        </g>
+        <g fill="url(#amber)" stroke="#FFEAB0" stroke-width="1.6" stroke-linejoin="round">
+          <path transform="translate(310 0)" d="M16 0 H84 V18 H18 V41 H68 L84 57 V84 L68 100 H0 V82 H66 V59 H16 L0 43 V16 Z"/><path transform="translate(408 0)" d="M0 0 H84 V18 H51 V100 H33 V18 H0 Z"/><path transform="translate(506 0)" d="M0 0 H18 V82 H66 V0 H84 V84 L68 100 H16 L0 84 Z"/><path transform="translate(604 0)" d="M0 0 H66 L86 20 V80 L66 100 H0 Z M18 18 V82 H60 L68 74 V26 L60 18 Z"/><path transform="translate(704 0)" d="M0 0 H18 V100 H0 Z"/><path transform="translate(736 0)" d="M16 0 H70 L86 16 V84 L70 100 H16 L0 84 V16 Z M18 18 V82 H68 V18 Z"/>
+        </g>
+      </g>
     </g>
     <rect x="356" y="194" width="140" height="5" rx="2.5" fill="#FFB21A"/>
     <text x="356" y="238" font-family="'Lato', 'Segoe UI', sans-serif" font-size="30" font-weight="700"
-          fill="#8FD8FF" letter-spacing="0.5">Level &amp; modpack editor for Jet Force Gemini: Recompiled</text>
+          fill="#8FD8FF" letter-spacing="0.5">Level &amp; modpack editor for Jet Force Gemini: Recomp</text>
     <rect x="1" y="1" width="1278" height="318" rx="23" fill="none" stroke="#1F3D73" stroke-width="2"/>
   </g>
 </svg>
