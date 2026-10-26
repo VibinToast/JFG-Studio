@@ -99,3 +99,8 @@ never in a project.
 | `decomp` | the decomp checkout; Studio imports `tools/jfgformats` from it |
 | `port` | the Jet Force Gemini: Recompiled folder (for fonts, `bin/mods` and test runs) |
 | `rom` | your own US ROM (used only to build the local catalog) |
+
+## License
+
+GPL-2.0-or-later, the licence Blender uses: see [LICENSE](LICENSE). You may use it under version 2 of the GNU General
+Public License or any later version.

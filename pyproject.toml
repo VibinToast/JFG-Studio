@@ -7,6 +7,7 @@ name = "jfgstudio"
 version = "0.1.0"
 description = "Level and modpack editor for Jet Force Gemini: Recompiled"
 requires-python = ">=3.12"
+license = {text = "GPL-2.0-or-later"}
 dependencies = [
     "imgui-bundle==1.93.0",
     "moderngl==5.13.0",
