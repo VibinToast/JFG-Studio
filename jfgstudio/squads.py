@@ -57,6 +57,34 @@ def examples(squads: dict, member_oid: int, mode: int | None = None):
     return best[3], (best[3][0], best[2]) if best[2] is not None else None
 
 
+def stand_in(squads: dict, member_oid: int, move_type) -> tuple | None:
+    """For an enemy the game has no squad of (a cut enemy): (squadron entry, member entry, the enemy copied) of a
+    squad of another enemy that moves the same way (`move_type(oid)`: the baddy row's moveType, walking or flying),
+    ranked as examples() ranks them; None when no enemy moves that way. Not the first squadron in the lists: that
+    one is a friendly villager squad at scale 26 (it left a cut worm tiny and an alien invisible)."""
+    want = move_type(member_oid)
+    if want is None:
+        return None
+    best = None
+    for oid in sorted(squads):
+        if oid == member_oid or move_type(oid) != want:
+            continue
+        found = examples(squads, oid)
+        if found is None:
+            continue
+        f = next(f for f in squads[oid] if f[3] == found[0])
+        rank = (f[4] == SMART, f[4] != SENTRY, f[1], f[2] is not None, len(squads[oid]))
+        if best is None or rank > best[0]:
+            best = (rank, found, oid)
+    return (*best[1], best[2]) if best else None
+
+
+def native_size(scale: float | None) -> int:
+    """A squadron's size field (hundredths; it replaces the members' definition scale) that draws an enemy at its
+    own definition's scale."""
+    return max(1, min(255, round((scale or 1.0) * 100)))
+
+
 def fix(level, sq: dict, squads: dict, key, mode: int | None = None) -> tuple[list[edit.Change], dict]:
     """The changes that point a squadron (and its members) at a stock squad of its own enemy, keeping every field
     set, make it spawn at once (a stock squad's trigger zone is where it stood in its own level) and wind its region

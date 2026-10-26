@@ -389,6 +389,10 @@ whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `
   differ. An empty `set` removes the patch. More than 16 entries on one action crash the game: the tool refuses a
   change that makes that worse, and the build refuses a set the pack leaves over 16 (the stock Termite, row 17, has
   23 on action 1: move 7 of them, anims 16-22, in one call).
+- `place_squad` of an enemy the game never puts in a squad (a cut one) copies a squad of an enemy that moves the same
+  way (walks or flies) and sets `size` to the enemy's own scale; `squadron_example` picks one yourself. The
+  squadron's settings are named (sight range, view cone, hearing, trigger zone, spawn interval, mission timing, wake
+  range ...): `describe_type squadron`. Its `trigger` 0, 2 and 4 read stale data in the game: use 1, 3, 5 or 6.
 - A pack can be a library: no levels, only patches (or kinds). Another pack names it with
   `add_dependency(id, version)` (mod.json "dependencies"); `remove_dependency(id)` drops it.
 

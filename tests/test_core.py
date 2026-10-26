@@ -138,6 +138,12 @@ class Validator(unittest.TestCase):
         self.assertEqual(self.errors(self.base), [])
         self.assertFalse(any(x.severity == val.WARNING for x in val.validate(self.base)))
 
+    def test_stale_squad_trigger(self):
+        p = clone(self.base)
+        sq = next(o for o in p.levels["gemini"].objects["objects"] if o["type"] == "stock:objtype/0x4F")
+        sq["fields"]["trigger"] = 2  # reads stale data in the game
+        self.assertIn((val.WARNING, "squad-trigger"), self.rules(p))
+
     def test_cutscene_minus_one(self):
         p = clone(self.base)
         p.levels["gemini"].level["header"]["cutsceneData"] = -1

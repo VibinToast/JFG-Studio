@@ -96,3 +96,22 @@ class Patrol(unittest.TestCase):
         self.assertEqual([o["fields"]["startAtLoad"] for o in points], [0, 0])  # a start value rides a lift
         links = [o for o in self.level.objects["objects"] if (s := self.S.schema(o)) and s.key == "patrolpath"]
         self.assertEqual(len(links), 1)
+
+
+class StandIn(unittest.TestCase):
+    # made-up squads: 0x30 walks (two smart squads), 0x31 walks (a sentry), 0x40 flies; 0x50 walks and has none
+    SQUADS = {0x30: [(2, True, 4, (10, 2), 0x11), (2, True, 6, (10, 5), 0x11)], 0x31: [(2, False, 7, (11, 1), 9)],
+              0x40: [(2, True, None, (12, 0), 5)]}
+    MOVES = {0x30: 1, 0x31: 1, 0x40: 5, 0x50: 1, 0x51: 5}
+
+    def test_same_movement(self):
+        walk = squads.stand_in(self.SQUADS, 0x50, self.MOVES.get)
+        self.assertEqual(walk[2], 0x30)  # a smart walker, not the sentry
+        fly = squads.stand_in(self.SQUADS, 0x51, self.MOVES.get)
+        self.assertEqual((fly[0], fly[1], fly[2]), ((12, 0), None, 0x40))  # a flyer: its squadron spawns its own
+        self.assertIsNone(squads.stand_in(self.SQUADS, 0x52, self.MOVES.get))  # not a baddy
+
+    def test_native_size(self):
+        self.assertEqual(squads.native_size(0.4), 40)
+        self.assertEqual(squads.native_size(None), 100)
+        self.assertEqual(squads.native_size(9.0), 255)

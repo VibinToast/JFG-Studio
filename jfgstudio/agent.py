@@ -1150,6 +1150,14 @@ class Session:
         placer = prefabs.Placer(lv, self.schemas, self._behaviours())
         sq_schema = self.schemas["squadron"]
         matched = self.squad_examples(m_oid) if squadron_example is None else None
+        native = None
+        if matched is None and squadron_example is None and self.catalog() is not None:
+            # The game has no squad of this enemy (a cut one): a squad of an enemy that moves the same way, at the
+            # enemy's own size
+            stand = squads.stand_in(self._squad_index(), m_oid, self._move_type)
+            if stand is not None:
+                matched = stand[:2]
+                native = squads.native_size((self._types or {}).get(m_oid, {}).get("scale"))
         sq_ex = self._example(SQUADRON_ID, sq_schema, squadron_example if matched is None else list(matched[0]))
         # Flying enemies and some others have no member entries in the game's lists: their squadron spawns its own
         # members (count of them) round itself. Such a squad is the squadron alone.
@@ -1180,6 +1188,8 @@ class Session:
         target = self._face_point(lv, face)
         sq_fields = {"squadronId": squadron_id, "doorId": door_id, "region": region_id, "count": members,
                      "baddyType": m_oid, "trigger": prefabs.TRIGGER_AT_ONCE}
+        if native is not None:
+            sq_fields["size"] = native
         if target is not None:
             sq_fields["heading"] = self._toward(sq_schema, (cx, cz), target)
         sq_pos = self._pos(lv, [cx, cz], sq_schema, True)
@@ -1689,6 +1699,12 @@ class Session:
         if self._squads is None:
             self._squads = squads.index(self._catalog) if self._catalog is not None else {}
         return self._squads
+
+    def _move_type(self, oid: int) -> int | None:
+        """How a baddy moves (its row's moveType: 1 walks, 5 flies ...), or None for a type with no row."""
+        from jfgformats import baddies
+        row = baddies.row_of(oid)
+        return self._catalog.baddies()["rows"][row]["data"].get("moveType") if row >= 0 else None
 
     def squad_examples(self, member_oid: int, mode: int | None = None):
         """(squadron entry, member entry) of a stock squad of `member_oid`, [list, entry] each (the member None when

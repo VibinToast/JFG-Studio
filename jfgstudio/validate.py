@@ -36,6 +36,9 @@ class Problem:
         return f"{self.severity}: {where}: {self.message} ({self.rule})"
 
 
+STALE_TRIGGERS = (0, 2, 4)  # squadron trigger kinds (entry +0x29, low 4 bits) the game runs on stale data
+
+
 def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     schemas = schemas if schemas is not None else obj.load_schemas()
     out: list[Problem] = []
@@ -391,6 +394,10 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
         key = schema.key if schema else None
         if key == "squadron":
             squadrons.append(o)
+            if fields.get("trigger") is not None and fields["trigger"] & 0xF in STALE_TRIGGERS:
+                out.append(Problem(WARNING, "squad-trigger", of, f"trigger {fields['trigger'] & 0xF} reads stale "
+                                   "data in the game (decomp MSR \"Cut enemies\"): use 1 (a hero in its zone), 3 (at "
+                                   "once), 5 (an object of class 8 in its zone) or 6 (food)", uid))
         elif key == "squadmember":
             members.append(o)
         elif key == "door":
