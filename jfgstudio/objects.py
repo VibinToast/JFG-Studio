@@ -53,6 +53,7 @@ class Schema:
     hidden: bool = False  # not drawn in game (zones, lights, markers): the Scene draws a marker, not a model
     value_scale: dict | None = None  # {"field", "scales": {value: factor}}: a size that follows a field's value
     variants: dict | None = None  # {"field", "ids"}: Prefabs lists those types once per named value of the field
+    sprite_env: dict | None = None  # {"field", "colours": {value: rgb}}: the env colour its sprite is drawn with
     min_size: int = field(init=False)
 
     def __post_init__(self):
@@ -70,6 +71,13 @@ class Schema:
             return 1.0
         v = values.get(self.value_scale["field"])
         return float(self.value_scale["scales"].get(str(v), 1.0))
+
+    def env_colour(self, values: dict) -> list | None:
+        """The env colour a field's value draws its sprite in (health pickups: blue, purple, red), or None for the
+        sprite's own."""
+        if not self.sprite_env:
+            return None
+        return self.sprite_env["colours"].get(str(values.get(self.sprite_env["field"])))
 
     def defaults(self) -> dict:
         """The fields whose default is not 0 (what a new object of this type starts with)."""
@@ -94,7 +102,8 @@ def load_schemas() -> dict[str, Schema]:
         out[doc["key"]] = Schema(doc["key"], doc["name"], [int(i, 0) for i in doc.get("ids", [])],
                                  doc.get("behaviour"), fields, doc.get("status", "decoded"), doc.get("description", ""),
                                  int(doc.get("minSize", "0"), 0), doc.get("category", "Other"),
-                                 doc.get("hidden", False), doc.get("valueScale"), doc.get("variants"))
+                                 doc.get("hidden", False), doc.get("valueScale"), doc.get("variants"),
+                                 doc.get("spriteEnv"))
     return out
 
 

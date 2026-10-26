@@ -238,16 +238,16 @@ class State:
             self.model_paths[oid] = path
         return self.model_paths[oid]
 
-    def sprite(self, oid: int) -> dict | None:
-        """The catalog's picture of an object type the game draws as a sprite (Catalog.sprite), or None: a model
-        type, a debug sprite, no catalog, or a jfgformats with no sprite reader."""
-        key = ("sprite", oid)
+    def sprite(self, oid: int, env: list | None = None) -> dict | None:
+        """The catalog's picture of an object type the game draws as a sprite (Catalog.sprite; `env` recolours
+        it), or None: a model type, a debug sprite, no catalog, or a jfgformats with no sprite reader."""
+        key = ("sprite", oid, tuple(env or ()))
         if key not in self.model_paths:
             t = self.objtypes.get(oid) if self.catalog() else None
             info = None
             if t and t["kind"] == "sprites" and t["assets"] and t["assets"][0] not in DEBUG_SPRITES:
                 try:
-                    info = self.cat.sprite(t["assets"][0])
+                    info = self.cat.sprite(t["assets"][0], env)
                 except Exception:  # noqa: BLE001 (a sprite that can't be exported keeps the object's shape)
                     info = None
             self.model_paths[key] = info
@@ -675,7 +675,8 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
         else:
             # a hidden type (the game draws nothing for it) shows only as its shape, if it has one
             path = None if schema and schema.hidden else S.model_path(oid)
-            sprite = None if path or (schema and schema.hidden) else S.sprite(oid)
+            sprite = None if path or (schema and schema.hidden) else S.sprite(
+                oid, schema.env_colour(S.fields(o, schema)) if schema else None)
             if sprite:  # the game's sprite, turned to face the camera
                 path = f"sprite:{sprite['png']}"
                 if path not in S.view.models:
@@ -1408,6 +1409,13 @@ def _variants(oid: int, schema: obj.Schema | None) -> list[tuple[int, str]]:
     return [(value, label) for value, label in sorted(f.enum.items()) if 0 <= value < 16]
 
 
+def _sprite_key(pid: int) -> tuple[int, list | None]:
+    """(object id, env colour) of a prefab's sprite: a health size's colour."""
+    oid, fields = _split(pid)
+    schema = obj.schema_for_id(oid, S.schemas, S.behaviours) if fields else None
+    return oid, schema.env_colour(fields) if schema else None
+
+
 def _split(pid: int) -> tuple[int, dict | None]:
     """A prefab id of a type -> (object id, the fields its variant sets, or None)."""
     if pid < VARIANT_BASE:
@@ -1449,7 +1457,7 @@ def _details_height(width: float) -> float:
 
 def _sprite_image(oid: int, height: float) -> bool:
     """A sprite type's picture `height` tall at the cursor (the Prefabs window's thumbnails); False if it has none."""
-    info = S.sprite(_split(oid)[0]) if oid >= 0 else None
+    info = S.sprite(*_sprite_key(oid)) if oid >= 0 else None
     thumb = S.view.thumbnail(info["png"]) if info else None
     if thumb is None:
         return False

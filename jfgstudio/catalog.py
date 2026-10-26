@@ -20,6 +20,7 @@ from jfgstudio import formats, rom, settings
 
 OBJINDEX_ASSET, OBJDEF_TABLE, OBJDEF_DATA = 0x30, 0x2E, 0x2F
 CATALOG_FORMAT = 4  # the catalog is rebuilt when objtypes.json is older
+SPRITES_FORMAT = 2  # the sprites are exported again when sprites.json is older
 # header fields the Level window offers stock values of (music, sky, fog, ambient loops ...)
 LEVEL_PROPS = ("tune", "tuneChannelMask", "voiceLimit", "ambientSounds", "fogNear", "fogFar", "fog3", "fogR", "fogG",
                "fogB", "clearR", "clearG", "clearB", "weather", "fov", "nightVision", "dayLength", "lights",
@@ -198,27 +199,40 @@ class Catalog:
             tmp.replace(path)
         return path
 
-    def sprite(self, sprite_id: int) -> dict | None:
-        """A sprite's first picture (its first frame with pixels, in the sprite's own colours): {"png": path,
-        "width", "height", "anchor": [x, y] (the pixel at the object's position, y down), "frames", "units" (world
-        units per pixel at scale 1)}, or None (no such sprite, or a jfgformats older than 0.4.0). Every sprite is
-        exported the first time one is asked for."""
-        index = self.dir / "sprites" / "sprites.json"
+    def sprite(self, sprite_id: int, env: list | None = None) -> dict | None:
+        """A sprite's first picture (its first frame with pixels, in the sprite's own colours, or with `env` as its
+        env colour: the health pickup's size): {"png": path, "width", "height", "anchor": [x, y] (the pixel at the
+        object's position, y down), "frames", "units" (world units per pixel at scale 1)}, or None (no such sprite,
+        or a jfgformats older than 0.4.0). Every sprite is exported the first time one is asked for; a recoloured
+        picture the first time it is asked for."""
+        folder = self.dir / "sprites"
         if not hasattr(self, "_sprites"):
-            if not index.exists():
-                self._export_sprites(index)
-            with open(index, encoding="utf-8") as f:
-                self._sprites = json.load(f)
+            self._sprites = self._sprite_index(folder)
         info = self._sprites.get(f"{sprite_id:04X}")
-        return {**info, "png": str(index.parent / f"{sprite_id:04X}.png")} if info else None
+        if not info:
+            return None
+        path = folder / f"{sprite_id:04X}.png"
+        if env and info.get("colours") and list(env) != info["colours"][1]:
+            path = folder / f"{sprite_id:04X}_{bytes(env).hex()}.png"
+            if not path.exists():
+                from jfgformats import png, sprites
+                w, h, grey = png.read_png((folder / f"{sprite_id:04X}_grey.png").read_bytes())
+                rgba = sprites.tinted({"width": w, "height": h, "rgba": grey}, (info["colours"][0], list(env)))
+                path.write_bytes(png.write_png("RGBA", w, h, rgba))
+        return {**info, "png": str(path)}
 
-    def _export_sprites(self, index: Path) -> None:
+    def _sprite_index(self, folder: Path) -> dict:
+        index = folder / "sprites.json"
+        if index.exists():
+            with open(index, encoding="utf-8") as f:
+                doc = json.load(f)
+            if doc.get("format") == SPRITES_FORMAT:
+                return doc["sprites"]
         try:
             from jfgformats import png, sprites
         except ImportError:  # jfgformats before 0.4.0: sprite objects keep their shapes
-            self._sprites = {}
-            return
-        index.parent.mkdir(parents=True, exist_ok=True)
+            return {}
+        folder.mkdir(parents=True, exist_ok=True)
         out = {}
         for n in range(sprites.count(self.assets)):
             try:
@@ -228,11 +242,16 @@ class Catalog:
             frame = next((f for f in s["frames"] if f["width"] and f["height"]), None)
             if frame is None:
                 continue
+            w, h = frame["width"], frame["height"]
             rgba = sprites.tinted(frame, s["colours"]) if s["colours"] else frame["rgba"]
-            (index.parent / f"{n:04X}.png").write_bytes(png.write_png("RGBA", frame["width"], frame["height"], rgba))
-            out[f"{n:04X}"] = {"width": frame["width"], "height": frame["height"], "anchor": list(frame["anchor"]),
-                               "frames": s["frameCount"], "units": sprites.WORLD_UNITS_PER_PIXEL}
-        self._write("sprites/sprites.json", out)
+            (folder / f"{n:04X}.png").write_bytes(png.write_png("RGBA", w, h, rgba))
+            out[f"{n:04X}"] = {"width": w, "height": h, "anchor": list(frame["anchor"]), "frames": s["frameCount"],
+                               "units": sprites.WORLD_UNITS_PER_PIXEL}
+            if s["colours"]:  # its grey picture too, for other colours (sprites.tinted)
+                (folder / f"{n:04X}_grey.png").write_bytes(png.write_png("RGBA", w, h, frame["rgba"]))
+                out[f"{n:04X}"]["colours"] = [list(c) for c in s["colours"]]
+        self._write("sprites/sprites.json", {"format": SPRITES_FORMAT, "sprites": out})
+        return out
 
     def _write(self, name: str, doc) -> None:
         with open(self.dir / name, "w", encoding="utf-8", newline="\n") as f:

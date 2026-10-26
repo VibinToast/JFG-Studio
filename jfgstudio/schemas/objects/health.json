@@ -7,9 +7,10 @@
  "category": "Pickups",
  "hidden": false,
  "status": "decoded",
- "description": "The health pickup (0xA9) and the health upgrade (0xE9). MSR 'Health'.",
+ "description": "The health pickup (0xA9: its gem blue, purple or red by size) and the health upgrade (0xE9). MSR 'Health'.",
  "valueScale": {"field": "amount", "scales": {"1": 1.3, "2": 1.6}},
  "variants": {"field": "amount", "ids": ["0xA9"]},
+ "spriteEnv": {"field": "amount", "colours": {"0": [0, 40, 255], "1": [128, 0, 204], "2": [208, 0, 0]}},
  "fields": [
   {"name": "amount", "offset": "0x0A", "type": "s8", "enum": {"0": "small (1 unit)", "1": "medium (5 units)", "2": "full"}, "description": "how much health (ignored by the upgrade)"},
   {"name": "respawn", "offset": "0x0B", "type": "s8", "description": "respawn delay in seconds after it is taken; 0 = gone for good"},

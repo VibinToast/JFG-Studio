@@ -9,7 +9,8 @@ from pathlib import Path
 import numpy as np
 
 from jfgstudio import formats
-from jfgstudio.catalog import Catalog
+from jfgstudio.catalog import SPRITES_FORMAT, Catalog
+from jfgstudio.objects import load_schemas
 from tests.test_game_textures import _png
 
 
@@ -25,8 +26,8 @@ class Sprites(unittest.TestCase):
         folder = self.cat.dir / "sprites"
         folder.mkdir()
         (folder / "0005.png").write_bytes(_png(4, 2, bytes([255, 0, 0, 255] * 8)))
-        (folder / "sprites.json").write_text(json.dumps({"0005": {
-            "width": 4, "height": 2, "anchor": [2, 2], "frames": 3, "units": 0.5}}))
+        (folder / "sprites.json").write_text(json.dumps({"format": SPRITES_FORMAT, "sprites": {"0005": {
+            "width": 4, "height": 2, "anchor": [2, 2], "frames": 3, "units": 0.5}}}))
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -36,6 +37,11 @@ class Sprites(unittest.TestCase):
         self.assertEqual((info["width"], info["height"], info["frames"]), (4, 2, 3))
         self.assertTrue(info["png"].endswith("0005.png"))
         self.assertIsNone(self.cat.sprite(6))
+
+    def test_health_colour_by_size(self):
+        health = load_schemas()["health"]
+        self.assertEqual(health.env_colour({"amount": 2}), [208, 0, 0])
+        self.assertIsNone(health.env_colour({"amount": 9}))  # the sprite's own colours
 
     def test_quad_stands_on_its_anchor(self):
         from jfgstudio.gui import viewport as vp
