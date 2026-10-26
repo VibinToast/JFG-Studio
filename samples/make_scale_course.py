@@ -31,8 +31,11 @@ PASSAGES = (20, 30, 40, 50, 60, 80, 100)  # width between two walls
 GAPS = (40, 60, 80, 100, 140, 180, 240, 300)  # across a shallow trench
 TRENCH = 40  # the trench's depth: falling in is safe, a ramp at its end leads out
 LANE = 120  # the width of a ramp or block
-LEDGES = (100, 140, 180, 220, 260)  # blocks whose top edge should be grabbable
-LEDGE_DROP = 1  # their walls stop this far under the top, so the top shares no edge with them
+LEDGES = (100, 140, 180, 220, 260)  # blocks whose top edges are grabbable ledges
+# A ledge (the decomp, port request 10): an up-facing top with triangle flag 0x02 and the wall triangle under each of
+# its edges with 0x01, linked across that edge (the wall's top on the top's own corners). The track loader marks the
+# top's edge; the hero catches it while falling past it.
+LEDGE_TOP, LEDGE_WALL = 0x02, 0x01
 
 
 def course():
@@ -42,6 +45,8 @@ def course():
     m.material("block", "stone")
     m.material("block_side", "stone")
     m.material("roof", "metal")
+    m.material("ledge_top", "stone", tri_flags=LEDGE_TOP)
+    m.material("ledge_wall", "metal", tri_flags=LEDGE_WALL)
     items = []
 
     # the ground: everything but the gap trench (z 1300-1700)
@@ -87,16 +92,12 @@ def course():
         if g is not None:
             items.append(("gap", i + 1, f"{g} across", (x + 200 + g + 100, 0, 1500)))
             x += 200 + g
-    # 6. ledge blocks: the walls stop LEDGE_DROP under the top, so the top's edges have no neighbour. The game's
-    # track loader makes such edges grabbable ledges; the importer links every edge two triangles share, so a block
-    # whose walls meet its top has none (the first row's blocks)
+    # 6. ledge blocks: flagged tops and walls (LEDGE_TOP, LEDGE_WALL); the first row's blocks are the same without
+    # the flags, so they have no ledges
     for i, h in enumerate(LEDGES):
         x0 = -600 + i * 250
-        m.floor("block", x0, 2000, x0 + 160, 2160, h)
-        for ax, az, bx, bz in ((x0, 2000, x0 + 160, 2000), (x0 + 160, 2000, x0 + 160, 2160),
-                               (x0 + 160, 2160, x0, 2160), (x0, 2160, x0, 2000)):
-            m.wall("block_side", ax, az, bx, bz, 0, h - LEDGE_DROP)
-        items.append(("ledge", i + 1, f"{h} high, its top edge left unlinked", (x0 + 80, h, 2080)))
+        m.box("ledge_top", "ledge_wall", x0, 2000, x0 + 160, 2160, 0, h)
+        items.append(("ledge", i + 1, f"{h} high, grabbable top edges (metal walls)", (x0 + 80, h, 2080)))
     return m, items
 
 
@@ -124,8 +125,8 @@ def main() -> int:
              "gentlest, 8 the shortest and steepest) and the blocks (1 the lowest, 13 the tallest). Second row: the "
              "tunnels (1 the lowest roof) and the passages between walls (1 the narrowest). Last: the trench, "
              "crossed on platforms from its end with the ramp out of it (gap 1 the narrowest). Beyond it: ledge blocks "
-             "(1 the lowest), whose top edge should be grabbable: jump up at a wall and see whether the hero "
-             "catches the edge.",
+             "(1 the lowest, metal walls), whose top edges are grabbable: walk off an edge (the hero should catch "
+             "it and hang), and jump up at a wall.",
              "A health pickup sits on top of each ramp and block and after each gap: getting it means the hero made "
              "it. The ring by the start is an exit back to the game.", ""]
     for group in ("ramp", "block", "tunnel", "passage", "gap", "ledge"):

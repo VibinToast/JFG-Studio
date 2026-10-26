@@ -1,6 +1,6 @@
 # Scale course
 
-You start facing the course. First row: the ramps (number 1 is the longest and gentlest, 8 the shortest and steepest) and the blocks (1 the lowest, 13 the tallest). Second row: the tunnels (1 the lowest roof) and the passages between walls (1 the narrowest). Last: the trench, crossed on platforms from its end with the ramp out of it (gap 1 the narrowest). Beyond it: ledge blocks (1 the lowest), whose top edge should be grabbable: jump up at a wall and see whether the hero catches the edge.
+You start facing the course. First row: the ramps (number 1 is the longest and gentlest, 8 the shortest and steepest) and the blocks (1 the lowest, 13 the tallest). Second row: the tunnels (1 the lowest roof) and the passages between walls (1 the narrowest). Last: the trench, crossed on platforms from its end with the ramp out of it (gap 1 the narrowest). Beyond it: ledge blocks (1 the lowest, metal walls), whose top edges are grabbable: walk off an edge (the hero should catch it and hang), and jump up at a wall.
 A health pickup sits on top of each ramp and block and after each gap: getting it means the hero made it. The ring by the start is an exit back to the game.
 
 ## Ramps
@@ -64,10 +64,10 @@ A health pickup sits on top of each ramp and block and after each gap: getting i
 
 ## Ledges
 
-1. 100 high, its top edge left unlinked
-2. 140 high, its top edge left unlinked
-3. 180 high, its top edge left unlinked
-4. 220 high, its top edge left unlinked
-5. 260 high, its top edge left unlinked
+1. 100 high, grabbable top edges (metal walls)
+2. 140 high, grabbable top edges (metal walls)
+3. 180 high, grabbable top edges (metal walls)
+4. 220 high, grabbable top edges (metal walls)
+5. 260 high, grabbable top edges (metal walls)
 
 Report: the steepest ramp walked up, the highest block stepped onto without jumping, the highest reached with a jump, the highest climbed (ledge grab), the lowest tunnel walked / crouched through, the narrowest passage, and the widest gap jumped (standing and running).

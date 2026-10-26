@@ -41,10 +41,13 @@ class Mesh:
         self.to_light = _norm(tuple(-c for c in sun_dir))
         self.kinds = {}  # material -> surface kind (FLAGS key)
         self.images = {}  # material -> image name
+        self.tri_flags = {}  # material -> triangle flags (0x02 a ledge's top, 0x01 the wall under it)
 
-    def material(self, name, image, kind="opaque"):
+    def material(self, name, image, kind="opaque", tri_flags=0):
         self.kinds[name] = kind
         self.images[name] = image
+        if tri_flags:
+            self.tri_flags[name] = tri_flags
 
     def _light(self, normal, tint, extra=1.0):
         d = max(0.0, sum(a * b for a, b in zip(normal, self.to_light, strict=True)))
@@ -203,6 +206,8 @@ def write_glb(mesh: Mesh, out: Path, images: dict, generator: str) -> None:
                "extras": {"batchFlags": FLAGS[kind], "pass": "translucent" if kind == "water" else "opaque"}}
         if kind == "water":
             mat["alphaMode"] = "BLEND"
+        if mesh.tri_flags.get(name):
+            mat["extras"]["triangleFlags"] = mesh.tri_flags[name]
         doc["materials"].append(mat)
         prims.append({"attributes": {"POSITION": g.accessor("f", pos, 5126, "VEC3", bounds=True),
                                      "TEXCOORD_0": g.accessor("f", uvs, 5126, "VEC2"),

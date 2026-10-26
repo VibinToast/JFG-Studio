@@ -367,7 +367,7 @@
   },
   {
    "fields": {},
-   "name": "ledge 1: 100 high, its top edge left unlinked",
+   "name": "ledge 1: 100 high, grabbable top edges (metal walls)",
    "pos": [
     -520,
     102,
@@ -375,11 +375,11 @@
    ],
    "size": 14,
    "type": "stock:objtype/0xA9",
-   "uid": "ledge_1__100_high__its_top_edge_left_unlinked1"
+   "uid": "ledge_1__100_high__grabbable_top_edges__metal_walls1"
   },
   {
    "fields": {},
-   "name": "ledge 2: 140 high, its top edge left unlinked",
+   "name": "ledge 2: 140 high, grabbable top edges (metal walls)",
    "pos": [
     -270,
     142,
@@ -387,11 +387,11 @@
    ],
    "size": 14,
    "type": "stock:objtype/0xA9",
-   "uid": "ledge_2__140_high__its_top_edge_left_unlinked1"
+   "uid": "ledge_2__140_high__grabbable_top_edges__metal_walls1"
   },
   {
    "fields": {},
-   "name": "ledge 3: 180 high, its top edge left unlinked",
+   "name": "ledge 3: 180 high, grabbable top edges (metal walls)",
    "pos": [
     -20,
     182,
@@ -399,11 +399,11 @@
    ],
    "size": 14,
    "type": "stock:objtype/0xA9",
-   "uid": "ledge_3__180_high__its_top_edge_left_unlinked1"
+   "uid": "ledge_3__180_high__grabbable_top_edges__metal_walls1"
   },
   {
    "fields": {},
-   "name": "ledge 4: 220 high, its top edge left unlinked",
+   "name": "ledge 4: 220 high, grabbable top edges (metal walls)",
    "pos": [
     230,
     222,
@@ -411,11 +411,11 @@
    ],
    "size": 14,
    "type": "stock:objtype/0xA9",
-   "uid": "ledge_4__220_high__its_top_edge_left_unlinked1"
+   "uid": "ledge_4__220_high__grabbable_top_edges__metal_walls1"
   },
   {
    "fields": {},
-   "name": "ledge 5: 260 high, its top edge left unlinked",
+   "name": "ledge 5: 260 high, grabbable top edges (metal walls)",
    "pos": [
     480,
     262,
@@ -423,7 +423,7 @@
    ],
    "size": 14,
    "type": "stock:objtype/0xA9",
-   "uid": "ledge_5__260_high__its_top_edge_left_unlinked1"
+   "uid": "ledge_5__260_high__grabbable_top_edges__metal_walls1"
   },
   {
    "fields": {
