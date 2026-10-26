@@ -80,6 +80,20 @@ spread and tiers in range.
 **Check:** `level_layout(level)`. Aim for roofed over 60%, passages 7%–67% (about a third), no open ground over 1,600,
 and the clearance in range.
 
+## Rewards for exploring
+
+Every side room, dead end, ledge and glass-sealed chamber should hold something worth the detour (the owner's rule):
+
+- **Weapons**: a weapon pickup (object types 0xFA-0x105, placed from a stock entry with `place`) or a chest
+  (`chest`, `contents`); a squadron's `drop` gives one when its last member dies.
+- **Keys**: `place_key_door` puts the key in a side area and the door on the main way, so exploring opens the level.
+- **Tribals** to rescue: planned. The port has to set a pack's Tribal total first (decomp port request 14); until
+  then don't place them.
+- **Ship parts and the game's other collectables** set the player's own progress in the main game, once per save:
+  ask the owner before using them in a pack.
+- **Health and ammo** after fights; **full health** or a **health upgrade** (`health` 0xE9, its own game flag) as a
+  bigger prize; crates and drums to break open.
+
 ## Room-graph templates
 
 Write the plan as a list of rooms (purpose, size, shape, floor height) and links (kind, width) before building:
