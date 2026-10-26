@@ -1,0 +1,21 @@
+{
+ "key": "target",
+ "name": "Shootable door switch (target)",
+ "ids": ["0x48"],
+ "behaviour": 111,
+ "minSize": "0x16",
+ "category": "Doors & switches",
+ "hidden": false,
+ "status": "decoded",
+ "description": "A switch the player shoots to open a door: on its first frame it locks the door with its door id; shot (its hit points gone) it plays a jingle, unlocks the door and sets its game flag; on a reload with the flag already set it opens the door at once. No trigger needed. Use a pack flag (103-127; 301-351 second choice; 0 = not saved). Decomp MSR mod #6 'Game flags a mod pack can use, and a switch that opens a door'.",
+ "fields": [
+  {"name": "doorId", "offset": "0x0A", "type": "u8", "link": "doorId", "description": "the door it locks and opens (the door's doorId)"},
+  {"name": "size", "offset": "0x0B", "type": "u8", "default": 20, "role": "scale", "scale": {"div": 20, "min": 0.1}, "description": "scale = value x 0.05 (20 = normal)"},
+  {"name": "yaw", "offset": "0x0C", "type": "s16", "unit": "angle16", "role": "yaw", "description": "facing"},
+  {"name": "pitch", "offset": "0x0E", "type": "s16", "unit": "angle16", "role": "pitch", "description": ""},
+  {"name": "data09", "offset": "0x10", "type": "u8", "default": 2, "description": "copied to its data +0x09 (stock 2 or 0)"},
+  {"name": "time", "offset": "0x11", "type": "u8", "default": 124, "description": "objTvTimes value (stock 0x7C)"},
+  {"name": "hitPoints", "offset": "0x12", "type": "u8", "default": 12, "description": "health = value << 8 (stock 12)"},
+  {"name": "gameFlag", "offset": "0x14", "type": "s16", "link": "gameFlag", "description": "game flag set when it is shot (0 = not saved); packs use 103-127, else 301-351"}
+ ]
+}

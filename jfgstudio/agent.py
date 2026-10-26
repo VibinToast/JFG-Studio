@@ -1001,6 +1001,72 @@ class Session:
         key = self.place(key_level or level, f"0x{KEY_IDS[lock - 2]:X}", key_pos, name=names[lock])
         return door + key
 
+    def _flags_in_use(self) -> set[int]:
+        used = {o.get("fields", {}).get("gameFlag") for lv in self.p.levels.values() for o in lv.objects["objects"]
+                if self._key(o) == "target"}
+        used |= {a.get("flag") for t in scripts.load_triggers(self.p) for a in t.get("then", [])
+                 if a.get("do") == "flag"}
+        return {f for f in used if isinstance(f, int)}
+
+    def place_switch_door(self, level: str, switch_pos, door=None, door_type=None, door_pos=None,
+                          saved: bool = True, flag: int | None = None, switch_facing: float | None = None,
+                          door_facing: float | None = None, switch_lift: float = 0) -> list[dict]:
+        """A shootable switch (the game's target) that keeps a door locked until it is shot: `door` "new" (with
+        door_type and door_pos) or a door's uid. Shot, it opens the door and sets a game flag of the pack's (103-127,
+        the first one free; `flag` to choose), so the door stays open after a reload; `saved` false: no flag, the door
+        locks again when the level reloads. `switch_lift`: its height over the floor (on a wall, say)."""
+        lv = self._level(level)
+        target_schema = self.schemas["target"]
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours())
+        used_ids = {o.get("fields", {}).get("doorId") for o in lv.objects["objects"]
+                    if self._key(o) in ("door", "squadron", "target")}
+        existing = None
+        if door == "new":
+            if door_type is None or door_pos is None:
+                raise AgentError("a new door needs door_type (a door object type, behaviour 7) and door_pos")
+            door_id = next(n for n in itertools.count(1) if n not in used_ids)
+        elif door is not None:
+            existing = self._object(lv, door)
+            if self._key(existing) != "door":
+                raise AgentError(f"{door!r} is not a door of {level}")
+            door_id = existing.get("fields", {}).get("doorId") or next(n for n in itertools.count(1)
+                                                                       if n not in used_ids)
+        else:
+            raise AgentError('give door: "new" (with door_type and door_pos) or a door\'s uid')
+        if not saved:
+            game_flag = 0
+        elif flag is not None:
+            game_flag = _as_int(flag, "flag")
+            problem = val._flag_problem(game_flag)
+            if problem and problem[0] == val.ERROR:
+                raise AgentError(problem[1])
+        else:
+            taken = self._flags_in_use()
+            game_flag = next((f for f in [*val.PACK_FLAGS, *val.PACK_FLAGS_MORE] if f not in taken), None)
+            if game_flag is None:
+                raise AgentError("the pack has used every flag it can (103-127, 301-351): use saved false")
+        fields = {"doorId": door_id, "gameFlag": game_flag}
+        if switch_facing is not None:
+            fields.update([self._facing(target_schema, switch_facing)])
+        placer.single(0x48, self._pos(lv, switch_pos, target_schema, True, switch_lift), name="door switch",
+                      fields=fields)
+        if door == "new":
+            d_oid, d_schema, _ = self._type(door_type)
+            if d_schema is None or d_schema.key != "door":
+                raise AgentError(f"{door_type!r} is not a door type (behaviour 7)")
+            d_fields = {"doorId": door_id}  # no key value: the switch's lock does the locking
+            if door_facing is not None:
+                d_fields.update([self._facing(d_schema, door_facing)])
+            d = placer.single(d_oid, self._pos(lv, door_pos, d_schema, True), self._example(d_oid, d_schema, None),
+                              name="switch door", fields=d_fields)
+            d["schema"] = "door"
+        made = self._add(lv, placer.made, "switch door")
+        if existing is not None and existing.get("fields", {}).get("doorId") != door_id:
+            made.append(self.update_object(lv.name, existing["uid"], fields={"doorId": door_id}))
+        if game_flag:
+            made.append({"note": f"game flag {game_flag}: set when the switch is shot (saved with the player's game)"})
+        return made
+
     def place_patrol(self, level: str, points: list, loop: bool = False, squadron: str | None = None,
                      start_at_load: bool = False, wait: int | None = None) -> list[dict]:
         """A patrol route: nodes on the floor at `points` ([x, z] or [x, y, z]), linked in order both ways (a chain

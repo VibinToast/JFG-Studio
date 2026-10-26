@@ -178,6 +178,18 @@ TOOLS = [
           {"level": _LEVEL, "door_type": _TYPE, "door_pos": _POS, "key_pos": _POS,
            "colour": {"type": ["string", "integer"], "description": "a key's name (\"red key\") or keyLock number"},
            "facing": _FACING, "key_level": _LEVEL}, ["level", "door_type", "door_pos", "key_pos"]),
+    _tool("place_switch_door", "A shootable switch that keeps a door locked until the player shoots it: door \"new\" "
+          "(with door_type and door_pos) or a door's uid. Shot, it opens the door and sets one of the pack's game "
+          "flags (handed out from 103), so the door stays open after a reload; saved false: the door locks again on "
+          "reload.",
+          lambda s, a: s.place_switch_door(a["level"], a["switch_pos"], a.get("door"), a.get("door_type"),
+                                           a.get("door_pos"), a.get("saved", True), a.get("flag"),
+                                           a.get("switch_facing"), a.get("door_facing"), a.get("switch_lift", 0)),
+          {"level": _LEVEL, "switch_pos": _POS, "door": {"type": "string"}, "door_type": _TYPE, "door_pos": _POS,
+           "saved": {"type": "boolean"}, "flag": {"type": "integer", "description": "a pack flag, 103-127"},
+           "switch_facing": _FACING, "door_facing": _FACING,
+           "switch_lift": {"type": "number", "description": "the switch's height over the floor"}},
+          ["level", "switch_pos"]),
     _tool("place_patrol", "A patrol route for squads: nodes at points, linked in order both ways (a chain is walked "
           "there and back; loop joins the ends into a ring). With squadron (its uid) the squadron patrols it: it "
           "starts from the node nearest to itself, so keep it next to the route.",

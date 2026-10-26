@@ -50,6 +50,64 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     out += _check_keys(project, schemas)
     out += _check_reachable(project, schemas)
     out += _check_fog(project, schemas)
+    out += _check_flags(project, schemas)
+    return out
+
+
+# Game flags (decomp MSR mod #6, "Game flags a mod pack can use"): every flag is saved progress of the save file.
+PACK_FLAGS = range(103, 128)  # unused by the game: packs hand them out from 103
+PACK_FLAGS_MORE = range(301, 352)  # the second choice, unless the pack adds ammo capacity upgrades (they use 0x80 + n)
+FLAG_BYTES = 352  # flags from here on are the regions' tribal rescued / killed bits, cleared at region changes
+GLOBAL_FLAGS = {*range(0, 20), *range(66, 71), *range(73, 77), *range(82, 88), 93, 95}  # copied to the shared file
+
+
+def _flag_problem(flag: int) -> tuple[str, str] | None:
+    if flag in PACK_FLAGS or flag == 0:
+        return None
+    if flag in PACK_FLAGS_MORE:
+        return INFO, f"game flag {flag} is free unless the pack adds ammo capacity upgrades (they use 0x80 + n)"
+    if flag < 0 or flag >= FLAG_BYTES:
+        return ERROR, (f"game flag {flag} is not a pack's to use: flags from {FLAG_BYTES} on are the regions' tribal "
+                       "rescued / killed bits (use 103-127)")
+    if flag in GLOBAL_FLAGS:
+        return ERROR, (f"game flag {flag} is copied to the file all save files share: packs must not set it "
+                       "(use 103-127)")
+    if flag == 80:
+        return WARNING, "game flag 80 is free but meant for a cell switch's message: prefer 103-127"
+    return ERROR, f"game flag {flag} is the game's own (saved progress): use 103-127"
+
+
+def _check_flags(project: Project, schemas) -> list[Problem]:
+    """Switches' game flags (target) and the flags triggers set: in the packs' range, each switch its own; and every
+    switch's door id names a door of its level."""
+    out, seen = [], {}
+    for level in project.levels.values():
+        of = f"levels/{level.name}/objects.json"
+        door_ids = {o.get("fields", {}).get("doorId") for o in level.objects["objects"] if _key(o, schemas) == "door"}
+        for o in level.objects["objects"]:
+            if _key(o, schemas) != "target":
+                continue
+            f = o.get("fields", {})
+            flag, door = f.get("gameFlag", 0), f.get("doorId", 0)
+            problem = _flag_problem(flag)
+            if problem:
+                out.append(Problem(problem[0], "game-flag", of, problem[1], o["uid"]))
+            if flag:
+                if flag in seen:
+                    out.append(Problem(WARNING, "game-flag", of, f"game flag {flag} is also {seen[flag]}'s: shooting "
+                                                                 "one counts as shooting both on a reload", o["uid"]))
+                seen.setdefault(flag, o["uid"])
+            if not door or door not in door_ids:
+                out.append(Problem(ERROR, "switch-door", of, f"the switch opens door id {door}, and no door of this "
+                                                             "level has it", o["uid"]))
+    from jfgstudio import scripts
+    for t in scripts.load_triggers(project):
+        for a in t.get("then", []):
+            if a.get("do") == "flag" and isinstance(a.get("flag"), int):
+                problem = _flag_problem(a["flag"])
+                if problem:
+                    out.append(Problem(problem[0], "game-flag", "triggers.json",
+                                       f"trigger {t.get('name', '')!r}: {problem[1]}"))
     return out
 
 

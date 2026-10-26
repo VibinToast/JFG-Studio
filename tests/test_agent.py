@@ -421,6 +421,31 @@ class Prefabs(AgentTest):
             self.s.place_key_door("home", "health", [0, 0], [0, 0])  # not a door
         self.assertFalse([p for p in self.s.validate()["problems"] if p["rule"] == "key"])
 
+    def test_switch_doors(self):
+        self.with_catalog()
+        first = self.s.place_switch_door("home", [0, -200], door="new", door_type="0x1AD", door_pos=[0, 0],
+                                         switch_lift=60)
+        switch = next(o for o in first if o.get("schema") == "target")
+        door = next(o for o in first if o.get("schema") == "door")
+        self.assertEqual((switch["fields"]["doorId"], door["fields"]["doorId"]), (1, 1))
+        self.assertEqual(switch["fields"]["gameFlag"], 103)
+        self.assertEqual(switch["pos"][1], 62)  # lifted onto a wall
+        self.assertNotIn("keyLock", door["fields"])  # the switch does the locking
+        second = self.s.place_switch_door("home", [300, -200], door="new", door_type="0x1AD", door_pos=[300, 0])
+        self.assertEqual([o["fields"]["gameFlag"] for o in second if o.get("schema") == "target"], [104])
+        shared = self.s.place_switch_door("gemini", [100, 0], door="door1")  # a door a squadron locks too
+        self.assertEqual(next(o for o in shared if o.get("schema") == "target")["fields"]["doorId"], 1)
+        unsaved = self.s.place_switch_door("home", [600, -200], door="new", door_type="0x1AD", door_pos=[600, 0],
+                                           saved=False)
+        self.assertEqual([o["fields"]["gameFlag"] for o in unsaved if o.get("schema") == "target"], [0])
+        for bad in (5, 400):  # a global flag; a tribal bit
+            with self.assertRaises(agent.AgentError):
+                self.s.place_switch_door("home", [0, 0], door="new", door_type="0x1AD", door_pos=[0, 100], flag=bad)
+        self.assertFalse([p for p in self.s.validate()["problems"] if p["severity"] == "error"])
+        self.s.update_object("home", switch["uid"], fields={"gameFlag": 50, "doorId": 99})
+        rules = {(p["rule"], p["severity"]) for p in self.s.validate()["problems"] if p.get("uid") == switch["uid"]}
+        self.assertEqual(rules, {("game-flag", "error"), ("switch-door", "error")})
+
     def test_patrol_for_a_squad(self):
         self.with_catalog()
         squad = self.s.place_squad("home", [0, -300], "0x29", members=2)

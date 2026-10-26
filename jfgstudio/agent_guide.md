@@ -113,8 +113,13 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   squadron in patrol mode: a chain is walked there and back, a ring (`loop`) round and round. A squadron walks the
   route nearest to itself, so keep it beside its route; stock patrols set off when the squadron is activated
   (`start_at_load` sets off at once). Squads without a patrol stay in their region.
-- **Doors opened by switches** aren't a tool yet: they need a game flag that is safe for packs to use (asked of the
-  decomp). Use squads or keys to lock doors.
+- **Switch doors**: `place_switch_door(level, switch_pos, door="new", door_type, door_pos)` (or `door`: a door's
+  uid) places the game's shootable switch: it keeps the door locked until the player shoots it, then opens it and
+  sets a game flag so it stays open after a reload (`saved` false: it locks again). Put the switch where the player
+  sees it, often on a wall beside the door (`switch_lift`) or across a gap from it.
+- **Game flags** are the player's saved progress, shared by the whole save file: a pack sets only its own, 103-127
+  (301-351 if it needs more and adds no ammo capacity upgrades). The tools hand them out; `validate` stops any
+  other.
 - **Exits**: `connect(from, exit_pos, to, arrive_pos)` makes the exit and the start point it leads to (numbered
   clear of the level's own start points, and of the game level's when it is an edit of one); `arrive_start_point`
   instead arrives at a start point already there. Give every level a way back. An exit's `arg1A` 1 (the default) shows the game's stats screen when it leads into another region.
