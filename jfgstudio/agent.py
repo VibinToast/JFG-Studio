@@ -280,11 +280,13 @@ class Session:
         levels = self._catalog.levels()
         return [f"{n}: {levels[n]['name']}" for n in ids if 0 <= n < len(levels)]
 
-    def game_textures(self, words=None, level=None, size=None, limit: int = 40) -> dict:
+    def game_textures(self, words=None, level=None, size=None, limit: int = 40, repeats: str | None = None) -> dict:
         """The game's level textures (from the player's ROM; a level painted with them carries none of them): those
         with all of `words` (a colour: green, brown, grey, blue, cyan, orange, yellow, red, pink, purple, white,
-        black; dark / mid / bright / vivid), used by game level `level`, of `size` [w, h]. Each: id (hex, for jfg64's
-        game_texture_material), size, words, alpha, the game levels that use it, and its PNG's path."""
+        black; dark / mid / bright / vivid), used by game level `level`, of `size` [w, h]; `repeats` "both": only
+        those that tile both ways (301 of the game's; the rest clamp, and jfg64's export cuts faces so each piece
+        holds one repeat). Each: id (hex, for jfg64's game_texture_material), size, words, which way it repeats,
+        alpha, the game levels that use it, and its PNG's path."""
         lib = self._library()
         want = {w.lower() for w in (words or [])}
         lv = _as_int(level, "level") if level is not None else None
@@ -294,7 +296,11 @@ class Session:
                 continue
             if size is not None and [t["width"], t["height"]] != [int(v) for v in size]:
                 continue
+            rep = t.get("repeat", [True, True])
+            if repeats == "both" and not all(rep):
+                continue
             out.append({"id": f"{tex:04X}", "size": [t["width"], t["height"]], "words": t["words"],
+                        "repeats": "both" if all(rep) else "across" if rep[0] else "up" if rep[1] else "no",
                         "alpha": t["alpha"], "levels": self._level_names(t["levels"][:4])
                         + ([f"... {len(t['levels']) - 4} more"] if len(t["levels"]) > 4 else []),
                         "path": str(lib.path(tex))})
@@ -315,7 +321,9 @@ class Session:
         rows = []
         for t, u in sorted(usage.items(), key=lambda kv: -kv[1]["area"])[:max(1, int(limit))]:
             use = max(("floor", "wall", "ceiling"), key=lambda k: u[k])
+            rep = tex[t].get("repeat", [True, True])
             rows.append({"id": f"{t:04X}", "share": f"{100 * u['area'] / total:.1f}%", "mostly": use,
+                         "repeats": "both" if all(rep) else "across" if rep[0] else "up" if rep[1] else "no",
                          "size": [tex[t]["width"], tex[t]["height"]], "words": tex[t]["words"]})
         return {"png": lib.sheet([int(r["id"], 16) for r in rows]), "level": f"{lv['id']}: {lv['name']}",
                 "world": lv["world"], "textures": rows,

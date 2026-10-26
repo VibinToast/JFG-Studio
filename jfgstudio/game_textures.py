@@ -21,7 +21,7 @@ import struct
 import tempfile
 from pathlib import Path
 
-LIBRARY_FORMAT = 1
+LIBRARY_FORMAT = 2  # 2: "repeat" per texture
 
 
 def pixel_key(png: bytes) -> str:
@@ -86,8 +86,13 @@ class Library:
                 if track not in t["tracks"]:
                     t["tracks"].append(track)
                     t["levels"] += [n for n in levels_of.get(track, []) if n not in t["levels"]]
+        from jfgformats.core import unpack_texture_entry
         for tex, t in textures.items():
             png, alpha, w, h = data.texture_png(tex | 0x8000)
+            _, header = unpack_texture_entry(data.tex_data[data.tex_table[tex]:data.tex_table[tex + 1]])
+            # The texture's own wrap masks (header +0x1D S, +0x1F T; 0 clamps): most of the game's level textures
+            # clamp and are mapped once per polygon. Past one repeat on a clamped axis they smear (play-tested).
+            t["repeat"] = [header[0x1D] != 0, header[0x1F] != 0]
             (self.dir / f"{tex:04X}.png").write_bytes(png)
             _, _, rgba = pngmod.read_png(png)
             px = memoryview(bytes(rgba))

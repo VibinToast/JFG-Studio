@@ -22,7 +22,7 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 
 ## Blender (when you model geometry)
 
-The jfg64 add-on is **required** in Blender, **version 0.4.4 or newer** (`jfg64.__version__`): it knows the game's
+The jfg64 add-on is **required** in Blender, **version 0.5.0 or newer** (`jfg64.__version__`): it knows the game's
 surfaces and limits and exports what Studio reads. If the version is older or a call below is missing, the running
 Blender has an old copy loaded: ask the player to restart Blender (after updating the add-on), don't work around it.
 Through a Blender MCP server, run Python in Blender and use it rather than writing your own:

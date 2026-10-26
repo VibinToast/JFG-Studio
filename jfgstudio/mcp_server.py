@@ -87,13 +87,15 @@ TOOLS = [
     _tool("game_textures", "The game's own level textures, from the player's ROM: a level painted with them carries "
           "none (each player's game shows them). Filter by colour words, a game level or a size; each comes with "
           "the levels that use it and its PNG path for Blender (jfg64.game_texture_material).",
-          lambda s, a: s.game_textures(a.get("words"), a.get("level"), a.get("size"), a.get("limit", 40)),
+          lambda s, a: s.game_textures(a.get("words"), a.get("level"), a.get("size"), a.get("limit", 40),
+                                       a.get("repeats")),
           {"words": {"type": "array", "items": {"type": "string"},
                      "description": "all of: a colour (green, brown, grey, blue, cyan, orange, yellow, red, pink, "
                                     "purple, white, black) and dark / mid / bright / vivid"},
            "level": {"type": "integer", "description": "a game level id (stock_levels) that uses it"},
            "size": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
-           "limit": {"type": "integer"}}, []),
+           "limit": {"type": "integer"},
+           "repeats": {"type": "string", "enum": ["both"], "description": "only textures that tile both ways"}}, []),
     _tool("stock_level_textures", "What a game level is made of: its textures by the share of the level they cover, "
           "each mostly floor, wall or ceiling, with a picture. For a theme (\"a forest level\"), look at the game's "
           "levels of that kind and use their textures.",

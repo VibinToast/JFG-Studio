@@ -29,7 +29,6 @@ from jfgstudio.catalog import Catalog
 from jfgstudio.project import Project
 
 GAME_ID = "jet-force-gemini"
-TEXTURE_CLAMP = 0x10  # track texture entry +6: the texture doesn't repeat (clamps), as far as play-tests show
 DEFAULT_MIN_RECOMP = "1.1.8"
 HEROES = ("vela", "juno", "lupus")
 STOCK_LEVELS = 412  # the US ROM's level count (the catalog's level_count); appended levels are numbered from here
@@ -259,12 +258,6 @@ class _Builder:
             # The track names its new textures by number (texture entry k at header +0x00, 8 bytes each, a u32 id
             # without bit 15): fixups, so the port writes the numbers the textures really get.
             textures_at = struct.unpack_from(">I", result["data"], 0)[0]
-            # A game texture's entry from its own level may clamp it (+6 bit 0x10): a new level tiles them freely,
-            # and clamped ones smeared past one repeat (play-tested). Unconfirmed: asked of the decomp (bot2).
-            data = bytearray(result["data"])
-            for k in range(len(self.tracks.read_track(result["data"])["textures"])):
-                data[textures_at + 8 * k + 6] &= ~TEXTURE_CLAMP & 0xFF
-            result = {**result, "data": bytes(data)}
             fixups = [{"at": textures_at + 8 * int(key), "type": "u32", "ref": f"texture_{name}_{key}"} for key in ids]
             out.append({"table": 0x24, "data": 0x25, "what": "track", "index": tid,
                         "raw": self.tracks.pack_track(result["data"]), "append": f"track_{name}",
