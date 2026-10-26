@@ -1,53 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
-  <!-- JFG-Studio's icon: a planet with an orbit over an editor's grid, in the launcher palette (gui/theme.py).
-       Original art (GPL-2.0-or-later with the rest of Studio). Rendered to icon.png / icon.ico by tools/make_icons.py -->
+  <!-- JFG-Studio's icon: the port's winged emblem redrawn flat and modern, with an editor's grid in its face.
+       Original vector art. Rendered to app_settings/icon.png and icon.ico by tools/make_icons.py -->
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#12285A"/>
-      <stop offset="1" stop-color="#050B1C"/>
+    <linearGradient id="rim" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#7FE3FF"/>
+      <stop offset="0.45" stop-color="#2E9BF0"/>
+      <stop offset="1" stop-color="#1A3FB0"/>
     </linearGradient>
-    <radialGradient id="planet" cx="0.36" cy="0.32" r="0.78">
-      <stop offset="0" stop-color="#B8F0FF"/>
-      <stop offset="0.28" stop-color="#3CC8FF"/>
-      <stop offset="0.7" stop-color="#1E6FD0"/>
-      <stop offset="1" stop-color="#0A2660"/>
-    </radialGradient>
-    <linearGradient id="grid" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3CC8FF" stop-opacity="0"/>
-      <stop offset="1" stop-color="#3CC8FF" stop-opacity="0.55"/>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF4D6"/>
+      <stop offset="0.5" stop-color="#FFC861"/>
+      <stop offset="1" stop-color="#F07A12"/>
     </linearGradient>
-    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#FFD36B"/>
-      <stop offset="0.5" stop-color="#FFB21A"/>
-      <stop offset="1" stop-color="#E07A00"/>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
-    <clipPath id="tileclip"><rect x="8" y="8" width="240" height="240" rx="52"/></clipPath>
-    <clipPath id="front"><rect x="0" y="134" width="256" height="122"/></clipPath>
+    <!-- the emblem: two horns, a flat brow, waist, two wings, a hexagonal eye cut through -->
+    <path id="shape" d="M62 12 L102 54 L154 54 L194 12 Q214 110 246 214 L188 180 L68 180 L10 214 Q42 110 62 12 Z"/>
+    <path id="eye" d="M94 112 L106 96 L150 96 L162 112 L150 128 L106 128 Z"/>
+    <path id="inner" d="M70 40 L96 68 L160 68 L186 40 Q198 112 220 190 L184 166 L72 166 L36 190 Q58 112 70 40 Z"/>
+    <mask id="cut">
+      <rect width="256" height="256" fill="#fff"/>
+      <use href="#eye" fill="#000"/>
+    </mask>
+    <clipPath id="innerclip"><use href="#inner"/></clipPath>
   </defs>
-  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#tile)"/>
-  <g clip-path="url(#tileclip)" stroke="url(#grid)" stroke-width="3" fill="none">
-    <!-- the editor's floor grid, in perspective -->
-    <path d="M8 196 H248 M8 214 H248 M8 236 H248"/>
-    <path d="M128 178 L128 256 M128 178 L76 256 M128 178 L180 256 M128 178 L24 256 M128 178 L232 256
-             M128 178 L-28 256 M128 178 L284 256"/>
+  <g transform="translate(0 16)">
+  <g mask="url(#cut)">
+    <!-- a soft shadow, then the rim -->
+    <use href="#shape" fill="#030816" opacity="0.45" transform="translate(4 7)" stroke="#030816" stroke-width="14"
+         stroke-linejoin="round"/>
+    <use href="#shape" fill="url(#rim)" stroke="url(#rim)" stroke-width="14" stroke-linejoin="round"/>
+    <use href="#inner" fill="#0B1733" stroke="#0B1733" stroke-width="10" stroke-linejoin="round"/>
+    <use href="#inner" fill="url(#face)"/>
+    <g clip-path="url(#innerclip)" stroke="#B5530A" stroke-opacity="0.35" stroke-width="2.5" fill="none">
+      <!-- the editor's grid across the face, running to a horizon under the eye -->
+      <path d="M0 142 H256 M0 152 H256 M0 166 H256 M0 186 H256"/>
+      <path d="M128 134 L128 256 M128 134 L98 256 M128 134 L158 256 M128 134 L68 256 M128 134 L188 256
+               M128 134 L38 256 M128 134 L218 256 M128 134 L8 256 M128 134 L248 256"/>
+    </g>
+    <use href="#inner" fill="url(#gloss)" clip-path="url(#innerclip)" transform="translate(0 -6)" opacity="0.8"/>
   </g>
-  <!-- the orbit behind the planet -->
-  <ellipse cx="128" cy="134" rx="104" ry="30" transform="rotate(-18 128 134)" fill="none" stroke="url(#ring)"
-           stroke-width="11" opacity="0.85"/>
-  <circle cx="128" cy="128" r="64" fill="url(#planet)"/>
-  <!-- bands on the planet -->
-  <path d="M74 112 Q128 98 182 112" stroke="#B8F0FF" stroke-opacity="0.35" stroke-width="6" fill="none"
-        stroke-linecap="round"/>
-  <path d="M68 140 Q128 126 188 140" stroke="#0A2660" stroke-opacity="0.35" stroke-width="7" fill="none"
-        stroke-linecap="round"/>
-  <!-- the orbit in front of it -->
-  <g clip-path="url(#front)">
-    <ellipse cx="128" cy="134" rx="104" ry="30" transform="rotate(-18 128 134)" fill="none" stroke="url(#ring)"
-             stroke-width="11"/>
+  <!-- the eye's rim -->
+  <use href="#eye" fill="none" stroke="#0B1733" stroke-width="9" stroke-linejoin="round"/>
+  <use href="#eye" fill="none" stroke="#7FE3FF" stroke-width="3.5" stroke-linejoin="round"/>
   </g>
-  <!-- a spark: a four-pointed star -->
-  <path d="M62 44 L68 62 L86 68 L68 74 L62 92 L56 74 L38 68 L56 62 Z" fill="#FFE7A8"/>
-  <circle cx="198" cy="58" r="5" fill="#E8F3FF" opacity="0.9"/>
-  <rect x="8" y="8" width="240" height="240" rx="52" fill="none" stroke="#3CC8FF" stroke-opacity="0.35"
-        stroke-width="3"/>
 </svg>

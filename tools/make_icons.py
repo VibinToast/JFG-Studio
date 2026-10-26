@@ -34,16 +34,35 @@ def browser(given: str | None) -> str:
     sys.exit("no Chrome or Edge found: pass its path")
 
 
+def fonts_css() -> str:
+    """@font-face rules for the port's fonts the banner names: JFG Black (its title) and Lato (the tagline). They are
+    read from the port (the `port` setting, else the port repo by JFG-Modding-Tools) and never kept in Studio."""
+    from jfgstudio.gui import theme
+    css = ""
+    for family, weight, parts in (("JFG Black", 400, ("jfg_launcher", "JFG-Black.ttf")),
+                                  ("Lato", 700, ("LatoLatin-Bold.ttf",)), ("Lato", 400, ("LatoLatin-Regular.ttf",))):
+        path = theme._port_font(*parts)
+        if path is None:
+            print(f"warning: the port's {'/'.join(parts)} was not found: the banner falls back to another font")
+            continue
+        css += f"@font-face{{font-family:'{family}';font-weight:{weight};src:url('{path.as_uri()}')}}"
+    return css
+
+
 def render(exe: str, svg: Path, width: int, height: int, out: Path) -> None:
-    """The SVG drawn at width x height on a transparent page, as a PNG."""
+    """The SVG drawn at width x height on a transparent page, as a PNG. It is put in the page itself (not an <img>),
+    so the page's fonts apply, with its folder as the base its links (the banner's icon) resolve against."""
     with tempfile.TemporaryDirectory() as tmp:
         page = Path(tmp) / "page.html"
-        page.write_text(f"<!doctype html><html><head><style>html,body{{margin:0;background:transparent}}"
-                        f"img{{display:block;width:{width}px;height:{height}px}}</style></head>"
-                        f"<body><img src='{svg.as_uri()}'></body></html>", encoding="utf-8")
+        body = svg.read_text(encoding="utf-8")
+        body = body.replace("<svg ", f"<svg style='display:block;width:{width}px;height:{height}px' ", 1)
+        page.write_text(f"<!doctype html><html><head><base href='{svg.parent.as_uri()}/'><style>{fonts_css()}"
+                        f"html,body{{margin:0;background:transparent}}</style></head><body>{body}</body></html>",
+                        encoding="utf-8")
         shot = Path(tmp) / "shot.png"
         subprocess.run([exe, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
                         "--default-background-color=00000000", f"--window-size={width},{height}",
+                        "--allow-file-access-from-files", "--virtual-time-budget=3000",
                         f"--user-data-dir={Path(tmp) / 'profile'}", f"--screenshot={shot}", page.as_uri()],
                        check=True, capture_output=True, timeout=120)
         shutil.copyfile(shot, out)
