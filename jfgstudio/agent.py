@@ -1940,6 +1940,114 @@ class Session:
         self._save()
         return {"reverted": [o["uid"] for o in targets]}
 
+    # ------------------------------------------------------------------ enemy tables and dependencies
+
+    def _baddy_row(self, object) -> tuple[int, dict]:
+        """(row, stock row) of a baddy named by its member object id (0xE0, a schema key) or {"row": n}."""
+        if self.catalog() is None:
+            raise AgentError(f"the catalog is not available ({self._catalog_error}): the tables come from the ROM")
+        from jfgformats import baddies
+        rows = self._catalog.baddies()["rows"]
+        if isinstance(object, dict) and "row" in object:
+            row = _as_int(object["row"], "row")
+        else:
+            oid = self._type(object)[0]
+            row = baddies.row_of(oid)
+            if row < 0:
+                raise AgentError(f"object 0x{oid:X} is not a baddy (no row in BaddyTypeToIndex)")
+        if not 0 <= row < len(rows):
+            raise AgentError(f"row {row} is not a baddy row (0-{len(rows) - 1})")
+        return row, rows[row]
+
+    def baddy_anims(self, object) -> dict:
+        """A baddy's animation set as the pack leaves it: each entry's fields (decode_anim's), the pack's patch on it,
+        and the actions more than 16 entries answer (the game's pick list crashes past that)."""
+        from jfgformats import baddies
+
+        from jfgstudio import baddy_patches as bp
+        row, stock = self._baddy_row(object)
+        rows = bp.applied(self._catalog.baddies()["rows"], self.p.baddies)
+        patches = {p["anim"]: p for p in self.p.baddies if p["row"] == row}
+        anims = []
+        for k, a in enumerate(rows[row]["anims"]):
+            e = {"anim": k, **{f: a[f] for f in bp.FIELDS}}
+            if k in patches:
+                e["patched"] = {f: {"stock": stock["anims"][k][f], "pack": v} for f, v in patches[k]["set"].items()}
+            anims.append(e)
+        out = {"row": row, "objects": [f"0x{o:X}" for o in stock["objects"]], "anims": anims}
+        over = baddies.overfull_actions(rows[row]["anims"])
+        if over:
+            out["overfull"] = {str(a): n for a, n in sorted(over.items())}
+        return out
+
+    def baddy_patch(self, object, anim, set: dict) -> dict:
+        """Patches entries (`anim`: one or a list) of a baddy's animation set with `set` (action, altAction, weight,
+        stance, fireSet (null = none), loops); "expect" holds the stock values. An empty `set` removes the pack's
+        patch of those entries. Refused when it leaves an action over 16 entries and worse than before."""
+        from jfgformats import baddies
+
+        from jfgstudio import baddy_patches as bp
+        row, stock = self._baddy_row(object)
+        anims = [_as_int(a, "anim") for a in (anim if isinstance(anim, list) else [anim])]
+        if not isinstance(set, dict):
+            raise AgentError("set is an object of fields: {\"action\": 53}")
+        try:
+            bp.check_set(set)
+        except bp.PatchError as e:
+            raise AgentError(str(e)) from None
+        for k in anims:
+            if not 0 <= k < len(stock["anims"]):
+                raise AgentError(f"row {row} has {len(stock['anims'])} animations (0-{len(stock['anims']) - 1}); "
+                                 f"there is no anim {k}")
+        rows = self._catalog.baddies()["rows"]
+        before = baddies.overfull_actions(bp.applied(rows, self.p.baddies)[row]["anims"])
+        patches = [dict(p) for p in self.p.baddies]
+        for k in anims:
+            old = next((p for p in patches if p["row"] == row and p["anim"] == k), None)
+            if old is not None:
+                patches.remove(old)
+            values = {**(old["set"] if old else {}), **set} if set else {}
+            values = {f: v for f, v in values.items() if v != stock["anims"][k][f]}  # the stock's own: no patch
+            if values:
+                patches.append({"row": row, "anim": k, "expect": {f: stock["anims"][k][f] for f in values},
+                                "set": values})
+        patches.sort(key=lambda p: (p["row"], p["anim"]))
+        after = baddies.overfull_actions(bp.applied(rows, patches)[row]["anims"])
+        worse = {a: n for a, n in after.items() if n > before.get(a, 0)}
+        if worse:
+            what = ", ".join(f"{n} animations on action {a}" for a, n in worse.items())
+            raise AgentError(f"row {row}: that leaves {what}; the game's pick list holds {baddies.PICK_LIST} and "
+                             "crashes past it")
+        self.p.baddies[:] = patches
+        self._save()
+        out = {"row": row, "patches": [p for p in patches if p["row"] == row]}
+        if after:
+            out["warning"] = (f"row {row} still has more than {baddies.PICK_LIST} animations on action(s) "
+                              f"{', '.join(map(str, sorted(after)))}: the build refuses it until fixed")
+        return out
+
+    def add_dependency(self, id: str, version: str) -> dict:
+        """Another pack this one needs (mod.json "dependencies"): a library such as restored content."""
+        import re
+        if not re.match(r"^[a-z0-9][a-z0-9_.\-]*$", id or ""):
+            raise AgentError(f"{id!r} is not a mod id (lower case letters, digits, _ . -)")
+        if not re.match(r"^[0-9]+\.[0-9]+\.[0-9]+$", version or ""):
+            raise AgentError(f"{version!r} is not a version (1.2.3)")
+        if id == self.p.id:
+            raise AgentError("a pack can't depend on itself")
+        deps = [d for d in self.p.meta.get("dependencies", []) if d["id"] != id] + [{"id": id, "version": version}]
+        self.p.meta["dependencies"] = deps
+        self._save()
+        return {"dependencies": deps}
+
+    def remove_dependency(self, id: str) -> dict:
+        deps = [d for d in self.p.meta.get("dependencies", []) if d["id"] != id]
+        if len(deps) == len(self.p.meta.get("dependencies", [])):
+            raise AgentError(f"the pack has no dependency {id!r}")
+        self.p.meta["dependencies"] = deps
+        self._save()
+        return {"dependencies": deps}
+
     def undo(self, level: str) -> dict:
         lv = self._level(level)
         label = self._history(lv).undo()

@@ -294,6 +294,27 @@ TOOLS = [
     _tool("delete_objects", "Delete objects by uid (the game level's own: removed from it, with edit_game_objects "
           "on).", lambda s, a: s.delete_objects(a["level"], a["uids"]),
           {"level": _LEVEL, "uids": {"type": "array", "items": {"type": "string"}}}, ["level", "uids"]),
+    _tool("baddy_anims", "A baddy's animation set (the enemy tables in the player's ROM, with the pack's patches "
+          "on): each entry's action, altAction, weight, stance, fireSet, loops, what the pack changed, and the "
+          "actions over 16 entries (the game crashes picking one of those).",
+          lambda s, a: s.baddy_anims(a["object"]),
+          {"object": {"description": "a member object id (\"0xE0\") or schema key, or {\"row\": n}"}},
+          ["object"]),
+    _tool("baddy_patch", "Patch entries of a baddy's animation set (baddies.json, applied by the port when overlay 3 "
+          "loads; \"expect\" holds the ROM's values so other data is skipped). An empty set removes the patch. "
+          "Refused when an action ends with more than 16 entries and more than before.",
+          lambda s, a: s.baddy_patch(a["object"], a["anim"], a["set"]),
+          {"object": {"description": "a member object id (\"0xE0\") or schema key, or {\"row\": n}"},
+           "anim": {"description": "an entry of the set, or a list of them",
+                    "anyOf": [{"type": "integer"}, {"type": "array", "items": {"type": "integer"}}]},
+           "set": {"type": "object", "description": "fields: action, altAction (0-255), weight (0-31), stance (0-7), "
+                   "fireSet (0-126, null = none), loops (0-15)"}}, ["object", "anim", "set"]),
+    _tool("add_dependency", "Make the pack need another (mod.json dependencies): a library pack such as restored "
+          "content. Replaces the version if it is already there.",
+          lambda s, a: s.add_dependency(a["id"], a["version"]),
+          {"id": {"type": "string"}, "version": {"type": "string", "description": "1.2.3"}}, ["id", "version"]),
+    _tool("remove_dependency", "Drop a dependency.", lambda s, a: s.remove_dependency(a["id"]),
+          {"id": {"type": "string"}}, ["id"]),
     _tool("undo", "Undo a level's last change.", lambda s, a: s.undo(a["level"]), {"level": _LEVEL}, ["level"]),
     _tool("redo", "Redo a level's last undone change.", lambda s, a: s.redo(a["level"]), {"level": _LEVEL},
           ["level"]),

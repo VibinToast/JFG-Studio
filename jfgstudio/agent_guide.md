@@ -380,6 +380,18 @@ whose textures it wears (0-10), `x`, `y` in map coordinates (x right, y down), `
 - **Pacing**: a start area with no enemies in view, a squad guarding each gate, pickups (health, ammo) after fights,
   a key or switch that sends the player back through what they cleared.
 
+## Enemy animation tables and library packs
+
+- `baddy_anims(object)` lists a baddy's animation set (by member object id, e.g. "0xE0", or {"row": n}): each
+  entry's action, altAction, weight, stance, fireSet, loops, and what the pack changed.
+- `baddy_patch(object, anim, set)` changes entries (`anim` one or a list) in baddies.json; the port applies them each
+  time the enemy code loads, in mod order, and skips an entry whose stock values ("expect", filled from the ROM)
+  differ. An empty `set` removes the patch. More than 16 entries on one action crash the game: the tool refuses a
+  change that makes that worse, and the build refuses a set the pack leaves over 16 (the stock Termite, row 17, has
+  23 on action 1: move 7 of them, anims 16-22, in one call).
+- A pack can be a library: no levels, only patches (or kinds). Another pack names it with
+  `add_dependency(id, version)` (mod.json "dependencies"); `remove_dependency(id)` drops it.
+
 ## Checking
 
 - `validate` names the file and the object (uid) of each problem; fix errors before `build` or `play`. Besides the

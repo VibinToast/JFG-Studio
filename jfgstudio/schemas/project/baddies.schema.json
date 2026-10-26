@@ -1,0 +1,30 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "baddies.json: patches of the game's enemy animation tables (jfg_assets.json \"baddies\")",
+ "type": "array",
+ "items": {
+  "type": "object",
+  "required": ["row", "anim", "set"],
+  "additionalProperties": false,
+  "properties": {
+   "row": {"type": "integer", "minimum": 0, "maximum": 53, "description": "baddy row (jfgformats.baddies.row_of of a member object id)"},
+   "anim": {"type": "integer", "minimum": 0, "description": "the entry within the row's animation set"},
+   "expect": {"$ref": "#/$defs/fields", "description": "the stock values; the port skips the entry when they differ"},
+   "set": {"$ref": "#/$defs/fields", "minProperties": 1}
+  }
+ },
+ "$defs": {
+  "fields": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "action": {"type": "integer", "minimum": 0, "maximum": 255},
+    "altAction": {"type": "integer", "minimum": 0, "maximum": 255},
+    "weight": {"type": "integer", "minimum": 0, "maximum": 31},
+    "stance": {"type": "integer", "minimum": 0, "maximum": 7},
+    "fireSet": {"type": ["integer", "null"], "minimum": 0, "maximum": 126},
+    "loops": {"type": "integer", "minimum": 0, "maximum": 15}
+   }
+  }
+ }
+}

@@ -199,6 +199,13 @@ class Catalog:
             tmp.replace(path)
         return path
 
+    def baddies(self) -> dict:
+        """The enemy tables (jfgformats.baddies.read: rows with their animation sets, fire sets), read once."""
+        if not hasattr(self, "_baddies"):
+            from jfgformats import baddies
+            self._baddies = baddies.read(self.jf.Rom(self.image))
+        return self._baddies
+
     def sprite(self, sprite_id: int, env: list | None = None) -> dict | None:
         """A sprite's first picture (its first frame with pixels, in the sprite's own colours, or with `env` as its
         env colour: the health pickup's size): {"png": path, "width", "height", "anchor": [x, y] (the pixel at the

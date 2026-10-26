@@ -526,6 +526,13 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     b.plan_ids()
     if b.problems:
         raise BuildError(b.problems)
+    if project.baddies:
+        from jfgformats import baddies
+
+        from jfgstudio import baddy_patches
+        bad = baddy_patches.problems(b.catalog.baddies()["rows"], project.baddies, baddies)
+        if bad:
+            raise BuildError(bad)
     try:
         changes = b.assets()
         kind_entries, objtypes, animrows = b.kinds()
@@ -588,8 +595,10 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("mod.json", json.dumps(manifest, indent=4, sort_keys=True))
-        if entries or level_patches:
+        if entries or level_patches or objtypes or regions or project.baddies:  # a pack with no levels too
             doc = {"entries": entries}
+            if project.baddies:
+                doc["baddies"] = project.baddies
             if level_patches:
                 doc["patches"] = level_patches
             if objtypes:

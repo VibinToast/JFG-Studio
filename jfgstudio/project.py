@@ -8,6 +8,7 @@
     geometry/<name>.glb             tracks from Blender (pack:track/<name>)
     music/<name>.ogg                music (pack:music/<name>)
     kinds/<name>.json, kinds/<name>/  object types made from stock ones, with their textures (pack:kind/<name>)
+    baddies.json                    patches of the game's enemy animation tables (baddy_patches.py), optional
 
 Files are saved deterministically (sorted keys, one-space indent, LF, a final newline), so a load followed by a save
 gives the same bytes and projects diff cleanly in git.
@@ -36,7 +37,7 @@ def _schema(name: str) -> dict:
                       .read_text(encoding="utf-8"))
 
 
-_SCHEMAS = {name: _schema(name) for name in ("project", "level", "objects", "planet", "kind", "galaxy")}
+_SCHEMAS = {name: _schema(name) for name in ("project", "level", "objects", "planet", "kind", "galaxy", "baddies")}
 
 
 def dumps(doc: dict) -> str:
@@ -76,6 +77,7 @@ class Project:
     planets: dict[str, dict] = field(default_factory=dict)
     kinds: dict[str, dict] = field(default_factory=dict)
     galaxies: dict[str, dict] = field(default_factory=dict)
+    baddies: list[dict] = field(default_factory=list)  # baddies.json
 
     @property
     def id(self) -> str:
@@ -104,6 +106,10 @@ class Project:
             write_json(self.path / "kinds" / f"{name}.json", kind)
         for name, galaxy in self.galaxies.items():
             write_json(self.path / "galaxies" / f"{name}.json", galaxy)
+        if self.baddies:
+            write_json(self.path / "baddies.json", self.baddies)
+        elif (self.path / "baddies.json").exists():  # every patch removed
+            (self.path / "baddies.json").unlink()
         gone = self.path / "galaxies"
         if gone.is_dir():  # a galaxy deleted in the editor
             for f in gone.glob("*.json"):
@@ -174,9 +180,12 @@ def load(path: Path | str) -> Project:
             galaxy = _read(f, "galaxy", problems)
             if galaxy is not None:
                 galaxies[f.stem] = galaxy
+    baddies = []
+    if (path / "baddies.json").exists():
+        baddies = _read(path / "baddies.json", "baddies", problems) or []
     if problems:
         raise ProjectError(problems)
-    return Project(path, meta, levels, planets, kinds, galaxies)
+    return Project(path, meta, levels, planets, kinds, galaxies, baddies)
 
 
 def create(path: Path | str, mod_id: str, name: str, author: str = "") -> Project:
