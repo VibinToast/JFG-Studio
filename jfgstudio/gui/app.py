@@ -1279,6 +1279,37 @@ def project_window() -> None:
 
 
 PREFAB_PAYLOAD = "JFG_PREFAB"
+UNCOUNTED = {"Ammo", "Health", "Breakable glass"}  # kind names that are their own plural
+# Types with no fields decoded, by behaviour (the decomp's behaviour table, by its init functions): the category and
+# fold Prefabs lists them under. They are placed as copies of a stock entry, like the rest of Other.
+BEHAVIOUR_FOLDS = {
+    43: ("Pickups", "Weapon pickups"), 80: ("Pickups", "Power-ups"), 81: ("Pickups", "Power-ups"),
+    103: ("Pickups", "Robot parts"), 134: ("Pickups", "Gems"),
+    55: ("Props", "Bridges"), 3: ("Props", "Swaying scenery"), 4: ("Props", "Swaying scenery"),
+    5: ("Props", "Swaying scenery"), 91: ("Props", "Breakable crates"), 36: ("Props", "Shard clusters"),
+    57: ("Lights & effects", "Fires and animated sprites"), 58: ("Lights & effects", "Fires and animated sprites"),
+    62: ("Lights & effects", "Fires and animated sprites"), 85: ("Lights & effects", "Fires and animated sprites"),
+    32: ("Lights & effects", "Sprays and bubbles"), 99: ("Lights & effects", "Fireflies"),
+    11: ("Lights & effects", "Weather"), 12: ("Lights & effects", "Lens flares"),
+    127: ("Lights & effects", "Light shows"), 132: ("Lights & effects", "Spotlights"),
+    145: ("Lights & effects", "Fireworks"), 105: ("Lights & effects", "Sound points"),
+    148: ("Lights & effects", "Sound points"),
+    17: ("Cameras", "Fixed cameras"), 100: ("Cameras", "Cutscene cameras"), 70: ("Cameras", "Menu cameras"),
+    71: ("Cameras", "Menu cameras"),
+    20: ("Creatures", "Fish"), 21: ("Creatures", "Frogs"), 22: ("Creatures", "Butterflies"), 87: ("Creatures", "Grubs"),
+    90: ("Characters", "Hint givers"), 93: ("Characters", "Sidekick pads"), 124: ("Characters", "Transformers"),
+    125: ("Characters", "Terminals"),
+    128: ("Doors & switches", "Night-vision pads"), 129: ("Doors & switches", "Blast doors"),
+    102: ("Doors & switches", "Robot targets"),
+    106: ("Bosses", "Boss setup"), 107: ("Bosses", "Boss setup"),
+    137: ("Bosses", "Boss parts"), 138: ("Bosses", "Boss parts"), 142: ("Bosses", "Boss parts"),
+    121: ("Races & multiplayer", "Race checkpoints"), 122: ("Races & multiplayer", "Race pickups"),
+    123: ("Races & multiplayer", "Race obstacles"), 119: ("Races & multiplayer", "Targets"),
+    120: ("Races & multiplayer", "Targets"), 143: ("Races & multiplayer", "Arcade machines"),
+    92: ("Races & multiplayer", "Character select"), 72: ("Races & multiplayer", "Character select"),
+    136: ("Enemies & navigation", "Region ids"), 149: ("Enemies & navigation", "AI points"),
+    27: ("Enemies & navigation", "AI junctions"),
+}
 KIND_BASE = -100  # prefab ids -100, -101 ...: the project's kinds, in name order
 GROUPS = {-1: ("Squad, region and locked door", "A squadron of stock members, a square navigation region they keep "
                                                  "to, and a door that stays locked until they are dead"),
@@ -1316,10 +1347,11 @@ def prefabs() -> None:
         if pf["used"] and not t.get("uses"):
             continue
         schema = obj.schema_for_id(oid, S.schemas, S.behaviours)
+        category, fold = _prefab_place(t, schema)
         if search and search not in t["name"].lower() and search not in f"0x{oid:x}" and not (
-                schema and search in schema.name.lower()):
+                schema and search in schema.name.lower()) and search not in (fold or "").lower():
             continue
-        groups.setdefault(schema.category if schema else "Other (fields not decoded)", []).append((oid, t, schema))
+        groups.setdefault(category, []).append((oid, t, schema, fold))
     order = sorted(groups, key=lambda c: (c.startswith("Other"), c))
     if S.project and S.project.kinds:
         flags = imgui.TreeNodeFlags_.default_open
@@ -1331,10 +1363,16 @@ def prefabs() -> None:
     for category in order:
         flags = imgui.TreeNodeFlags_.default_open if search else 0
         if imgui.tree_node_ex(f"{category} ({len(groups[category])})##{category}", flags):
-            for oid, t, schema in sorted(groups[category], key=lambda r: r[1]["name"].lower()):
-                tip = (f"{schema.name}: {schema.description}" if schema else "Fields not decoded: placed as a copy "
-                       "of a stock entry") + f"\nbehaviour {t['behaviour']}, used {t.get('uses', 0)} times"
-                _prefab_row(oid, f"{t['name']}  0x{oid:X}", tip)
+            folds: dict[str | None, list] = {}
+            for row in groups[category]:
+                folds.setdefault(row[3], []).append(row)
+            # kinds of two or more get a fold each, unless one kind is the whole category
+            folded = {f for f in folds if f and 1 < len(folds[f]) < len(groups[category])}
+            for fold in sorted(folded):
+                if imgui.tree_node_ex(f"{fold} ({len(folds[fold])})##{category}/{fold}", flags):
+                    _prefab_rows(folds[fold])
+                    imgui.tree_pop()
+            _prefab_rows([r for f, rows in folds.items() if f not in folded for r in rows])
             imgui.tree_pop()
     imgui.end_child()
     if wide:
@@ -1346,6 +1384,28 @@ def prefabs() -> None:
     else:
         imgui.separator()
         _prefab_details()
+
+
+def _prefab_rows(rows) -> None:
+    for oid, t, schema, _ in sorted(rows, key=lambda r: r[1]["name"].lower()):
+        tip = (f"{schema.name}: {schema.description}" if schema else "Fields not decoded: placed as a copy of a "
+               "stock entry") + f"\nbehaviour {t['behaviour']}, used {t.get('uses', 0)} times"
+        _prefab_row(oid, f"{t['name']}  0x{oid:X}", tip)
+
+
+def _prefab_place(t: dict, schema: obj.Schema | None) -> tuple[str, str | None]:
+    """(category, fold) a type is listed under in Prefabs: its schema's category and kind, or for a type with no
+    fields decoded, where its behaviour puts it (BEHAVIOUR_FOLDS), else Other."""
+    if schema:
+        return schema.category, _plural(schema.name)
+    return BEHAVIOUR_FOLDS.get(t["behaviour"], ("Other (fields not decoded)", None))
+
+
+def _plural(name: str) -> str:
+    """A kind's name for a fold of several: "Door lock light" -> "Door lock lights", "Exit (loading zone)" -> "Exits
+    (loading zone)"."""
+    head, sep, rest = name.partition(" (")
+    return name if head.endswith("s") or head in UNCOUNTED else head + "s" + sep + rest
 
 
 HINT = "Drag a type into the Scene, or select it and press Place."
