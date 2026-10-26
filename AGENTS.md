@@ -32,7 +32,9 @@ Neighbours in `JetForceGemini/`: the decomp (`Decomp/`, read-only; Studio import
 - **Never commit ROM-derived content**: ROMs, catalogs, exports of game data, built `.nrm` files, decomp code or asm.
   Game names are read from the user's ROM at run time. Tests use synthetic data.
 - Our own code only: JFG-Forge and BattleTanx-Studio are references, nothing is copied from them (owner's decision).
-- Format code comes from the decomp's `jfgformats` (path setting `decomp`); never fork it here.
+- Format code comes from the decomp's `jfgformats` (path setting `decomp`); never fork it here. Only a release build
+  bundles a copy from a pinned decomp commit into the download, never committed (owner 2026-10-25; JFG-Modding
+  `Docs/STUDIO_RELEASE_PLAN.md`).
 - Agents never contact players or modders. Commit author VibinToast, no AI co-author or attribution lines. Ask the
   owner before committing or pushing unless told otherwise. New work on `feature/<name>`.
 - **Sessions you start are yours to close (owner, 2026-10-25).** When a side session you started (a trial, a
