@@ -119,7 +119,7 @@ class AgentTest(unittest.TestCase):
 class Project(AgentTest):
     def test_summary_and_level_info(self):
         summary = self.s.summary()
-        self.assertEqual(summary["id"], "test.sample")
+        self.assertEqual(summary["id"], "test_sample")
         self.assertEqual([lv["name"] for lv in summary["levels"]], ["gemini", "home"])
         self.assertTrue(summary["catalog"].startswith("not available"))
         info = self.s.level_info("gemini")
@@ -794,7 +794,7 @@ class Server(AgentTest):
         mcp_server.serve(None, stdin, stdout)
         replies = [json.loads(line) for line in stdout.getvalue().splitlines()]
         self.assertEqual([r["id"] for r in replies], [1, 2, None])
-        self.assertEqual(json.loads(replies[1]["result"]["content"][0]["text"])["id"], "test.sample")
+        self.assertEqual(json.loads(replies[1]["result"]["content"][0]["text"])["id"], "test_sample")
         self.assertEqual(replies[2]["error"]["code"], -32700)
 
 

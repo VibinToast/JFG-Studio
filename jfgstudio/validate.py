@@ -52,6 +52,25 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     out += _check_fog(project, schemas)
     out += _check_flags(project, schemas)
     out += _check_lights(project, schemas)
+    out += _check_ids(project)
+    return out
+
+
+def _check_ids(project: Project) -> list[Problem]:
+    """Mod ids the runtime's loader refuses as dependencies (N64Recomp validate_mod_id: letters, digits, _): a
+    dependency so named stops this pack opening (the launcher says it isn't in the mods folder), and a pack whose
+    own id has one can't be depended on."""
+    from jfgstudio.project import DEPENDABLE_ID_RE
+    out = []
+    for d in project.meta.get("dependencies", []):
+        if not DEPENDABLE_ID_RE.match(d["id"]):
+            out.append(Problem(ERROR, "dependency-id", "project.json", f"dependency {d['id']!r}: the game's mod loader "
+                               "takes only letters, digits and _ in a dependency id, so this pack wouldn't open. That "
+                               "pack needs an id without dots or dashes"))
+    if not DEPENDABLE_ID_RE.match(project.id):
+        library = " (it has no levels: a library?)" if not project.levels else ""
+        out.append(Problem(WARNING, "mod-id", "project.json", f"the id {project.id!r} has a character other than "
+                           f"letters, digits and _{library}: other packs can't depend on it. yourname_my_world works"))
     return out
 
 

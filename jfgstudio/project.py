@@ -24,6 +24,9 @@ import jsonschema
 
 FORMAT = 1
 NAME_RE = re.compile(r"^[a-z0-9_][a-z0-9_\-]*$")
+# A mod id another pack can depend on: the runtime checks every dependency id with N64Recomp's validate_mod_id
+# (letters, digits and _, not starting with a digit). A pack's own id may hold a dot, but then nothing can depend on it.
+DEPENDABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class ProjectError(Exception):

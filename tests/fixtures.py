@@ -35,7 +35,7 @@ def _objects() -> list[dict]:
 
 
 def sample_project(root: Path) -> proj.Project:
-    p = proj.create(root / "sample.jfgproj", "test.sample", "Sample planet", "tests")
+    p = proj.create(root / "sample.jfgproj", "test_sample", "Sample planet", "tests")
     gem = proj.new_level(p, "gemini", "Planet Gemini", "pack:track/field")
     gem.level["fixedId"] = 412
     gem.level["sky"] = 180

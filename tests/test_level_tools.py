@@ -87,9 +87,9 @@ class StartLevel(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p = sample_project(Path(tmp))
             self.assertEqual(testrun.start_level_arg(p, "gemini", False), "412")
-            self.assertEqual(testrun.start_level_arg(p, "gemini", True), "test.sample:level_gemini")
+            self.assertEqual(testrun.start_level_arg(p, "gemini", True), "test_sample:level_gemini")
             del p.levels["gemini"].level["fixedId"]
-            self.assertEqual(testrun.start_level_arg(p, "gemini", True), "test.sample:level_gemini")
+            self.assertEqual(testrun.start_level_arg(p, "gemini", True), "test_sample:level_gemini")
             with self.assertRaises(testrun.TestRunError):
                 testrun.start_level_arg(p, "gemini", False)
             self.assertEqual(testrun.start_level_arg(p, "21", True), "21")

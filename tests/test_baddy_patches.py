@@ -62,5 +62,21 @@ class ProjectFile(unittest.TestCase):
             self.assertEqual(proj.load(f"{d}/x.jfgproj").baddies, [])
 
 
+class ModIds(unittest.TestCase):
+    def test_dependency_ids(self):
+        from jfgstudio import agent
+        from jfgstudio import validate as val
+        with tempfile.TemporaryDirectory() as d:
+            proj.create(f"{d}/lib.jfgproj", "yourname.library", "Library")
+            s = agent.Session(f"{d}/lib.jfgproj")
+            with self.assertRaises(agent.AgentError):
+                s.add_dependency("someone.base", "1.0.0")  # the loader refuses a dependency id with a dot
+            self.assertEqual(s.add_dependency("someone_base", "1.0.0")["dependencies"][0]["id"], "someone_base")
+            rules = {p.rule: p.severity for p in val.validate(s.p)}
+            self.assertEqual(rules.get("mod-id"), val.WARNING)  # its own id has a dot: nothing can depend on it
+            s.p.meta["dependencies"].append({"id": "someone.else", "version": "1.0.0"})  # written by hand
+            self.assertIn(("dependency-id", val.ERROR), {(p.rule, p.severity) for p in val.validate(s.p)})
+
+
 if __name__ == "__main__":
     unittest.main()

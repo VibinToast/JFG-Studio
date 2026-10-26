@@ -123,7 +123,7 @@ def parser() -> argparse.ArgumentParser:
 
     n = sub.add_parser("new", help="create an empty project")
     n.add_argument("project", help="folder to create (e.g. my_planet.jfgproj)")
-    n.add_argument("--id", required=True, help="mod id, e.g. yourname.my_planet")
+    n.add_argument("--id", required=True, help="mod id, e.g. yourname_my_planet (letters, digits, _)")
     n.add_argument("--name", required=True, help="display name")
     n.add_argument("--author")
     n.set_defaults(run=cmd_new)

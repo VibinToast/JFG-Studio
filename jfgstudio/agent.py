@@ -2029,8 +2029,10 @@ class Session:
     def add_dependency(self, id: str, version: str) -> dict:
         """Another pack this one needs (mod.json "dependencies"): a library such as restored content."""
         import re
-        if not re.match(r"^[a-z0-9][a-z0-9_.\-]*$", id or ""):
-            raise AgentError(f"{id!r} is not a mod id (lower case letters, digits, _ . -)")
+        if not proj.DEPENDABLE_ID_RE.match(id or ""):
+            raise AgentError(f"{id!r} can't be a dependency: the game's mod loader takes only letters, digits and _ "
+                             "in a dependency id (no dots or dashes; not starting with a digit), and refuses to open "
+                             "a pack that names another way. Rename the library's id (e.g. yourname_library)")
         if not re.match(r"^[0-9]+\.[0-9]+\.[0-9]+$", version or ""):
             raise AgentError(f"{version!r} is not a version (1.2.3)")
         if id == self.p.id:

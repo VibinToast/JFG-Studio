@@ -1984,7 +1984,7 @@ def new_project_popup() -> None:
     if imgui.begin_popup_modal("New project", None, imgui.WindowFlags_.always_auto_resize)[0]:
         _, d["name"] = imgui.input_text("Name", d["name"])
         _, d["id"] = imgui.input_text("Mod id", d["id"])
-        imgui.text_disabled("lower case, e.g. yourname.my_planet")
+        imgui.text_disabled("letters, digits and _, e.g. yourname_my_planet")
         _, d["folder"] = imgui.input_text("Folder", d["folder"])
         imgui.same_line()
         if imgui.button("..."):

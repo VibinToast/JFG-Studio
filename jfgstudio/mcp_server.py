@@ -67,7 +67,8 @@ TOOLS = [
     _tool("new_project", "Create an empty project folder and open it.",
           lambda s, a: s.new(a["path"], a["mod_id"], a["name"], a.get("author", "")),
           {"path": {"type": "string", "description": "folder to create, e.g. C:/mods/my_world.jfgproj"},
-           "mod_id": {"type": "string", "description": "e.g. yourname.my_world"},
+           "mod_id": {"type": "string", "description": "e.g. yourname_my_world (letters, digits and _: other "
+                      "packs can depend on it)"},
            "name": {"type": "string"}, "author": {"type": "string"}}, ["path", "mod_id", "name"]),
     _tool("project_summary", "Levels, planets, galaxies, kinds, geometry and music files of the open project.",
           lambda s, a: s.summary()),
