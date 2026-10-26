@@ -12,6 +12,8 @@ from jfgstudio.project import Level
 
 EXIT_ID, START_ID, REGIONPOINT_ID, SQUADRON_ID = 0x0B, 0x0D, 0x05, 0x4F
 PATROL_POINT_ID, PATROL_PATH_ID = 0x61, 0x60
+REGIONINFO_ID = 0x69
+HOLE = 1  # RegionInfo flags: a hole of the area it links to (decomp MSR mod #6)
 def winding(points) -> float:
     """Twice the signed area of a polygon of (x, z) corners in order: positive is counter-clockwise, the way the game
     wants a region (IsPointInRegion finds nothing inside a clockwise one; decomp MSR mod #6)."""
@@ -82,6 +84,20 @@ class Placer:
             corners = list(reversed(corners))
         for k, (x, y, z) in enumerate(corners):
             self.single(REGIONPOINT_ID, (x, y, z), name=f"region{n}_{k}", fields={"region": n, "corner": k})
+        return n
+
+    def hole(self, corners, area: int) -> int:
+        """A hole in region `area` (an obstacle): a region of its own from corners in order, wound clockwise, with a
+        RegionInfo linking it to the area. Smart squad members keep out of it and run to its corners for cover; an
+        area with no hole and no inward corner gives them nowhere to go (decomp MSR mod #6). Returns its id."""
+        n = max(self.free("regionpoint", "region"), self.free("squadron", "region"), self.free("regioninfo", "region"))
+        if winding([(c[0], c[2]) for c in corners]) > 0:
+            corners = list(reversed(corners))
+        for k, (x, y, z) in enumerate(corners):
+            self.single(REGIONPOINT_ID, (x, y, z), name=f"hole{n}_{k}", fields={"region": n, "corner": k})
+        centre = [sum(c[i] for c in corners) / len(corners) for i in range(3)]
+        self.single(REGIONINFO_ID, centre, name=f"hole{n}", fields={"region": n, "flags": HOLE, "link": area,
+                                                                    "anchored": 0})
         return n
 
     def patrol_point(self, pos, example) -> dict:

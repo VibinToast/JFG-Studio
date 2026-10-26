@@ -198,6 +198,12 @@ TOOLS = [
           {"level": _LEVEL, "points": {"type": "array", "items": _POS, "minItems": 2},
            "loop": {"type": "boolean"}, "squadron": {"type": "string"},
            "wait": {"type": "integer", "description": "wait at each node (stock 15)"}}, ["level", "points"]),
+    _tool("add_cover", "Make the obstacles inside a squad's region (blocks, crates, pillars) holes of it. Smart "
+          "squads move only to cover (the corners of holes and inward corners of their region): in a plain "
+          "rectangle over open floor they stand and fire (validate: squad-cover). place_squad does this itself.",
+          lambda s, a: s.add_cover(a["level"], a["squadron"]),
+          {"level": _LEVEL, "squadron": {"type": "string", "description": "the squadron's uid"}},
+          ["level", "squadron"]),
     _tool("fix_squad", "Mend a squadron: point it (and its members) at a fitting stock squad of its own enemy, keeping "
           "its fields; make it spawn at once; wind its region counter-clockwise. For squads that stand still, never "
           "turn or never appear (validate: squad-stock, squad-trigger, region-winding).",

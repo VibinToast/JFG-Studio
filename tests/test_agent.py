@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from jfgstudio import agent, formats, mcp_server
+from jfgstudio import agent, formats, mcp_server, prefabs
 from jfgstudio import validate as val
 from jfgstudio.gui.viewport import floor_of
 from tests.fixtures import sample_project
@@ -473,6 +473,30 @@ class Prefabs(AgentTest):
         self.assertTrue(fixed["regionRewound"])
         problems = self.s.validate()["problems"]
         self.assertFalse([p for p in problems if p["rule"] in ("region-winding", "squad-trigger")])
+
+    def test_squads_get_cover(self):
+        self.with_catalog()
+        open_floor = self.s.place_squad("home", [0, -300], "0x29", members=2)
+        sq = next(o["uid"] for o in open_floor if o.get("schema") == "squadron")
+        self.s.update_object("home", sq, fields={"behaviour": 0x11})  # a smart squad over open floor: no cover
+        self.assertIn("squad-cover", {p["rule"] for p in self.s.validate()["problems"]})
+        self.assertTrue([o for o in self.s.add_cover("home", sq) if "warning" in o])
+        crate = _block(-80, -280, 0, -200, 0, 90)  # a crate inside the squad's region (the default 300 square)
+        wall = _block(250, -650, 320, 0, 0, 200)  # one across the region's edge: left for the outline
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + crate + wall, (), KILL)
+        made = self.s.add_cover("home", sq)
+        info = [o for o in made if o.get("schema") == "regioninfo"]
+        self.assertEqual(len(info), 1)
+        hole = info[0]["fields"]
+        self.assertEqual((hole["flags"], hole["link"]), (1, 1))
+        corners = [o for o in made if o.get("schema") == "regionpoint"]
+        xs, zs = {o["pos"][0] for o in corners}, {o["pos"][2] for o in corners}
+        self.assertTrue(min(xs) <= -80 and max(xs) >= 0 and min(zs) <= -280 and max(zs) >= -200)  # round the crate
+        pts = [(o["pos"][0], o["pos"][2]) for o in sorted(corners, key=lambda o: o["fields"]["corner"])]
+        self.assertLess(prefabs.winding(pts), 0)  # a hole goes clockwise
+        rules = {p["rule"] for p in self.s.validate()["problems"]}
+        self.assertFalse(rules & {"squad-cover", "region-winding"})
+        self.assertFalse([o for o in self.s.add_cover("home", sq) if o.get("schema")])  # no second hole
 
     def test_switch_doors(self):
         self.with_catalog()

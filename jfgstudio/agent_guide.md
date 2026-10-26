@@ -119,8 +119,12 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
   The region must go **counter-clockwise** in (x, z) (the tools wind it so; `validate` stops a clockwise one,
   `region-winding`): the game finds nothing inside a clockwise region, so its squad stands still and never turns.
   Members walk only inside their region and only notice a hero who is inside a region too, so make the region
-  cover the floor they fight on and where the player comes from. Crates and walls inside it are not avoided (the
-  game's holes are not made yet): keep regions over open floor.
+  cover the floor they fight on and where the player comes from. Smart squads move only to **cover**: the corners
+  of holes (obstacles cut out of the region) and inward corners of the region, where the hero can't see them. In a
+  rectangle over open floor they stand and fire. `place_squad` makes every block, crate or pillar inside the region
+  a hole (`add_cover` does it for a squad made before; `validate` warns: `squad-cover`); members also keep out of
+  holes. So give a squad's area things to hide behind, and keep obstacles off the region's edge (cut the outline
+  round those).
   `place_squad` makes all of it. With `door`, the squadron keeps that door locked until all its members are dead:
   the door's `doorId` matches the squadron's, and each locked door needs its own id. Members are kept off lava,
   water and pits (moved to the nearest dry floor); the result warns about any it couldn't place dry. A squadron's

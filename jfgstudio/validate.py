@@ -288,7 +288,7 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
 
     total = obj.LIST_HEADER_SIZE
     squadrons, members, doors, region_corners, starts, switches = [], [], [], defaultdict(set), [], []
-    region_points = defaultdict(list)
+    region_points, holes = defaultdict(list), set()
     patrol_nodes, patrol_links, counts = [], [], Counter()
     for o in items:
         uid = o["uid"]
@@ -330,6 +330,8 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
         elif key == "regionpoint" and "region" in fields:
             region_corners[fields["region"]].add(fields.get("corner"))
             region_points[fields["region"]].append((fields.get("corner", 0), o["pos"][0], o["pos"][2]))
+        elif key == "regioninfo" and fields.get("link") not in (None, 0, fields.get("region")):
+            holes.add(fields.get("region"))  # a hole of another region: wound clockwise on purpose
         elif key == "startpoint":
             starts.append(o)
         elif key == "exit":
@@ -352,7 +354,7 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
     if total > obj.LIST_BUFFER_SIZE:
         out.append(Problem(ERROR, "list-size", of, f"the object list is 0x{total:X} bytes; the game's buffer is "
                                                    f"0x{obj.LIST_BUFFER_SIZE:X} (header included)"))
-    out += _check_winding(region_points, of)  # an edit's own regions too
+    out += _check_winding({r: p for r, p in region_points.items() if r not in holes}, of)  # an edit's own regions too
     if stock_base:
         return out
     out += _check_squads(squadrons, members, doors, region_corners, of, switches)
