@@ -32,6 +32,9 @@ TOOLS = (("hand", "Q", "Hand: pan and orbit the view"), ("move", "W", "Move"),
          ("region", "G", "Region: click a navigation region's corners on the floor"),
          ("water", "T", "Water: drag a rectangle on the floor to add a water surface to the pack's geometry"),
          ("patrol", "P", "Patrol: click a squad patrol network's points; each links to the last"))
+# Sprites the game keeps for its own debugging (a red ball, an "AI" badge) on objects it never draws in play: those
+# objects stay markers or shapes in the Scene
+DEBUG_SPRITES = {1, 38}
 
 
 class State:
@@ -234,6 +237,21 @@ class State:
                     path = None
             self.model_paths[oid] = path
         return self.model_paths[oid]
+
+    def sprite(self, oid: int) -> dict | None:
+        """The catalog's picture of an object type the game draws as a sprite (Catalog.sprite), or None: a model
+        type, a debug sprite, no catalog, or a jfgformats with no sprite reader."""
+        key = ("sprite", oid)
+        if key not in self.model_paths:
+            t = self.objtypes.get(oid) if self.catalog() else None
+            info = None
+            if t and t["kind"] == "sprites" and t["assets"] and t["assets"][0] not in DEBUG_SPRITES:
+                try:
+                    info = self.cat.sprite(t["assets"][0])
+                except Exception:  # noqa: BLE001 (a sprite that can't be exported keeps the object's shape)
+                    info = None
+            self.model_paths[key] = info
+        return self.model_paths[key]
 
     def sky_for(self, level: dict):
         """(dome .glb, mode) for a level's sky (header +0x58 is a definition index; +0x69 the mode), or None."""
@@ -657,13 +675,20 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
         else:
             # a hidden type (the game draws nothing for it) shows only as its shape, if it has one
             path = None if schema and schema.hidden else S.model_path(oid)
-            shape = path is None and key in vp.SHAPES  # drawn by the game as a sprite, or not at: a shape stands in
+            sprite = None if path or (schema and schema.hidden) else S.sprite(oid)
+            if sprite:  # the game's sprite, turned to face the camera
+                path = f"sprite:{sprite['png']}"
+                if path not in S.view.models:
+                    S.view.models[path] = vp.SpriteMesh(sprite)
+            shape = path is None and key in vp.SHAPES  # no model or sprite to draw: a shape stands in
             if shape:
                 path = f"shape:{vp.SHAPES[key]}:{key}"
             mesh = S.view.model(path) if path else None
             if mesh is None or not mesh.parts:
                 continue
             m = _matrix(o, schema, None if shape else oid, squad_sizes)  # a shape is its own size, not the type's
+            if sprite:
+                m = vp.billboard(m[:3, 3], float(np.linalg.norm(m[:3, 0])), S.camera)
         if o["type"].startswith("pack:kind/") and not (schema and schema.key == "squadmember"):
             kind = S.project.kinds.get(o["type"].split("/", 1)[1], {})
             m = m @ np.diag([kind.get("scale", 1.0)] * 3 + [1.0])
@@ -1333,10 +1358,27 @@ def _details_height(width: float) -> float:
     text = HINT if pid is None else GROUPS[pid][1] if pid in (-2, -3) else "x" * 60 if pid <= KIND_BASE else ""
     wrapped = imgui.calc_text_size(text, False, max(width, 1.0)).y + imgui.get_style().item_spacing.y if text else 0
     rows = 0 if pid is None else 4 if pid == -1 else 1 if pid < 0 else 2
+    if pid is not None and pid >= 0 and S.sprite(pid):
+        rows += hello_imgui.em_size(4) / row
     return wrapped + rows * row + imgui.get_style().item_spacing.y * 2 + 2
 
 
+def _sprite_image(oid: int, height: float) -> bool:
+    """A sprite type's picture `height` tall at the cursor (the Prefabs window's thumbnails); False if it has none."""
+    info = S.sprite(oid) if oid >= 0 else None
+    thumb = S.view.thumbnail(info["png"]) if info else None
+    if thumb is None:
+        return False
+    glo, (w, h) = thumb
+    imgui.image(imgui.ImTextureRef(glo), imgui.ImVec2(height * w / max(h, 1), height))
+    return True
+
+
 def _prefab_row(pid: int, label: str, tip: str) -> None:
+    line = imgui.get_text_line_height()
+    if not _sprite_image(pid, line):
+        imgui.dummy(imgui.ImVec2(line, line))  # names line up with the rows that have a picture
+    imgui.same_line()
     if imgui.selectable(f"{label}##pf{pid}", S.prefab["oid"] == pid)[0]:
         S.prefab["oid"], S.prefab["example"] = pid, 0
     if imgui.is_item_hovered():
@@ -1369,6 +1411,10 @@ def _prefab_details() -> None:
             f"{S.objtypes[d]['name']} 0x{d:X}" for d in doors])
         _, pf["members"] = imgui.slider_int("Members", pf["members"], 1, 8)
     elif pid >= 0:
+        if S.sprite(pid):
+            _sprite_image(pid, hello_imgui.em_size(4))
+            imgui.same_line()
+            _muted("Drawn by the game as this sprite (its first frame), always facing the camera.")
         t = S.objtypes.get(pid, {})
         schema = obj.schema_for_id(pid, S.schemas, S.behaviours)
         options = [_example_label(*e) for e in t.get("examples", [])]

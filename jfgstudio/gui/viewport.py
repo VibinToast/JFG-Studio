@@ -69,9 +69,38 @@ SELECTED_COLOUR = (1.0, 1.0, 0.2, 1.0)
 MARKER_HEIGHT = 40.0
 PICKUP_KINDS = {"health": (0.95, 0.25, 0.25, 1.0), "ammo": (1.0, 0.80, 0.25, 1.0), "key": (1.0, 0.95, 0.30, 1.0),
                 "collectable": (0.85, 0.50, 1.0, 1.0), "token": (0.85, 0.50, 1.0, 1.0)}
-# Objects with no model of their own (the game draws them as sprites, which jfgformats can't read yet) get a shape:
-# a capsule the size of a hero facing the way it faces, or a floating diamond in their colour.
+# Objects with no model or sprite to draw (the game draws nothing, or the catalog has no sprites yet) get a shape: a
+# capsule the size of a hero facing the way it faces, or a floating diamond in their colour.
 SHAPES = {"startpoint": "capsule", **{k: "diamond" for k in PICKUP_KINDS}}
+
+
+class SpriteMesh:
+    """An object the game draws as a sprite: its picture (Catalog.sprite) on a quad in the x-y plane facing +z, the
+    anchor pixel at the origin, sized in world units at scale 1. billboard() turns it to the camera."""
+
+    def __init__(self, info: dict):
+        formats.load()
+        from jfgformats import png
+        with open(info["png"], "rb") as f:
+            w, h, rgba = png.read_png(f.read())
+        k, (ax, ay) = info["units"], info["anchor"]
+        x0, x1, y0, y1 = -ax * k, (w - ax) * k, (ay - h) * k, ay * k
+        corners = [(x0, y0, 0.0), (x1, y0, 0.0), (x1, y1, 0.0), (x0, y1, 0.0)]
+        uvs = [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)]  # the picture's first row at the top
+        idx = [0, 1, 2, 0, 2, 3]
+        pos = np.array([corners[i] for i in idx], "f8")
+        self.parts = [(pos, np.array([uvs[i] for i in idx], "f8"), np.ones((6, 4)), rgba, (w, h), "sprite")]
+        self.visible = self.collision = pos.reshape(-1, 3, 3)
+        self.bounds = (pos.min(axis=0), pos.max(axis=0))
+        self.images = {}
+
+
+def billboard(pos, scale: float, camera: "Camera") -> np.ndarray:
+    """A sprite's matrix: at `pos`, its quad turned to face the camera (the game's sprites always do), scaled."""
+    m = np.identity(4)
+    m[:3, :3] = camera.view()[:3, :3].T * scale  # columns: the camera's right, up and back
+    m[:3, 3] = pos
+    return m
 
 
 class ShapeMesh:
@@ -394,6 +423,7 @@ class Viewport:
         self.clear = None  # the level's clear colour (rgb 0-1), shown where there is no sky
         self.models = {}  # .glb path -> TrackMesh (or None when it could not be read)
         self.model_parts = {}  # .glb path -> uploaded parts
+        self.thumbnails = {}  # .png path -> (GL id, size) for imgui
 
     def _init(self):
         self.ctx = moderngl.create_context()
@@ -436,6 +466,22 @@ class Viewport:
                 self.models[path] = None
         return self.models[path]
 
+    def thumbnail(self, path: str) -> tuple[int, tuple[int, int]] | None:
+        """A PNG as a GL texture for imgui (the Prefabs window's sprite thumbnails): (GL id, (w, h)), read once."""
+        if path not in self.thumbnails:
+            if self.ctx is None:
+                self._init()
+            try:
+                from jfgformats import png
+                with open(path, "rb") as f:
+                    w, h, rgba = png.read_png(f.read())
+                t = self.ctx.texture((w, h), 4, rgba)
+                t.filter = (moderngl.LINEAR, moderngl.LINEAR)
+                self.thumbnails[path] = (t.glo, (w, h))
+            except Exception:  # noqa: BLE001 (no thumbnail)
+                self.thumbnails[path] = None
+        return self.thumbnails[path]
+
     def _upload(self, mesh=None):
         textures = {}
         out = [] if mesh is not None else self.gpu_parts
@@ -448,7 +494,7 @@ class Viewport:
                 key = id(image)
                 if key not in textures:
                     t = self.ctx.texture(size, 4, image)
-                    t.repeat_x = t.repeat_y = True
+                    t.repeat_x = t.repeat_y = kind != "sprite"  # a sprite's edge doesn't bleed into the far side
                     t.filter = (moderngl.LINEAR, moderngl.LINEAR)
                     textures[key] = t
                 tex = textures[key]
@@ -539,10 +585,15 @@ class Viewport:
                 self.model_parts[path] = self._upload(mesh) if mesh is not None else []
             prog["model"].write(np.asarray(matrix, "f4").T.tobytes())
             prog["tint"].value = tuple(tint)
-            for vao, count, tex, _ in self.model_parts[path]:
+            for vao, count, tex, kind in self.model_parts[path]:
                 prog["textured"].value = tex is not None
                 (tex or self.white).use(0)
+                if kind == "sprite":  # soft edges blend; it doesn't hide what is drawn after it
+                    self.ctx.enable(moderngl.BLEND)
+                    self.ctx.depth_mask = False
                 vao.render(moderngl.TRIANGLES, vertices=count)
+                self.ctx.depth_mask = True
+                self.ctx.disable(moderngl.BLEND)
         prog["model"].write(np.identity(4, "f4").tobytes())
         if len(lines):
             self.line_prog["mvp"].write(mvp.T.tobytes())

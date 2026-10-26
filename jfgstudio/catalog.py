@@ -6,6 +6,8 @@
     <data>/catalog/<sha1 prefix>/map.json         the planet map (points, discs, routes, entry levels)
     <data>/catalog/<sha1 prefix>/tracks/NNN.glb   a track's geometry, exported on first use
     <data>/catalog/<sha1 prefix>/models/XXXX.glb  a model (rest pose), exported on first use
+    <data>/catalog/<sha1 prefix>/sprites/XXXX.png a sprite's first picture, all exported on first use, with
+                                                  sprites.json (size, anchor, frame count)
 
 All of it is derived from the user's ROM and stays on the user's machine: never in a project, a pack or the repo.
 """
@@ -185,6 +187,42 @@ class Catalog:
             models.export_gltf(self._models, self._models.model(model_id), str(tmp), False)
             tmp.replace(path)
         return path
+
+    def sprite(self, sprite_id: int) -> dict | None:
+        """A sprite's first picture (its first frame with pixels, in the sprite's own colours): {"png": path,
+        "width", "height", "anchor": [x, y] (the pixel at the object's position, y down), "frames", "units" (world
+        units per pixel at scale 1)}, or None (no such sprite, or a jfgformats older than 0.4.0). Every sprite is
+        exported the first time one is asked for."""
+        index = self.dir / "sprites" / "sprites.json"
+        if not hasattr(self, "_sprites"):
+            if not index.exists():
+                self._export_sprites(index)
+            with open(index, encoding="utf-8") as f:
+                self._sprites = json.load(f)
+        info = self._sprites.get(f"{sprite_id:04X}")
+        return {**info, "png": str(index.parent / f"{sprite_id:04X}.png")} if info else None
+
+    def _export_sprites(self, index: Path) -> None:
+        try:
+            from jfgformats import png, sprites
+        except ImportError:  # jfgformats before 0.4.0: sprite objects keep their shapes
+            self._sprites = {}
+            return
+        index.parent.mkdir(parents=True, exist_ok=True)
+        out = {}
+        for n in range(sprites.count(self.assets)):
+            try:
+                s = sprites.read(self.assets, n)
+            except Exception:  # noqa: BLE001 (a sprite jfgformats can't read is left out)
+                continue
+            frame = next((f for f in s["frames"] if f["width"] and f["height"]), None)
+            if frame is None:
+                continue
+            rgba = sprites.tinted(frame, s["colours"]) if s["colours"] else frame["rgba"]
+            (index.parent / f"{n:04X}.png").write_bytes(png.write_png("RGBA", frame["width"], frame["height"], rgba))
+            out[f"{n:04X}"] = {"width": frame["width"], "height": frame["height"], "anchor": list(frame["anchor"]),
+                               "frames": s["frameCount"], "units": sprites.WORLD_UNITS_PER_PIXEL}
+        self._write("sprites/sprites.json", out)
 
     def _write(self, name: str, doc) -> None:
         with open(self.dir / name, "w", encoding="utf-8", newline="\n") as f:
