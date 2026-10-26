@@ -288,6 +288,7 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
 
     total = obj.LIST_HEADER_SIZE
     squadrons, members, doors, region_corners, starts, switches = [], [], [], defaultdict(set), [], []
+    region_points = defaultdict(list)
     patrol_nodes, patrol_links, counts = [], [], Counter()
     for o in items:
         uid = o["uid"]
@@ -328,6 +329,7 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
             switches.append(o)
         elif key == "regionpoint" and "region" in fields:
             region_corners[fields["region"]].add(fields.get("corner"))
+            region_points[fields["region"]].append((fields.get("corner", 0), o["pos"][0], o["pos"][2]))
         elif key == "startpoint":
             starts.append(o)
         elif key == "exit":
@@ -345,6 +347,7 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
     if total > obj.LIST_BUFFER_SIZE:
         out.append(Problem(ERROR, "list-size", of, f"the object list is 0x{total:X} bytes; the game's buffer is "
                                                    f"0x{obj.LIST_BUFFER_SIZE:X} (header included)"))
+    out += _check_winding(region_points, of)  # an edit's own regions too
     if stock_base:
         return out
     out += _check_squads(squadrons, members, doors, region_corners, of, switches)
@@ -388,6 +391,21 @@ def _check_patrols(nodes, links, of) -> list[Problem]:
     for n, k in outgoing.items():
         if k > 6:
             out.append(Problem(WARNING, "patrol", of, f"patrol node {n} has {k} links; the game keeps 6"))
+    return out
+
+
+def _check_winding(region_points, of) -> list[Problem]:
+    """A region's corners must go counter-clockwise in (x, z): the game finds no point inside a clockwise one, so its
+    squad never moves or turns (decomp MSR mod #6; the game's clockwise regions are holes linked to another)."""
+    from jfgstudio.prefabs import winding
+    out = []
+    for region, pts in region_points.items():
+        pts = [(x, z) for _, x, z in sorted(pts, key=lambda p: p[0] if p[0] is not None else -1)]
+        if len(pts) >= 3 and winding(pts) < 0:
+            out.append(Problem(ERROR, "region-winding", of, f"region {region}: its corners go clockwise in (x, z): "
+                                                            "the game finds nothing inside it, so its squad stands still and "
+                                                            "never turns. fix_squad (or reversing the corner numbers) "
+                                                            "mends it"))
     return out
 
 

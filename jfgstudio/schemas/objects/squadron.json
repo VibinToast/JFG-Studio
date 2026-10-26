@@ -10,10 +10,14 @@
  "description": "Spawns and runs its members (entries naming it with +0x11). With a door id it keeps those doors locked until every member is dead. MSR D9 'Squadron entry'. Unnamed bytes are copied 1:1: start from a stock squadron of the same baddy type.",
  "fields": [
   {"name": "stance", "offset": "0x0A", "type": "u8", "description": "formation stance (low 2 bits; 2, 3 = alert)"},
+  {"name": "behaviour", "offset": "0x0D", "type": "u8", "enum": {"2": "2", "9": "sentry", "17": "smart"}, "description": "what members do normally: 0x11 (17) smart, walks inside its region to the hero; 9 sentry, never walks and only faces its fixed heading (decomp MSR 'What makes squad members move and turn')"},
+  {"name": "alertBehaviour", "offset": "0x10", "type": "u8", "enum": {"2": "2", "9": "sentry", "17": "smart"}, "description": "what members do when alerted (the hero seen or heard)"},
+  {"name": "hurtBehaviour", "offset": "0x13", "type": "u8", "enum": {"2": "2", "9": "sentry", "17": "smart"}, "description": "what members do when hurt"},
   {"name": "count", "offset": "0x0B", "type": "u8", "default": 1, "description": "member count (the door unlock checks this many saved flags)"},
   {"name": "size", "offset": "0x15", "type": "u8", "default": 40, "description": "the members' size in hundredths (40 = 0.40, stock ants; 0 = 1.0). It replaces the definition's scale, and every member shares it (decomp MSR 'Phase 2 prep: drawn size and facing')"},
   {"name": "kind", "offset": "0x24", "type": "u8", "description": "squadron kind (low 4 bits)"},
   {"name": "heading", "offset": "0x25", "type": "s8", "unit": "angle8", "role": "yaw", "description": "launch / fixed heading"},
+  {"name": "trigger", "offset": "0x29", "type": "u8", "enum": {"1": "hero in zone", "3": "at once"}, "description": "when the squad spawns: 3 at once; 1 when a hero enters the zone at the squadron's position + (+0x1F, +0x20, +0x21) x 16, radius +0x22 x 16 (a stock squad's zone is where it stood in its own level)"},
   {"name": "squadronId", "offset": "0x2D", "type": "u8", "link": "squadronId", "description": "members name it with their +0x11"},
   {"name": "doorId", "offset": "0x31", "type": "u8", "link": "doorId", "description": "doors with this id stay locked until the squadron is dead (0 = none)"},
   {"name": "health", "offset": "0x34", "type": "u8", "description": "member health in units (8.8 << 8)"},
@@ -21,6 +25,7 @@
   {"name": "maxSpeed", "offset": "0x38", "type": "s8", "description": "maximum speed"},
   {"name": "minSpeed", "offset": "0x39", "type": "s8", "description": "minimum speed (negative allows reversing)"},
   {"name": "acceleration", "offset": "0x3C", "type": "u8", "default": 1, "description": "acceleration (stock 1, 2 or 8)"},
+  {"name": "flags", "offset": "0x3A", "type": "u16", "description": "0x40 members go for the hero at once; 0x400 always face the target (bit 3 cleared on load)"},
   {"name": "drop", "offset": "0x3E", "type": "u8", "default": 40, "enum": {"0": "nothing", "20": "small health", "21": "medium health", "22": "full health", "23": "health upgrade", "40": "nothing (stock)", "1": "weapon 0 pickup", "2": "weapon 1 pickup", "3": "weapon 2 pickup", "4": "weapon 3 pickup", "5": "weapon 4 pickup", "6": "weapon 5 pickup", "7": "weapon 6 pickup", "8": "weapon 7 pickup", "9": "weapon 8 pickup", "10": "weapon 9 pickup", "11": "weapon 10 pickup", "12": "weapon 11 pickup", "13": "weapon 12 pickup", "14": "weapon 13 pickup", "15": "weapon 14 pickup", "16": "weapon 15 pickup"}, "description": "pickup dropped when the last member dies"},
   {"name": "region", "offset": "0x3F", "type": "u8", "link": "region", "description": "navigation region (0-127: the game reads it signed); the list must have region corners for it"}
  ]

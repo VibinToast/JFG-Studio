@@ -109,7 +109,7 @@ class AgentTest(unittest.TestCase):
 
     def with_catalog(self):
         self.s._catalog, self.s._catalog_error, self.s._types = FakeCatalog(), None, TYPES
-        self.s._squads = {0x29: [(2, True, 4, (10, 2)), (1, True, 5, (13, 3))]}  # made-up stock squads of 0x29
+        self.s._squads = {0x29: [(2, True, 4, (10, 2), 0x11), (1, True, 5, (13, 3), 0x11)]}  # made-up stock squads of 0x29
 
     def errors(self):
         return [p for p in val.validate(self.s.p) if p.severity == val.ERROR]
@@ -451,6 +451,27 @@ class Prefabs(AgentTest):
         fixed = self.s.fix_squad("home", old_sq)
         self.assertEqual((fixed["stock"], fixed["members"]), ({"list": 10, "entry": 2}, 2))
         self.assertFalse([p for p in self.s.validate()["problems"] if p["rule"] == "squad-stock"])
+
+    def test_squads_walk_and_appear(self):
+        self.with_catalog()
+        self.s._squads[0x29].insert(0, (2, True, 4, (12, 1), 9))  # a sentry of 0x29 that comes first
+        made = self.s.place_squad("home", [0, -300], "0x29", members=2,  # a clockwise region
+                                  region=[[-200, -500], [-200, -100], [200, -100], [200, -500]])
+        sq = next(o for o in made if o.get("schema") == "squadron")
+        self.assertEqual(sq["stock"], {"list": 10, "entry": 2})  # the smart squad, not the sentry
+        self.assertEqual(sq["fields"]["trigger"], 3)  # spawns at once
+        self.assertFalse([p for p in self.s.validate()["problems"] if p["rule"] == "region-winding"])
+        corners = sorted((o for o in self.s.p.levels["home"].objects["objects"] if o["type"] == "stock:objtype/0x5"
+                          and o["fields"]["region"] == sq["fields"]["region"]), key=lambda o: o["fields"]["corner"])
+        for o in corners[1:]:  # wound the other way round: the old order, backwards
+            self.s.update_object("home", o["uid"], fields={"corner": 4 - o["fields"]["corner"]})
+        self.s.update_object("home", sq["uid"], fields={"trigger": 1})
+        rules = {p["rule"] for p in self.s.validate()["problems"]}
+        self.assertIn("region-winding", rules)
+        fixed = self.s.fix_squad("home", sq["uid"])
+        self.assertTrue(fixed["regionRewound"])
+        problems = self.s.validate()["problems"]
+        self.assertFalse([p for p in problems if p["rule"] in ("region-winding", "squad-trigger")])
 
     def test_switch_doors(self):
         self.with_catalog()

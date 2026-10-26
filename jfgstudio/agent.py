@@ -37,6 +37,8 @@ NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way 
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = 300  # place_patrol moves a squadron farther than this from its route to the route's first node
+SMART, SENTRY = 0x11, 9  # squadron behaviours (+0x0D): walks to the hero in its region; never walks (MSR mod #6)
+TRIGGER_AT_ONCE = 3  # squadron +0x29: spawn at level start (1: when a hero enters a zone placed for a stock level)
 PATROL_MODE = 6  # a squadron's kind (low 4 bits) that walks the patrol network (decomp: "Squad patrol network")
 IMAGE_PIXELS = 2048  # a new image is stored as one 16-bit texture of at most 4 KB: bigger ones are shrunk
 LAVA_FLOOR_DEPTH = 100  # lava needs a solid floor at most this far under it, or Juno falls through
@@ -885,7 +887,7 @@ class Session:
         squadron = placer.single(SQUADRON_ID, self._pos(lv, [cx, cz], sq_schema, True), sq_ex,
                                  name=f"{label} squad",
                                  fields={"squadronId": squadron_id, "doorId": door_id, "region": region_id,
-                                         "count": members, "baddyType": m_oid})
+                                         "count": members, "baddyType": m_oid, "trigger": TRIGGER_AT_ONCE})
         if m_kind:
             squadron["kindFields"] = {"baddyType": m_kind}
         wet = []
@@ -1171,11 +1173,11 @@ class Session:
         return made
 
     def place_patrol(self, level: str, points: list, loop: bool = False, squadron: str | None = None,
-                     start_at_load: bool = False, wait: int | None = None) -> list[dict]:
+                     start_at_load: bool = True, wait: int | None = None) -> list[dict]:
         """A patrol route: nodes on the floor at `points` ([x, z] or [x, y, z]), linked in order both ways (a chain
         is walked there and back; `loop` joins the last to the first). With `squadron` (a squadron's uid) it is put in
-        patrol mode; it starts from the node nearest to itself, when activated (or at level load with
-        `start_at_load`). `wait`: the wait at each node (stock 15)."""
+        patrol mode; it starts from the node nearest to itself, which gets a start value (`start_at_load`: a
+        patrol whose nearest node has none doesn't set off, decomp MSR mod #6). `wait`: the wait at each node (stock 15)."""
         lv = self._level(level)
         if not isinstance(points, list) or len(points) < 2:
             raise AgentError("a patrol needs at least two points")
@@ -1219,7 +1221,7 @@ class Session:
         return made
 
     def _squad_index(self) -> dict:
-        """Every stock squadron by its enemy: [(mode, moves, member entry or None, (list, entry))]."""
+        """Every stock squadron by its enemy: [(mode, moves, member entry or None, (list, entry), behaviour)]."""
         if self._squads is None:
             import struct
             self._squads = {}
@@ -1238,7 +1240,7 @@ class Session:
                     member = next((j for j, m in enumerate(entries) if m and m[0] == baddy and len(m[1]) > 0x11
                                    and m[1][0x11] == sid), None)
                     moves = struct.unpack_from(">b", data, 0x38)[0] > 0
-                    self._squads.setdefault(baddy, []).append((data[0x24] & 0xF, moves, member, (n, i)))
+                    self._squads.setdefault(baddy, []).append((data[0x24] & 0xF, moves, member, (n, i), data[0x0D]))
         return self._squads
 
     def squad_examples(self, member_oid: int, mode: int | None = None):
@@ -1246,8 +1248,9 @@ class Session:
         its members aren't list entries). A squadron's unnamed bytes (behaviour, missions, hearing ...) must come from
         a squadron of the same enemy (decomp MSR, "Squadron entry"), and in the mode it is used in: `mode` (kind's low
         4 bits: 6 patrol), else the enemy's usual one (2 in 893 of the game's 924 squads; a squad copied from a rare
-        mode-1 one ran into place and crouched without firing, play-tested). None when the game has no squad of that
-        enemy in that mode, or there is no catalog."""
+        mode-1 one ran into place and crouched without firing, play-tested). Of those, a smart one (behaviour 0x11:
+        walks inside its region to the hero) before any other, and a sentry (9: never walks, faces one way) last.
+        None when the game has no squad of that enemy in that mode, or there is no catalog."""
         if self.catalog() is None:
             return None
         found = self._squad_index().get(member_oid, [])
@@ -1258,12 +1261,13 @@ class Session:
         same = [f for f in found if f[0] == mode]
         if not same:
             return None
-        best = max(same, key=lambda f: (f[1], f[2] is not None))
+        best = max(same, key=lambda f: (f[4] == SMART, f[4] != SENTRY, f[1], f[2] is not None))
         return best[3], (best[3][0], best[2]) if best[2] is not None else None
 
     def fix_squad(self, level: str, uid: str) -> dict:
-        """Points a squadron (and its members) at a stock squad of its own enemy, keeping every field set: for squads
-        made before place_squad picked one, which stand still or behave like another enemy."""
+        """Points a squadron (and its members) at a stock squad of its own enemy, keeping every field set, makes it
+        spawn at once (a stock squad's trigger zone is where it stood in its own level) and winds its region
+        counter-clockwise: for squads that stand still, never turn, never appear or behave like another enemy."""
         lv = self._level(level)
         sq = self._object(lv, uid)
         if self._key(sq) != "squadron":
@@ -1282,12 +1286,23 @@ class Session:
         if matched[1] is not None:
             changes += [edit.Change(m["uid"], ("stock",), copy.deepcopy(m.get("stock")),
                                     {"list": matched[1][0], "entry": matched[1][1]}) for m in members]
+        changes.append(edit.Change(uid, ("fields", "trigger"), sq["fields"].get("trigger"), TRIGGER_AT_ONCE))
+        region = sq["fields"].get("region")
+        corners = [o for o in lv.objects["objects"] if self._key(o) == "regionpoint"
+                   and o.get("fields", {}).get("region") == region]
+        corners.sort(key=lambda o: o["fields"].get("corner", 0))
+        rewound = len(corners) >= 3 and prefabs.winding([(o["pos"][0], o["pos"][2]) for o in corners]) < 0
+        if rewound:  # corner 0 stays, the rest go the other way round
+            changes += [edit.Change(o["uid"], ("fields", "corner"), k, (len(corners) - k) % len(corners))
+                        for k, o in enumerate(corners)]
         self._history(lv).do(edit.Command(f"fix squad {uid}", changes))
         self._save()
-        return {"squadron": uid, "stock": changes[0].new, "members": len(members) if matched[1] is not None else 0}
+        return {"squadron": uid, "stock": changes[0].new, "members": len(members) if matched[1] is not None else 0,
+                "regionRewound": rewound}
 
     def mismatched_squads(self) -> list[tuple[str, str, int, int]]:
-        """(level, uid, the squad's enemy, the copied stock squadron's enemy) for squadrons copying another enemy's."""
+        """(level, uid, the squad's enemy, the copied stock squadron's enemy) for squadrons copying another enemy's, one
+        in another mode, or a sentry where the game has a walking squad of that enemy."""
         if self.catalog() is None:
             return []
         import struct
@@ -1308,8 +1323,11 @@ class Session:
                     continue
                 # the mode it runs in: its own kind, else its enemy's usual one; the copied squad should be in it
                 runs = kind & 0xF if kind is not None else Counter(f[0] for f in found).most_common(1)[0][0]
-                fits = self.squad_examples(ours, runs) is not None
-                if stock_baddy is not None and (ours != stock_baddy or (fits and e[0x24] & 0xF != runs)):
+                best = self.squad_examples(ours, runs)
+                fits = best is not None
+                # a sentry (never walks or turns) copied where the game has a squad of that enemy that walks
+                sentry = fits and o.get("fields", {}).get("behaviour", e[0x0D]) == SENTRY and                     self._catalog.stock_entry(*best[0])[0x0D] != SENTRY
+                if stock_baddy is not None and (ours != stock_baddy or (fits and e[0x24] & 0xF != runs) or sentry):
                     out.append((lv.name, o["uid"], ours, stock_baddy))
         return out
 
@@ -1515,6 +1533,21 @@ class Session:
                                         f"the squadron copies a stock squad (of 0x{theirs:X}) that doesn't fit its "
                                         f"0x{ours:X} members or its mode: they may stand still or not fight. "
                                         "fix_squad points it at a fitting squad of their own enemy", uid))
+        for lv in self.p.levels.values():  # stock trigger zones: placed for the stock level, not this one
+            for o in lv.objects["objects"]:
+                if self._key(o) != "squadron":
+                    continue
+                trigger = o.get("fields", {}).get("trigger")
+                if trigger is None and o.get("stock") and self.catalog() is not None:
+                    try:
+                        trigger = self._catalog.stock_entry(o["stock"]["list"], o["stock"]["entry"])[0x29]
+                    except Exception:  # noqa: BLE001 (the build reports a bad stock entry)
+                        continue
+                if trigger is not None and trigger & 0xF == 1 and lv.base is None:
+                    problems.append(val.Problem(val.WARNING, "squad-trigger", f"levels/{lv.name}/objects.json",
+                                                "the squadron spawns when a hero enters a zone copied from a stock "
+                                                "level (+0x1F-+0x23 from where that squad stood): it may never appear "
+                                                "here. trigger 3 (fix_squad) spawns it at once", o["uid"]))
         for lv in self.p.levels.values():  # an edit's start points against the game level's own
             base = self._base_starts(lv)
             for o in lv.objects["objects"]:

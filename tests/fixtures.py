@@ -13,7 +13,7 @@ EXIT, START, SQUADRON, REGION = "stock:objtype/0xB", "stock:objtype/0xD", "stock
 
 
 def _objects() -> list[dict]:
-    corners = [(-900, -900), (-900, 900), (900, 900), (900, -900)]
+    corners = [(-900, -900), (900, -900), (900, 900), (-900, 900)]  # counter-clockwise in (x, z), as the game wants
     out = [
         {"uid": "start0", "name": "Start", "type": START, "pos": [0, 10, 0], "size": 0x10,
          "fields": {"player": 0, "startPoint": 0, "yaw": 0}},

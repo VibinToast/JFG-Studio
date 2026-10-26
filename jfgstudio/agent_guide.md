@@ -116,21 +116,29 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
 ## Gameplay patterns
 
 - **Squad**: a squadron, its members and a region (a polygon of region points, corners in order) they keep to.
+  The region must go **counter-clockwise** in (x, z) (the tools wind it so; `validate` stops a clockwise one,
+  `region-winding`): the game finds nothing inside a clockwise region, so its squad stands still and never turns.
+  Members walk only inside their region and only notice a hero who is inside a region too, so make the region
+  cover the floor they fight on and where the player comes from. Crates and walls inside it are not avoided (the
+  game's holes are not made yet): keep regions over open floor.
   `place_squad` makes all of it. With `door`, the squadron keeps that door locked until all its members are dead:
   the door's `doorId` matches the squadron's, and each locked door needs its own id. Members are kept off lava,
   water and pits (moved to the nearest dry floor); the result warns about any it couldn't place dry. A squadron's
   behaviour (moving, chasing, missions) is in bytes not decoded yet, copied from a stock squad: `place_squad` copies
   one of the same enemy (a kind's base) in the mode it runs in (2, the game's usual fighting mode, or 6 for a
   patrol); a squad copying another enemy's, or a rare mode (1), ran into place and crouched without firing
-  (play-tested). `validate`
-  warns about such squads (`squad-stock`) and `fix_squad` mends one.
+  (play-tested). Of those it picks a smart squad (`behaviour` 0x11: walks to the hero and turns), never a sentry
+  (9: never walks, faces one way) when the enemy has another. A squad spawns at once (`trigger` 3): a stock squad's
+  own trigger (1) waits for the hero in a zone placed for its stock level, so it may never appear. `validate`
+  warns about such squads (`squad-stock`, `squad-trigger`) and `fix_squad` mends one.
 - **Key door**: `place_key_door(level, door_type, door_pos, key_pos)` makes a door that needs a coloured key and
   the key, in a colour no other door of the pack uses (or `colour: "red key"`; `key_level` puts the key in another
   level). Put the key somewhere the player has to reach first: a ledge, past a squad.
 - **Patrols**: `place_patrol(level, points, loop, squadron)` lays a route of nodes along the points and puts the
   squadron in patrol mode: a chain is walked there and back, a ring (`loop`) round and round. A squadron walks the
   route nearest to itself: a squad more than 300 from its route is moved to the route's first node with its
-  members and region. Stock patrols set off when the squadron is activated (`start_at_load` sets off at once).
+  members and region. The node nearest the squadron gets a start value (`start_at_load`, default on): a patrol
+  without one doesn't set off.
   Squads without a patrol stay in their region.
 - **Switch doors**: `place_switch_door(level, switch_pos, door="new", door_type, door_pos)` (or `door`: a door's
   uid) places the game's shootable switch: it keeps the door locked until the player shoots it, then opens it and

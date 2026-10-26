@@ -194,14 +194,15 @@ TOOLS = [
           "there and back; loop joins the ends into a ring). With squadron (its uid) the squadron patrols it: it "
           "starts from the node nearest to itself, so keep it next to the route.",
           lambda s, a: s.place_patrol(a["level"], a["points"], a.get("loop", False), a.get("squadron"),
-                                      a.get("start_at_load", False), a.get("wait")),
+                                      a.get("start_at_load", True), a.get("wait")),
           {"level": _LEVEL, "points": {"type": "array", "items": _POS, "minItems": 2},
            "loop": {"type": "boolean"}, "squadron": {"type": "string"},
-           "start_at_load": {"type": "boolean", "description": "set off at level load (stock patrols wait for the "
-                                                                "squadron to be activated)"},
+           "start_at_load": {"type": "boolean", "description": "give the squadron's nearest node a start value "
+                                                                "(default true: without one the patrol doesn't set off)"},
            "wait": {"type": "integer", "description": "wait at each node (stock 15)"}}, ["level", "points"]),
-    _tool("fix_squad", "Point a squadron (and its members) at a stock squad of its own enemy, keeping its fields: "
-          "squads that copy another enemy's stand still or behave wrong (validate warns: squad-stock).",
+    _tool("fix_squad", "Mend a squadron: point it (and its members) at a fitting stock squad of its own enemy, keeping "
+          "its fields; make it spawn at once; wind its region counter-clockwise. For squads that stand still, never "
+          "turn or never appear (validate: squad-stock, squad-trigger, region-winding).",
           lambda s, a: s.fix_squad(a["level"], a["uid"]), {"level": _LEVEL, "uid": {"type": "string"}},
           ["level", "uid"]),
     _tool("connect", "An exit in one level and the start point it brings the player to in another: a new one at "

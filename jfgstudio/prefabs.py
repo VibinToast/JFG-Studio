@@ -12,6 +12,12 @@ from jfgstudio.project import Level
 
 EXIT_ID, START_ID, REGIONPOINT_ID, SQUADRON_ID = 0x0B, 0x0D, 0x05, 0x4F
 PATROL_POINT_ID, PATROL_PATH_ID = 0x61, 0x60
+def winding(points) -> float:
+    """Twice the signed area of a polygon of (x, z) corners in order: positive is counter-clockwise, the way the game
+    wants a region (IsPointInRegion finds nothing inside a clockwise one; decomp MSR mod #6)."""
+    return sum(x0 * z1 - x1 * z0 for (x0, z0), (x1, z1) in zip(points, points[1:] + points[:1], strict=True))
+
+
 REGION_HALF = 300  # a new squad's region: a square this far around it
 
 
@@ -67,8 +73,12 @@ class Placer:
         return n
 
     def polygon(self, corners, region: int | None = None) -> int:
-        """A navigation region from corners in order (RegionPoints); returns its id."""
+        """A navigation region from corners in order (RegionPoints), wound counter-clockwise in (x, z) whichever way
+        they were given (the game finds nothing inside a clockwise region, so its squad never moves); returns its
+        id."""
         n = region if region is not None else max(self.free("regionpoint", "region"), self.free("squadron", "region"))
+        if winding([(c[0], c[2]) for c in corners]) < 0:
+            corners = list(reversed(corners))
         for k, (x, y, z) in enumerate(corners):
             self.single(REGIONPOINT_ID, (x, y, z), name=f"region{n}_{k}", fields={"region": n, "corner": k})
         return n
