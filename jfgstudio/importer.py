@@ -50,10 +50,13 @@ def check(path: str | Path, catalog, log=None) -> Report:
            f"({len(result.get('newTextures', {}))} new images)",
            f"buffer: {len(result['data'])} bytes unpacked; fits the game's track buffer"]
     size = len(result["data"])
-    if size > TRACK_LARGEST:
-        out.append(f"error: {size // 1024} KB unpacked is more than the game's largest level ({TRACK_LARGEST // 1024} "
-                   "KB): the level's objects then find no memory and the game crashes (play-tested at 329 KB). Use "
-                   "fewer triangles: coarser walls, textures that repeat (game_textures repeats both), fewer props")
+    need = size + TABLE_BYTES * triangles
+    fits = need <= TRACK_BUFFER
+    if not fits:
+        out.append(f"error: the track needs {need // 1024} KB at load ({size // 1024} KB and about {TABLE_BYTES} "
+                   f"bytes per triangle of tables), more than the game's {TRACK_BUFFER // 1024} KB track buffer: it "
+                   "writes past it and the game crashes (play-tested). Use fewer triangles: coarser walls, textures "
+                   "that repeat (game_textures repeats both), fewer props")
     elif size > TRACK_LARGE:
         out.append(f"warning: {size // 1024} KB unpacked: bigger than 9 in 10 of the game's levels "
                    f"({TRACK_LARGE // 1024} KB); keep its objects few, or use fewer triangles")
@@ -70,7 +73,7 @@ def check(path: str | Path, catalog, log=None) -> Report:
         out.append(f"error: {lost} colliding triangles come after non-colliding (nocollide) ones in their segment: the "
                    "game gives them no collision (the player falls through). The importer puts them last within a draw "
                    "pass: make the see-through surfaces after them colliding, or the decoration solid")
-    report = Report(not lost and not art and size <= TRACK_LARGEST, out)
+    report = Report(not lost and not art and fits, out)
     try:
         from jfgstudio.gui.viewport import TrackMesh  # numpy only; no window needed
         mesh = TrackMesh(str(path))
@@ -82,9 +85,12 @@ def check(path: str | Path, catalog, log=None) -> Report:
     return report
 
 
-# The game's own levels' tracks, unpacked: 9 in 10 are under TRACK_LARGE, the largest is TRACK_LARGEST. The track
-# shares the game's 8 MB heap with the level's objects: a 329 KB one left them no room and crashed (play-tested).
-TRACK_LARGE, TRACK_LARGEST = 121 * 1024, 247 * 1024
+# The game loads a track into one heap block of TRACK_BUFFER bytes and builds tables of about TABLE_BYTES per
+# triangle after it, unchecked (decomp PORT_FINDINGS request 15): a 329 KB, 8,531-triangle track overran it and
+# crashed (play-tested). The port's newer builds give it more; a pack keeps to the game's own. 9 in 10 of the
+# game's tracks are under TRACK_LARGE unpacked.
+TRACK_BUFFER, TABLE_BYTES = 0x9F000, 44
+TRACK_LARGE = 121 * 1024
 NO_COLLISION = 0x80  # a triangle flag: drawn, not solid
 
 
