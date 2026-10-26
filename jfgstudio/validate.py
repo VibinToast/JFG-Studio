@@ -403,8 +403,8 @@ def _check_winding(region_points, of) -> list[Problem]:
         pts = [(x, z) for _, x, z in sorted(pts, key=lambda p: p[0] if p[0] is not None else -1)]
         if len(pts) >= 3 and winding(pts) < 0:
             out.append(Problem(ERROR, "region-winding", of, f"region {region}: its corners go clockwise in (x, z): "
-                                                            "the game finds nothing inside it, so its squad stands still and "
-                                                            "never turns. fix_squad (or reversing the corner numbers) "
+                                                            "the game finds nothing inside it, so its squad stands "
+                                                            "still and never turns. fix_squad (or reversing the corner numbers) "
                                                             "mends it"))
     return out
 

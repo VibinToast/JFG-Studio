@@ -197,8 +197,9 @@ TOOLS = [
                                       a.get("start_at_load", True), a.get("wait")),
           {"level": _LEVEL, "points": {"type": "array", "items": _POS, "minItems": 2},
            "loop": {"type": "boolean"}, "squadron": {"type": "string"},
-           "start_at_load": {"type": "boolean", "description": "give the squadron's nearest node a start value "
-                                                                "(default true: without one the patrol doesn't set off)"},
+           "start_at_load": {"type": "boolean",
+                             "description": "give the squadron's nearest node a start value (default true: without "
+                                            "one the patrol doesn't set off)"},
            "wait": {"type": "integer", "description": "wait at each node (stock 15)"}}, ["level", "points"]),
     _tool("fix_squad", "Mend a squadron: point it (and its members) at a fitting stock squad of its own enemy, keeping "
           "its fields; make it spawn at once; wind its region counter-clockwise. For squads that stand still, never "

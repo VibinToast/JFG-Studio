@@ -109,7 +109,8 @@ class AgentTest(unittest.TestCase):
 
     def with_catalog(self):
         self.s._catalog, self.s._catalog_error, self.s._types = FakeCatalog(), None, TYPES
-        self.s._squads = {0x29: [(2, True, 4, (10, 2), 0x11), (1, True, 5, (13, 3), 0x11)]}  # made-up stock squads of 0x29
+        # made-up stock squads of 0x29: (mode, moves, member entry, (list, entry), behaviour)
+        self.s._squads = {0x29: [(2, True, 4, (10, 2), 0x11), (1, True, 5, (13, 3), 0x11)]}
 
     def errors(self):
         return [p for p in val.validate(self.s.p) if p.severity == val.ERROR]

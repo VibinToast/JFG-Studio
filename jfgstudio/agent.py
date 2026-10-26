@@ -1177,7 +1177,8 @@ class Session:
         """A patrol route: nodes on the floor at `points` ([x, z] or [x, y, z]), linked in order both ways (a chain
         is walked there and back; `loop` joins the last to the first). With `squadron` (a squadron's uid) it is put in
         patrol mode; it starts from the node nearest to itself, which gets a start value (`start_at_load`: a
-        patrol whose nearest node has none doesn't set off, decomp MSR mod #6). `wait`: the wait at each node (stock 15)."""
+        patrol whose nearest node has none doesn't set off, decomp MSR mod #6). `wait`: the wait at each node
+        (stock 15)."""
         lv = self._level(level)
         if not isinstance(points, list) or len(points) < 2:
             raise AgentError("a patrol needs at least two points")
@@ -1327,7 +1328,8 @@ class Session:
                 best = self.squad_examples(ours, runs)
                 fits = best is not None
                 # a sentry (never walks or turns) copied where the game has a squad of that enemy that walks
-                sentry = fits and o.get("fields", {}).get("behaviour", e[0x0D]) == SENTRY and                     self._catalog.stock_entry(*best[0])[0x0D] != SENTRY
+                behaviour = o.get("fields", {}).get("behaviour", e[0x0D])
+                sentry = fits and behaviour == SENTRY and self._catalog.stock_entry(*best[0])[0x0D] != SENTRY
                 if stock_baddy is not None and (ours != stock_baddy or (fits and e[0x24] & 0xF != runs) or sentry):
                     out.append((lv.name, o["uid"], ours, stock_baddy))
         return out
