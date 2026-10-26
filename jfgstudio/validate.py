@@ -336,6 +336,11 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
             out += _check_exit(project, o, of, schemas)
         elif key == "patrolpoint":
             patrol_nodes.append((fields.get("node"), uid))
+            if fields.get("startAtLoad"):
+                out.append(Problem(WARNING, "patrol-start", of, "the patrol point has a start value: the squadron "
+                                                                "nearest it rides a lift from level load, stops at its "
+                                                                "first node and never fights. Set startAtLoad to 0",
+                                   uid))
         elif key == "patrolpath":
             patrol_links.append((fields.get("nodeA"), fields.get("nodeB"), uid))
         elif key == "fogzone" and fields.get("fadeTime", 1) == 0:
@@ -404,8 +409,8 @@ def _check_winding(region_points, of) -> list[Problem]:
         if len(pts) >= 3 and winding(pts) < 0:
             out.append(Problem(ERROR, "region-winding", of, f"region {region}: its corners go clockwise in (x, z): "
                                                             "the game finds nothing inside it, so its squad stands "
-                                                            "still and never turns. fix_squad (or reversing the corner numbers) "
-                                                            "mends it"))
+                                                            "still and never turns. fix_squad (or reversing the "
+                                                            "corner numbers) mends it"))
     return out
 
 

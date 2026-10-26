@@ -37,6 +37,7 @@ NEW_GAME_LEVEL = 21  # where a new game starts (Juno); the editor's default way 
 SIZED = 12  # describe_type of a shared schema (doors) measures this many of its most used types' models
 KEY_IDS = tuple(range(0x258, 0x262))  # the coloured keys: keyLock 2 (yellow) is 0x258 ... 11 (blue) 0x261
 PATROL_NEAR = 300  # place_patrol moves a squadron farther than this from its route to the route's first node
+PATROL_BEHAVIOUR = 2  # squadron +0x0D: walk the patrol nodes (MSR mod #6)
 SMART, SENTRY = 0x11, 9  # squadron behaviours (+0x0D): walks to the hero in its region; never walks (MSR mod #6)
 PATROL_MODE = 6  # a squadron's kind (low 4 bits) that walks the patrol network (decomp: "Squad patrol network")
 IMAGE_PIXELS = 2048  # a new image is stored as one 16-bit texture of at most 4 KB: bigger ones are shrunk
@@ -1173,12 +1174,12 @@ class Session:
         return made
 
     def place_patrol(self, level: str, points: list, loop: bool = False, squadron: str | None = None,
-                     start_at_load: bool = True, wait: int | None = None) -> list[dict]:
+                     wait: int | None = None) -> list[dict]:
         """A patrol route: nodes on the floor at `points` ([x, z] or [x, y, z]), linked in order both ways (a chain
         is walked there and back; `loop` joins the last to the first). With `squadron` (a squadron's uid) it is put in
-        patrol mode; it starts from the node nearest to itself, which gets a start value (`start_at_load`: a
-        patrol whose nearest node has none doesn't set off, decomp MSR mod #6). `wait`: the wait at each node
-        (stock 15)."""
+        patrol mode (behaviour 2, the node patrol, sets off by itself from the node nearest to it) and fights as a
+        smart squad once it sees the hero (alert behaviour 0x11; decomp MSR mod #6, not play-tested). `wait`: the
+        wait at each node (stock 15)."""
         lv = self._level(level)
         if not isinstance(points, list) or len(points) < 2:
             raise AgentError("a patrol needs at least two points")
@@ -1200,9 +1201,6 @@ class Session:
             pairs.append((nodes[-1], nodes[0]))
         for a, b in pairs:
             placer.patrol_link(a, b, link_ex)
-        if sq is not None and start_at_load:
-            nearest = min(nodes, key=lambda n: math.dist(n["pos"], sq["pos"]))
-            nearest["fields"]["startAtLoad"] = 1
         made = self._add(lv, placer.made, "patrol")
         if sq is not None and min(math.dist(n["pos"][::2], sq["pos"][::2]) for n in nodes) > PATROL_NEAR:
             made += self._move_squad(lv, sq, nodes[0]["pos"])
@@ -1213,6 +1211,9 @@ class Session:
             self.update_object(lv.name, squadron, fields={"kind": ((kind or 0) & 0xF0) | PATROL_MODE})
             if self.squad_examples(sq["fields"].get("baddyType", -1), PATROL_MODE) is not None:
                 self.fix_squad(lv.name, squadron)  # the game's own patrol squad of this enemy: its other bytes fit
+            # walk the nodes; once alerted (the hero seen), fight like a smart squad
+            self.update_object(lv.name, squadron, fields={"behaviour": PATROL_BEHAVIOUR, "alertBehaviour": SMART,
+                                                          "hurtBehaviour": SMART})
             made.append(self._describe(sq))
             others = [o for o in lv.objects["objects"] if self._key(o) == "patrolpoint" and o not in nodes]
             mine = min(math.dist(n["pos"], sq["pos"]) for n in nodes)

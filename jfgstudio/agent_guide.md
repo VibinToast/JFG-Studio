@@ -137,8 +137,10 @@ player to install it (Blender 5.2 or newer: Edit > Preferences > Add-ons, the â–
 - **Patrols**: `place_patrol(level, points, loop, squadron)` lays a route of nodes along the points and puts the
   squadron in patrol mode: a chain is walked there and back, a ring (`loop`) round and round. A squadron walks the
   route nearest to itself: a squad more than 300 from its route is moved to the route's first node with its
-  members and region. The node nearest the squadron gets a start value (`start_at_load`, default on): a patrol
-  without one doesn't set off.
+  members and region. A patrol squad walks the nodes in a straight line (no path-finding: keep every link clear
+  and wide enough for the squad) and fights like any squad once it sees the hero. Never give a patrol point a start
+  value (`startAtLoad`): it means "ride the node's lift", and a squad near one stops at its first node for good
+  (`validate`: `patrol-start`).
   Squads without a patrol stay in their region.
 - **Switch doors**: `place_switch_door(level, switch_pos, door="new", door_type, door_pos)` (or `door`: a door's
   uid) places the game's shootable switch: it keeps the door locked until the player shoots it, then opens it and

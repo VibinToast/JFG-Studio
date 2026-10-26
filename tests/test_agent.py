@@ -503,15 +503,16 @@ class Prefabs(AgentTest):
         self.with_catalog()
         squad = self.s.place_squad("home", [0, -300], "0x29", members=2)
         sq = next(o["uid"] for o in squad if o.get("schema") == "squadron")
-        made = self.s.place_patrol("home", [[0, -250], [400, -250], [400, -600]], loop=True, squadron=sq,
-                                   start_at_load=True, wait=30)
+        made = self.s.place_patrol("home", [[0, -250], [400, -250], [400, -600]], loop=True, squadron=sq, wait=30)
         nodes = [o for o in made if o.get("schema") == "patrolpoint"]
         links = [o for o in made if o.get("schema") == "patrolpath"]
         self.assertEqual(sorted(n["fields"]["node"] for n in nodes), [1, 2, 3])
         self.assertEqual(len(links), 3)  # a ring
-        self.assertEqual(sum(n["fields"].get("startAtLoad", 0) for n in nodes), 1)
+        self.assertFalse([n for n in nodes if n["fields"].get("startAtLoad")])  # a start value rides a lift
         self.assertEqual({n["fields"]["wait"] for n in nodes}, {30})
-        self.assertEqual(next(o for o in made if o.get("uid") == sq)["fields"]["kind"], 0x16)  # 0x12: high bits kept
+        fields = next(o for o in made if o.get("uid") == sq)["fields"]
+        self.assertEqual(fields["kind"], 0x16)  # 0x12: high bits kept
+        self.assertEqual((fields["behaviour"], fields["alertBehaviour"]), (2, 0x11))  # patrol, then fight
         self.assertEqual(self.s.squad_examples(0x29), ((10, 2), (10, 4)))  # the usual mode (2), not the rare 1
         self.assertEqual(self.s.squad_examples(0x29, 1), ((13, 3), (13, 5)))
         self.assertIsNone(self.s.squad_examples(0x29, 6))  # no stock patrol squad of it: the squad keeps its own

@@ -16,6 +16,6 @@
   {"name": "wait", "offset": "0x0E", "type": "u8", "description": "wait time at the node"},
   {"name": "node", "offset": "0x0F", "type": "u8", "link": "patrolNode", "description": "node number 1..N, unique"},
   {"name": "flags", "offset": "0x10", "type": "u8", "description": "0x02 sniper point; 0x04 sets squad flag 0x1000 while heading here"},
-  {"name": "startAtLoad", "offset": "0x15", "type": "s8", "description": "low 2 bits non-zero: the nearest patrolling squadron starts at level load"}
+  {"name": "startAtLoad", "offset": "0x15", "type": "s8", "description": "keep 0 (every stock node): non-zero makes the nearest squadron ride the node's lift (behaviour 0x1F) from level load, which only ends at a node with a lift, so without one it stops at its first node and ignores its own behaviour (decomp MSR mod #6)"}
  ]
 }
