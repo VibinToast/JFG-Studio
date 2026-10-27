@@ -890,6 +890,17 @@ class Session:
         dest.write_bytes(src_path.read_bytes())
         return {"music": f"pack:music/{name}", "use": f"set_level(level, {{\"music\": \"pack:music/{name}\"}})"}
 
+    def set_thumbnail(self, src: str | None) -> dict:
+        try:
+            dest = proj.set_thumbnail(self.p, src or None)
+        except proj.ProjectError as e:
+            raise AgentError("; ".join(e.problems)) from e
+        if dest is None:
+            return {"thumbnail": None}
+        size = proj.thumbnail_size(dest.read_bytes())
+        return {"thumbnail": dest.name, "size": list(size) if size else None,
+                "problems": [p.message for p in val._check_thumbnail(self.p)]}
+
     # ------------------------------------------------------------------ levels
 
     def level_info(self, name: str) -> dict:

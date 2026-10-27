@@ -10,6 +10,7 @@
     kinds/<name>.json, kinds/<name>/  object types made from stock ones, with their textures (pack:kind/<name>)
     baddies.json                    patches of the game's enemy animation tables (baddy_patches.py), optional
     objtypes/<name>.json            object types made from a stock definition (packtypes.py; pack:objtype/<name>)
+    thumb.png (or thumb.dds)        the pack's picture on the game's mods page, optional
 
 Files are saved deterministically (sorted keys, one-space indent, LF, a final newline), so a load followed by a save
 gives the same bytes and projects diff cleanly in git.
@@ -28,6 +29,8 @@ NAME_RE = re.compile(r"^[a-z0-9_][a-z0-9_\-]*$")
 # A mod id another pack can depend on: the runtime checks every dependency id with N64Recomp's validate_mod_id
 # (letters, digits and _, not starting with a digit). A pack's own id may hold a dot, but then nothing can depend on it.
 DEPENDABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# The mods page's picture of a pack, in the order the runtime looks for it at the root of the .nrm (mod_manifest.cpp)
+THUMBNAILS = ("thumb.dds", "thumb.png")
 
 
 class ProjectError(Exception):
@@ -98,6 +101,10 @@ class Project:
     def music_path(self, name: str) -> Path:
         """music/<name>.ogg: a pack's own music (OGG Vorbis), streamed by the port in place of the game's tune."""
         return self.path / "music" / f"{name}.ogg"
+
+    def thumbnail_path(self) -> Path | None:
+        """thumb.png (or thumb.dds) in the project folder: the picture the game's mods page shows for the pack."""
+        return next((f for f in (self.path / n for n in THUMBNAILS) if f.is_file()), None)
 
     def save(self) -> None:
         from jfgstudio import stock_edit  # the game level's objects' changes, kept as "stockEdits"
@@ -222,6 +229,33 @@ def create(path: Path | str, mod_id: str, name: str, author: str = "") -> Projec
         (path / folder).mkdir(parents=True, exist_ok=True)
     project.save()
     return project
+
+
+def set_thumbnail(project: Project, src: Path | str | None) -> Path | None:
+    """Copies a PNG or DDS into the project as its mods page picture (thumb.png / thumb.dds), replacing the one there;
+    None removes it."""
+    data = None
+    if src is not None:
+        src = Path(src)
+        if src.suffix.lower() not in (".png", ".dds"):
+            raise ProjectError([f"{src.name}: the mods page takes a PNG or DDS picture"])
+        data = src.read_bytes()
+    for name in THUMBNAILS:
+        (project.path / name).unlink(missing_ok=True)
+    if data is None:
+        return None
+    dest = project.path / f"thumb{src.suffix.lower()}"
+    dest.write_bytes(data)
+    return dest
+
+
+def thumbnail_size(data: bytes) -> tuple[int, int] | None:
+    """A PNG's or DDS's (width, height) from its header; None if it is neither."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24:
+        return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+    if data[:4] == b"DDS " and len(data) >= 20:
+        return int.from_bytes(data[16:20], "little"), int.from_bytes(data[12:16], "little")
+    return None
 
 
 def edit_stock_level(project: Project, name: str, level_id: int, display_name: str, track_id: int) -> Level:

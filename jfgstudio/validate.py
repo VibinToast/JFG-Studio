@@ -57,7 +57,24 @@ def validate(project: Project, schemas: dict | None = None) -> list[Problem]:
     out += _check_flags(project, schemas)
     out += _check_lights(project, schemas)
     out += _check_ids(project)
+    out += _check_thumbnail(project)
     return out
+
+
+def _check_thumbnail(project: Project) -> list[Problem]:
+    """The mods page's picture: one the runtime can't read leaves the tile blank, and it is drawn square."""
+    from jfgstudio.project import thumbnail_size
+    path = project.thumbnail_path()
+    if path is None:
+        return []
+    size = thumbnail_size(path.read_bytes())
+    if size is None:
+        return [Problem(WARNING, "thumbnail", path.name, f"{path.name} is not a {path.suffix[1:].upper()} file: the "
+                        "mods page would show nothing")]
+    if size[0] != size[1]:
+        return [Problem(WARNING, "thumbnail", path.name, f"the picture is {size[0]} x {size[1]}: the mods page draws "
+                        "it square, so it is stretched. 512 x 512 works")]
+    return []
 
 
 def _check_ids(project: Project) -> list[Problem]:

@@ -118,6 +118,44 @@ class Markers(unittest.TestCase):
         self.assertEqual(o["size"], 0x0E)
 
 
+
+def _png(w: int, h: int) -> bytes:
+    import struct
+    import zlib
+    raw = b"".join(b"\0" + bytes(w * 4) for _ in range(h))
+    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))  # noqa: E731
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+class Thumbnail(unittest.TestCase):
+    def test_set_validate_remove(self):
+        from jfgstudio import project as proj
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            self.assertIsNone(p.thumbnail_path())
+            src = Path(tmp) / "Cover.PNG"
+            src.write_bytes(_png(8, 4))
+            self.assertEqual(proj.set_thumbnail(p, src).name, "thumb.png")
+            self.assertEqual(proj.thumbnail_size(p.thumbnail_path().read_bytes()), (8, 4))
+            self.assertEqual([x.rule for x in val._check_thumbnail(p)], ["thumbnail"])  # not square
+            src.write_bytes(_png(8, 8))
+            proj.set_thumbnail(p, src)
+            self.assertFalse(val._check_thumbnail(p))
+            dds = Path(tmp) / "cover.dds"
+            dds.write_bytes(b"DDS " + (124).to_bytes(4, "little") + bytes(4) + (16).to_bytes(4, "little")
+                            + (16).to_bytes(4, "little") + bytes(108))
+            proj.set_thumbnail(p, dds)  # replaces the PNG: the runtime would take the DDS anyway
+            self.assertEqual(sorted(f.name for f in p.path.glob("thumb.*")), ["thumb.dds"])
+            self.assertFalse(val._check_thumbnail(p))
+            (p.path / "thumb.dds").write_bytes(b"not a picture")
+            self.assertEqual([x.rule for x in val._check_thumbnail(p)], ["thumbnail"])
+            with self.assertRaises(proj.ProjectError):
+                proj.set_thumbnail(p, Path(tmp) / "cover.jpg")
+            self.assertIsNone(proj.set_thumbnail(p, None))
+            self.assertIsNone(p.thumbnail_path())
+
+
 class Music(unittest.TestCase):
     def test_music_manifest_and_validate(self):
         from jfgstudio import build

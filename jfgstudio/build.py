@@ -717,6 +717,9 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
             z.writestr(name, raw)
         if patch:
             z.writestr("patch.bps", patch)
+        thumb = project.thumbnail_path()
+        if thumb:  # the mods page reads it from the root of the .nrm
+            z.writestr(thumb.name, thumb.read_bytes())
     out.write_bytes(buf.getvalue())
     _self_check(b, out)
     log(f"wrote {out}: {len(entries)} entries ({sum(e.get('append') is not None for e in entries)} new)"

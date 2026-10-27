@@ -1464,6 +1464,48 @@ def project_window() -> None:
         for d in deps:
             imgui.bullet_text(f"{d['id']} {d['version']}")
         imgui.tree_pop()
+    if imgui.tree_node("Mods page picture"):
+        _thumbnail_section()
+        imgui.tree_pop()
+
+
+def _thumbnail_section() -> None:
+    """The pack's thumb.png / thumb.dds: its picture in the game's mods list and details panel."""
+    path = S.project.thumbnail_path()
+    if path is None:
+        imgui.text_disabled("none: the mods page shows a blank tile")
+    elif path.suffix == ".png":
+        try:
+            from jfgformats import png
+            key = ("thumb", str(path), path.stat().st_mtime_ns)
+            if key not in S.view.thumbnails:
+                w, h, rgba = png.read_png(path.read_bytes())
+                S.view.thumbnail_rgba(key, w, h, rgba)
+            glo = S.view.thumbnails[key][0]
+            size = hello_imgui.em_size(6)
+            imgui.image(imgui.ImTextureRef(glo), imgui.ImVec2(size, size))
+        except Exception:  # noqa: BLE001 (validate says what is wrong with it)
+            imgui.text_colored(theme.colour("ERROR"), f"{path.name} can't be read as a PNG")
+    else:
+        _muted(f"{path.name} (DDS: no preview here)")
+    if imgui.button("Choose picture..."):
+        picked = (pfd.open_file("The pack's picture (square, 512 x 512 works)", "",
+                                ["Pictures", "*.png *.dds"]).result() or [None])[0]
+        if picked:
+            try:
+                proj.set_thumbnail(S.project, picked)
+                S.message = f"{S.project.thumbnail_path().name}: in the pack from the next build"
+                S.validate()
+            except proj.ProjectError as e:
+                S.message = "; ".join(e.problems)
+    if imgui.is_item_hovered():
+        theme.tip("A square PNG or DDS, copied into the project as thumb.png; the build puts it in the pack, and the "
+                  "game's mods page shows it")
+    if path is not None:
+        imgui.same_line()
+        if imgui.button("Remove##thumb"):
+            proj.set_thumbnail(S.project, None)
+            S.validate()
 
 
 PREFAB_PAYLOAD = "JFG_PREFAB"
