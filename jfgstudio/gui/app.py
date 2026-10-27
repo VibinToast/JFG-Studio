@@ -92,6 +92,7 @@ class State:
         self.drag_scale = 0  # the size field's value when a scale drag started
         self.settings_open = False
         self.settings_edit = {}
+        self.checked: tuple[str, int, int] | None = None  # the last Validate press: time, errors, warnings
         self.cat = None  # the local catalog of the user's ROM, opened on first use
         self.cat_error = ""
         self.objtypes: dict[int, dict] = {}  # object id -> name, behaviour, models, stock examples
@@ -123,6 +124,26 @@ class State:
 
     def validate(self) -> None:
         self.problems = val.validate(self.project, self.schemas) if self.project else []
+
+    def check(self) -> None:
+        """Validate pressed: the same check, answered in the status bar and the Console even when nothing's wrong
+        (the Console comes to the front when something is)."""
+        import time
+        self.validate()
+        if not self.project:
+            self.message = "Open a project to validate it"
+            return
+        errors = sum(p.severity == val.ERROR for p in self.problems)
+        warnings = sum(p.severity == val.WARNING for p in self.problems)
+        self.checked = (time.strftime("%H:%M:%S"), errors, warnings)
+        if errors or warnings:
+            self.message = f"Validate: {errors} errors, {warnings} warnings (see the Console)"
+            for w in hello_imgui.get_runner_params().docking_params.dockable_windows:
+                if w.label == "Console":
+                    w.is_visible = True
+                    w.focus_window_at_next_frame = True
+        else:
+            self.message = "Validate: no problems found"
 
     def save(self) -> None:
         if self.project:
@@ -1802,12 +1823,19 @@ def _place(pid: int, pos) -> None:
 
 def console() -> None:
     if imgui.button("Validate"):
-        S.validate()
+        S.check()
     imgui.same_line()
     if S.project:
         errors = sum(p.severity == val.ERROR for p in S.problems)
         warnings = sum(p.severity == val.WARNING for p in S.problems)
         imgui.text(f"{errors} errors, {warnings} warnings")
+        if S.checked:
+            imgui.same_line()
+            when, _, _ = S.checked
+            if errors or warnings:
+                imgui.text_colored(theme.colour("MUTED"), f"  (validated at {when})")
+            else:
+                imgui.text_colored(theme.colour("ACCENT"), f"  No problems found (validated at {when})")
     imgui.separator()
     for line in S.load_errors + S.errors:
         imgui.push_style_color(imgui.Col_.text, theme.colour("ERROR"))
@@ -1906,7 +1934,7 @@ def toolbar() -> None:
         imgui.end_combo()
     imgui.same_line()
     if imgui.button("Validate"):
-        S.validate()
+        S.check()
 
 
 def menus() -> None:
@@ -1953,7 +1981,7 @@ def menus() -> None:
         imgui.end_menu()
     if imgui.begin_menu("Build"):
         if imgui.menu_item("Validate", "", False, S.project is not None)[0]:
-            S.validate()
+            S.check()
         if imgui.menu_item("Build pack", "", False, S.project is not None and not S.playing)[0]:
             play(launch=False)
         if imgui.menu_item("Play in game", "", False, S.project is not None and not S.playing)[0]:
