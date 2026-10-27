@@ -82,8 +82,10 @@ tool, `guide`, tells it the game's units, limits and level patterns.
 ## Download
 
 Get the zip from [Releases](https://github.com/VibinToast/JFG-Studio/releases), unzip it anywhere and run
-`JFG-Studio.exe`; `jfgstudio.exe` beside it is the command line (and `jfgstudio.exe mcp` the agent server). Set your
-ROM and the Jet Force Gemini: Recompiled folder in File > Settings. The sample projects are in its `samples` folder.
+`JFG-Studio.exe`. `JFG-Studio-cli.exe` beside it is the command line (`JFG-Studio-cli` takes the commands below in
+place of `jfgstudio`) and the agent server (`JFG-Studio-cli mcp`): a separate console exe, because the editor's
+windowed exe has no console for output and no stdin/stdout for an MCP client. Set your ROM and the Jet Force Gemini:
+Recompiled folder in File > Settings. The sample projects are in its `samples` folder.
 
 ## Build the release
 

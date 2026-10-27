@@ -1,4 +1,5 @@
-# PyInstaller spec for the release: one folder with JFG-Studio.exe (the editor) and jfgstudio.exe (the command line).
+# PyInstaller spec for the release: one folder with JFG-Studio.exe (the editor, a windowed exe) and
+# JFG-Studio-cli.exe (the command line and the MCP server, a console exe: a windowed exe has no stdin/stdout).
 # Run by tools/build_release.ps1, which sets JFGFORMATS_PATH to a copy of the decomp's tools/ taken at a pinned
 # commit. jfgformats is bundled from there; it is never committed to this repo.
 import os
@@ -34,5 +35,5 @@ def exe(a, name, console):
 
 coll = COLLECT(  # noqa: F821
     exe(gui, "JFG-Studio", False), gui.binaries, gui.datas,
-    exe(cli, "jfgstudio", True), cli.binaries, cli.datas,
+    exe(cli, "JFG-Studio-cli", True), cli.binaries, cli.datas,
     name="JFG-Studio", upx=False)

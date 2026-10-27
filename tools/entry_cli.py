@@ -1,4 +1,4 @@
-"""jfgstudio.exe: the command line, and `jfgstudio mcp` for AI agents (a console exe)."""
+"""JFG-Studio-cli.exe: the command line, and `JFG-Studio-cli mcp` for AI agents (a console exe)."""
 
 import sys
 

@@ -66,8 +66,8 @@ def play(project: proj.Project, level: str | None = None, start_point: int = 0, 
     installed pack's path. Raises TestRunError, build.BuildError, formats.FormatsUnavailable or rom.RomError."""
     exe = find_exe(settings.get("port"))
     if exe is None:
-        raise TestRunError("the port is not set or has no game executable: File > Settings (or jfgstudio settings "
-                           "set port <folder>)")
+        raise TestRunError("the Jet Force Gemini: Recompiled folder is not set or has no game executable: File > "
+                           f"Settings (or {settings.command()} settings set port <folder>)")
     caps = capabilities(exe)
     if not caps:
         raise TestRunError(f"{exe.name} did not answer --capabilities: this port is older than JFG-Studio needs")

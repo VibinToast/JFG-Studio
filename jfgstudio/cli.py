@@ -100,12 +100,12 @@ def cmd_mcp(args) -> int:
 
 
 def cmd_not_yet(args) -> int:
-    print(f"jfgstudio {args.command}: not built yet (phase 0 task {args.task}, Docs/PHASE0_TASKS.md)")
+    print(f"{settings.command()} {args.command}: not built yet (phase 0 task {args.task}, Docs/PHASE0_TASKS.md)")
     return 2
 
 
 def parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="jfgstudio", description="Level and modpack editor for Jet Force Gemini: "
+    ap = argparse.ArgumentParser(prog=settings.command(), description="Level and modpack editor for Jet Force Gemini: "
                                                                  "Recompiled")
     ap.add_argument("--version", action="version", version=f"JFG-Studio {__version__}")
     sub = ap.add_subparsers(dest="command")
@@ -164,6 +164,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.command is None:
         args = parser().parse_args(["gui", *(argv if argv is not None else sys.argv[1:])])
     if args.command == "settings" and args.action == "set" and (not args.key or args.value is None):
-        print("usage: jfgstudio settings set <key> <value>  (an empty value clears it)")
+        print(f"usage: {settings.command()} settings set <key> <value>  (an empty value clears it)")
         return 1
     return args.run(args)

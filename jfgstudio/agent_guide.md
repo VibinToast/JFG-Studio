@@ -21,7 +21,8 @@ it; the player plays it. Every tool saves the project as it goes, and each level
    starts the game in the level). You can't play it yourself: say what to try, and the player reports back. To build
    and install only, `play` with `launch` false: give the player the `command` it returns, word for word (the level
    goes by its pack name, `level_<name>`; a command you write yourself may start nowhere). Without the MCP tools,
-   Studio's command line does the same: `jfgstudio validate <proj>`, `jfgstudio test <proj> --no-launch`.
+   Studio's command line does the same: `jfgstudio validate <proj>`, `jfgstudio test <proj> --no-launch`
+   (`JFG-Studio-cli` instead of `jfgstudio` in the release download).
 
 ## Blender (when you model geometry)
 

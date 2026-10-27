@@ -612,7 +612,7 @@ class _Builder:
 def build(project: Project, out: str | Path, rom_path: str | None = None, log=print) -> BuildResult:
     problems = [str(p) for p in val.validate(project) if p.severity == val.ERROR]
     if problems:
-        raise BuildError(["the project has errors (jfgstudio validate):", *problems])
+        raise BuildError(["the project has errors (Build > Validate shows them):", *problems])
     image = rom.load(rom_path)
     b = _Builder(project, image, log)
     b.plan_ids()

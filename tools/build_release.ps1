@@ -1,5 +1,5 @@
-# Builds the JFG-Studio release zip: dist/JFG-Studio-<version>-windows.zip, holding JFG-Studio.exe, jfgstudio.exe and
-# the sample projects. Needs the decomp: jfgformats is copied from its tools/ at a pinned commit (default: its HEAD)
+# Builds the JFG-Studio release zip: dist/JFG-Studio-<version>-windows.zip, holding JFG-Studio.exe,
+# JFG-Studio-cli.exe and the sample projects. Needs the decomp: jfgformats is copied from its tools/ at a pinned commit (default: its HEAD)
 # into the build only, never into this repo. Run from anywhere:
 #   powershell -File tools\build_release.ps1 [-Decomp <decomp checkout>] [-Commit <decomp commit>]
 param(

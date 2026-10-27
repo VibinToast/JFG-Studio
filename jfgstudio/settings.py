@@ -24,6 +24,11 @@ def shown_keys() -> dict[str, str]:
     return {k: v for k, v in KEYS.items() if not (frozen() and k == "decomp")}
 
 
+def command() -> str:
+    """The command line's name in messages: the release's console exe, or the source install's script."""
+    return "JFG-Studio-cli" if frozen() else "jfgstudio"
+
+
 def needed() -> str:
     """What the catalog needs set, for messages."""
     return "your ROM" if frozen() else "your ROM and the decomp"

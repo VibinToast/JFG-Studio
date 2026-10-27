@@ -37,7 +37,7 @@ def load(path: str | Path | None = None) -> bytes:
     jf = formats.load()
     path = path or settings.get("rom")
     if not path:
-        raise RomError("No ROM set: jfgstudio settings set rom <path to your US ROM>")
+        raise RomError(f"No ROM set: File > Settings (or {settings.command()} settings set rom <path to your US ROM>)")
     try:
         data = Path(path).read_bytes()
     except OSError as e:
