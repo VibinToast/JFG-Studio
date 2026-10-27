@@ -79,7 +79,22 @@ tool, `guide`, tells it the game's units, limits and level patterns.
      (`claude mcp add -s user blender -- <path to blender-mcp>`). It runs Python the agent sends inside Blender:
      keep Blender open with the add-on running while the agent works, and only then.
 
+## Download
+
+Get the zip from [Releases](https://github.com/VibinToast/JFG-Studio/releases), unzip it anywhere and run
+`JFG-Studio.exe`; `jfgstudio.exe` beside it is the command line (and `jfgstudio.exe mcp` the agent server). Set your
+ROM and the Jet Force Gemini: Recompiled folder in File > Settings. The sample projects are in its `samples` folder.
+
+## Build the release
+
+On a machine with the decomp: `tools/build_release.ps1 [-Decomp <checkout>] [-Commit <decomp commit>]` copies
+`tools/jfgformats` from the decomp at that commit (default its HEAD) into the build only, runs PyInstaller
+(`tools/jfgstudio.spec`) and writes `dist/JFG-Studio-<version>-windows.zip` with the samples, the licences and a
+`BUILD.txt` naming both commits. Nothing from the decomp is committed here.
+
 ## Run from source
+
+Running from source needs the decomp checkout for `jfgformats` (the `decomp` setting below); the release exe doesn't.
 
 ```
 python -m venv .venv
@@ -96,7 +111,7 @@ never in a project.
 
 | Key | What |
 |---|---|
-| `decomp` | the decomp checkout; Studio imports `tools/jfgformats` from it |
+| `decomp` | from source only: the decomp checkout; Studio imports `tools/jfgformats` from it (the exe has its own) |
 | `port` | the Jet Force Gemini: Recompiled folder (for fonts, `bin/mods` and test runs) |
 | `rom` | your own US ROM (used only to build the local catalog) |
 

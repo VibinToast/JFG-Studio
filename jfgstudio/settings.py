@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import platformdirs
@@ -11,6 +12,21 @@ KEYS = {
     "port": "the Jet Force Gemini: Recompiled folder",
     "rom": "your own US ROM (only used to build the local catalog)",
 }
+
+
+def frozen() -> bool:
+    """True in the release exe (PyInstaller): jfgformats is bundled, so there is no decomp to set."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def shown_keys() -> dict[str, str]:
+    """The settings a user sets: the release exe has no decomp setting."""
+    return {k: v for k, v in KEYS.items() if not (frozen() and k == "decomp")}
+
+
+def needed() -> str:
+    """What the catalog needs set, for messages."""
+    return "your ROM" if frozen() else "your ROM and the decomp"
 
 
 def config_dir() -> Path:
@@ -44,7 +60,9 @@ def _workspace() -> Path:
 
 def detected(key: str) -> str | None:
     """A path found without a setting, in the usual layout: the decomp next to JFG-Modding-Tools, the user's ROM
-    beside it. None when it isn't there."""
+    beside it. None when it isn't there (and always in the release exe, which sits wherever it was unzipped)."""
+    if frozen():
+        return None
     base = _workspace()
     if key == "decomp":
         candidate = base / "Decomp"

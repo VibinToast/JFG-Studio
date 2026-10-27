@@ -30,6 +30,7 @@ Neighbours in `JetForceGemini/`: the decomp (`Decomp/`, read-only; Studio import
 | `jfgstudio/track_textures.py` | a level's track texture list (what a texscroll numbers), from jfgformats' importer |
 | `jfgstudio/gui/` | the editor window (Unity-style docked layout) and the theme |
 | `samples/` | the sample planet project and the script that draws its geometry |
+| `tools/build_release.ps1`, `tools/jfgstudio.spec` | the release zip: PyInstaller, with `jfgformats` copied from the decomp at a pinned commit (build only) |
 | `tests/` | unittest, synthetic data only: `python -m unittest discover -s tests -t .` |
 
 ## Rules

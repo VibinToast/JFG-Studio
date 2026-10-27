@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -254,6 +255,20 @@ class Cli(unittest.TestCase):
         self.assertEqual(cli.main(["settings", "set", "decomp", "C:/decomp"]), 0)
         self.assertEqual(settings.get("decomp"), "C:/decomp")
         self.assertEqual(cli.main(["settings", "set", "nope", "x"]), 1)
+
+    def test_release_exe_has_no_decomp(self):
+        """The release exe bundles jfgformats: no decomp setting to show, nothing found beside the exe."""
+        from unittest import mock
+
+        from jfgstudio import formats
+        self.assertIn("decomp", settings.shown_keys())
+        with mock.patch.object(sys, "frozen", True, create=True):
+            self.assertNotIn("decomp", settings.shown_keys())
+            self.assertIsNone(settings.detected("rom"))
+            self.assertEqual(settings.needed(), "your ROM")
+            with mock.patch("importlib.import_module", side_effect=ImportError("gone")):
+                with self.assertRaisesRegex(formats.FormatsUnavailable, "missing its jfgformats"):
+                    formats.load()
 
 
 if __name__ == "__main__":

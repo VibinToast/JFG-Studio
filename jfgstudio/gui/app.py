@@ -17,7 +17,7 @@ import numpy as np
 from imgui_bundle import hello_imgui, imgui, imguizmo
 from imgui_bundle import portable_file_dialogs as pfd
 
-from jfgstudio import __version__, crashlog, edit, refs, stock_edit
+from jfgstudio import __version__, crashlog, edit, refs, settings, stock_edit
 from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
@@ -1490,7 +1490,7 @@ def prefabs() -> None:
     """Every stock object type in the user's catalog, by category: drag one into the Scene, or select it and Place."""
     pf = S.prefab
     if S.catalog() is None:
-        imgui.text_colored(theme.colour("ERROR"), "No catalog: set your ROM and the decomp in File > Settings.")
+        imgui.text_colored(theme.colour("ERROR"), f"No catalog: set {settings.needed()} in File > Settings.")
         imgui.text_wrapped(S.cat_error)
         return
     avail = imgui.get_content_region_avail()
@@ -1969,12 +1969,12 @@ def settings_popup() -> None:
     """File > Settings: the decomp, port and ROM paths (the same settings as `jfgstudio settings`)."""
     from jfgstudio import settings
     if S.settings_open:
-        S.settings_edit = {k: settings.load().get(k, "") for k in settings.KEYS}
+        S.settings_edit = {k: settings.load().get(k, "") for k in settings.shown_keys()}
         imgui.open_popup("Settings")
         S.settings_open = False
     if not imgui.begin_popup_modal("Settings", None, imgui.WindowFlags_.always_auto_resize)[0]:
         return
-    for key, what in settings.KEYS.items():
+    for key, what in settings.shown_keys().items():
         imgui.text(what)
         imgui.set_next_item_width(hello_imgui.em_size(36))
         _, S.settings_edit[key] = imgui.input_text(f"##{key}", S.settings_edit[key])

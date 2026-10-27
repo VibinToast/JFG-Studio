@@ -30,7 +30,7 @@ from jfgstudio.project import Project
 
 GAME_ID = "jet-force-gemini"
 SQUADRON = 0x4F
-DEFAULT_MIN_RECOMP = "1.1.8"
+DEFAULT_MIN_RECOMP = "1.3.0"  # the first Jet Force Gemini: Recompiled release with mod support
 HEROES = ("vela", "juno", "lupus")
 STOCK_LEVELS = 412  # the US ROM's level count (the catalog's level_count); appended levels are numbered from here
 # (table asset, data asset, what, how to compare two entries)

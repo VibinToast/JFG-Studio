@@ -7,6 +7,7 @@ The models are exported from the user's ROM into their data folder on first use,
 import numpy as np
 from imgui_bundle import hello_imgui, imgui
 
+from jfgstudio import settings
 from jfgstudio.gui import theme
 from jfgstudio.gui import viewport as vp
 
@@ -44,7 +45,7 @@ def models_window() -> None:
     A = _app()
     S = A.S
     if S.catalog() is None:
-        A._muted(f"No catalog: set your ROM and the decomp in File > Settings. {S.cat_error}")
+        A._muted(f"No catalog: set {settings.needed()} in File > Settings. {S.cat_error}")
         return
     users = model_users()
     avail = imgui.get_content_region_avail()

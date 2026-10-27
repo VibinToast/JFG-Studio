@@ -50,7 +50,7 @@ def cmd_settings(args) -> int:
             return 1
         settings.set_value(args.key, args.value)
     current = settings.load()
-    for key, what in settings.KEYS.items():
+    for key, what in settings.shown_keys().items():
         value = current.get(key) or (f"{settings.detected(key)}  (found automatically)" if settings.detected(key)
                                      else "(not set)")
         print(f"{key:7} {value}\n        {what}")
