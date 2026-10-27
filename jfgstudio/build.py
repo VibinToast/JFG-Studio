@@ -26,7 +26,7 @@ from jfgstudio import bps, formats, packtypes, paths, prefabs, refs, rom, stock_
 from jfgstudio import objects as obj
 from jfgstudio import validate as val
 from jfgstudio.catalog import Catalog
-from jfgstudio.project import Project
+from jfgstudio.project import Project, default_thumbnail
 
 GAME_ID = "jet-force-gemini"
 SQUADRON = 0x4F
@@ -717,9 +717,11 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
             z.writestr(name, raw)
         if patch:
             z.writestr("patch.bps", patch)
-        thumb = project.thumbnail_path()
-        if thumb:  # the mods page reads it from the root of the .nrm
+        thumb = project.thumbnail_path()  # the mods page reads it from the root of the .nrm
+        if thumb:
             z.writestr(thumb.name, thumb.read_bytes())
+        else:
+            z.writestr("thumb.png", default_thumbnail())
     out.write_bytes(buf.getvalue())
     _self_check(b, out)
     log(f"wrote {out}: {len(entries)} entries ({sum(e.get('append') is not None for e in entries)} new)"

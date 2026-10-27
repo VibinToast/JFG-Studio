@@ -10,7 +10,7 @@
     kinds/<name>.json, kinds/<name>/  object types made from stock ones, with their textures (pack:kind/<name>)
     baddies.json                    patches of the game's enemy animation tables (baddy_patches.py), optional
     objtypes/<name>.json            object types made from a stock definition (packtypes.py; pack:objtype/<name>)
-    thumb.png (or thumb.dds)        the pack's picture on the game's mods page, optional
+    thumb.png (or thumb.dds)        the pack's picture on the game's mods page, optional (Studio's icon without it)
 
 Files are saved deterministically (sorted keys, one-space indent, LF, a final newline), so a load followed by a save
 gives the same bytes and projects diff cleanly in git.
@@ -247,6 +247,11 @@ def set_thumbnail(project: Project, src: Path | str | None) -> Path | None:
     dest = project.path / f"thumb{src.suffix.lower()}"
     dest.write_bytes(data)
     return dest
+
+
+def default_thumbnail() -> bytes:
+    """Studio's icon: the mods page picture of a pack whose project has none (a blank tile otherwise)."""
+    return resources.files("jfgstudio").joinpath("assets/app_settings/icon.png").read_bytes()
 
 
 def thumbnail_size(data: bytes) -> tuple[int, int] | None:

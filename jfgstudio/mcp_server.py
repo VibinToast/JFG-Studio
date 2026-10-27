@@ -385,7 +385,7 @@ TOOLS = [
                                                                                                 a.get("name")),
           {"path": {"type": "string"}, "name": {"type": "string"}}, ["path"]),
     _tool("set_thumbnail", "The pack's picture on the game's mods page: copy a square PNG or DDS (512 x 512 works) "
-          "into the project as thumb.png / thumb.dds; an empty path removes it.",
+          "into the project as thumb.png / thumb.dds; an empty path removes it (packs without one show Studio's icon).",
           lambda s, a: s.set_thumbnail(a["path"]), {"path": {"type": "string"}}, ["path"]),
     _tool("validate", "Check the project against the game's rules, and each level's objects against its geometry; "
           "each problem names its file and object.",

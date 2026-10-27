@@ -154,6 +154,7 @@ class Thumbnail(unittest.TestCase):
                 proj.set_thumbnail(p, Path(tmp) / "cover.jpg")
             self.assertIsNone(proj.set_thumbnail(p, None))
             self.assertIsNone(p.thumbnail_path())
+            self.assertEqual(proj.thumbnail_size(proj.default_thumbnail()), (256, 256))  # Studio's icon, square
 
 
 class Music(unittest.TestCase):

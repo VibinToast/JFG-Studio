@@ -1472,20 +1472,20 @@ def project_window() -> None:
 def _thumbnail_section() -> None:
     """The pack's thumb.png / thumb.dds: its picture in the game's mods list and details panel."""
     path = S.project.thumbnail_path()
-    if path is None:
-        imgui.text_disabled("none: the mods page shows a blank tile")
-    elif path.suffix == ".png":
+    if path is None or path.suffix == ".png":
         try:
             from jfgformats import png
-            key = ("thumb", str(path), path.stat().st_mtime_ns)
+            key = ("thumb", str(path), path.stat().st_mtime_ns if path else 0)
             if key not in S.view.thumbnails:
-                w, h, rgba = png.read_png(path.read_bytes())
+                w, h, rgba = png.read_png(path.read_bytes() if path else proj.default_thumbnail())
                 S.view.thumbnail_rgba(key, w, h, rgba)
             glo = S.view.thumbnails[key][0]
             size = hello_imgui.em_size(6)
             imgui.image(imgui.ImTextureRef(glo), imgui.ImVec2(size, size))
         except Exception:  # noqa: BLE001 (validate says what is wrong with it)
             imgui.text_colored(theme.colour("ERROR"), f"{path.name} can't be read as a PNG")
+        if path is None:
+            imgui.text_disabled("Studio's icon, until you choose a picture")
     else:
         _muted(f"{path.name} (DDS: no preview here)")
     if imgui.button("Choose picture..."):
