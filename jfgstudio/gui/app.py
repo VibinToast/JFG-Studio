@@ -22,7 +22,7 @@ from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
 from jfgstudio import validate as val
-from jfgstudio.gui import icons, kind_tools, level_tools, model_viewer, planet_tools, script_tools, theme
+from jfgstudio.gui import icons, kind_tools, level_tools, model_viewer, planet_tools, script_tools, setup_window, theme
 from jfgstudio.gui import viewport as vp
 
 gz = imguizmo.im_guizmo
@@ -1945,6 +1945,8 @@ def menus() -> None:
             hello_imgui.get_runner_params().docking_params.layout_reset = True
         imgui.end_menu()
     if imgui.begin_menu("Help"):
+        if imgui.menu_item("Setup...", "", False)[0]:
+            setup_window.open_window()
         if imgui.menu_item("Open log folder", "", False)[0]:
             import os
             os.startfile(crashlog.log_dir())  # noqa: S606 (Windows: the folder in Explorer)
@@ -2307,12 +2309,14 @@ def run(project_path: str | None = None, screenshot: str | None = None, frames: 
         shortcuts()
         new_project_popup()
         settings_popup()
+        setup_window.setup_window()
         if screenshot:
             counter["n"] += 1
             if counter["n"] >= frames:
                 params.app_shall_exit = True
 
     params.callbacks.show_gui = guarded("editor", gui)
+    setup_window.start(screenshot is not None)
     params.fps_idling.enable_idling = not screenshot
     hello_imgui.run(params)
     if screenshot:
