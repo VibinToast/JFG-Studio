@@ -1194,12 +1194,13 @@ class Session:
     def place_squad(self, level: str, centre, member_type, members: int = 3, region=None, door=None,
                     door_type=None, door_pos=None, door_fields: dict | None = None, spread: float = 150,
                     name: str | None = None, squadron_example=None, member_example=None,
-                    face=None) -> list[dict]:
+                    face=None, size: int | None = None) -> list[dict]:
         """A squadron, its members around `centre` and the region they keep to; with `door` ("new" with door_type
         and door_pos, or an existing door's uid) a door it keeps locked until all of them are dead. Members face
         `face` ([x, z]; default: the level's start point 0, the way the player comes) until they have a target.
         A squad whose squadron spawns its own flying members is placed where they drop in from, so they cruise
-        FLYER_CRUISE over the floor (under any roof)."""
+        FLYER_CRUISE over the floor (under any roof). `size`: the members' size in percent (squadron +0x15); by
+        default the stock squad's, or 100 for another mod's type (the port multiplies it by that type's own scale)."""
         lv = self._level(level)
         members = _as_int(members, "members")
         if not 1 <= members <= 16:
@@ -1253,6 +1254,15 @@ class Session:
                      "baddyType": m_oid, "trigger": prefabs.TRIGGER_AT_ONCE}
         if native is not None:
             sq_fields["size"] = native
+        if m_kind and refs.parse(m_kind).category == "objtype" and not refs.parse(m_kind).is_pack:
+            # Another mod's type: the stock squad's percent (37 for some) would shrink it; the port multiplies the
+            # percent by the type's own definition scale (jfg_squad_types.cpp, "Its own size")
+            sq_fields["size"] = 100
+        if size is not None:
+            size = _as_int(size, "size")
+            if not 1 <= size <= 255:
+                raise AgentError("size is a percent, 1-255")
+            sq_fields["size"] = size
         if target is not None:
             sq_fields["heading"] = self._toward(sq_schema, (cx, cz), target)
         sq_pos = self._pos(lv, [cx, cz], sq_schema, True)

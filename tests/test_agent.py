@@ -190,6 +190,26 @@ class Placing(AgentTest):
             self.assertNotIn("bug", (o["uid"] + o.get("name", "")).lower())
         self.assertFalse(self.errors())
 
+    def test_squad_size(self):
+        # A stock squad keeps its example's percent unless given one; another mod's type is 100 (the game multiplies
+        # it by that type's own scale)
+        self.with_catalog()
+        squadron = next(o for o in self.s.place_squad("home", [0, -400], "0x29", members=2, size=150)
+                        if o.get("schema") == "squadron")
+        self.assertEqual(squadron["fields"]["size"], 150)
+        with self.assertRaises(agent.AgentError):
+            self.s.place_squad("home", [0, -400], "0x29", size=0)
+        mod = Path(self.tmp.name) / "someone_beetle"
+        mod.mkdir()
+        (mod / "mod.toml").write_text('[manifest]\nid = "someone_beetle"\nversion = "0.1.0"\n', encoding="utf-8")
+        (mod / "jfg_assets.json").write_text(json.dumps({"objtypes": [
+            {"append": "objtype_beetle", "def": "objdef_beetle", "like": 0x29}]}), encoding="utf-8")
+        self.s.add_dependency(None, None, mod_folder=str(mod))
+        made = self.s.place_squad("home", [300, -400], "someone_beetle:objtype/beetle", members=2)
+        squadron = next(o for o in made if o.get("schema") == "squadron")
+        self.assertEqual(squadron["fields"]["size"], 100)
+        self.assertEqual(squadron["kindFields"], {"baddyType": "someone_beetle:objtype/beetle"})
+
     def test_squad_locks_an_existing_door(self):
         self.with_catalog()
         made = self.s.place_squad("gemini", [0, -400], "0x29", members=2, door="door1")

@@ -180,7 +180,7 @@ TOOLS = [
           lambda s, a: s.place_squad(a["level"], a["centre"], a["member_type"], a.get("members", 3), a.get("region"),
                                      a.get("door"), a.get("door_type"), a.get("door_pos"), a.get("door_fields"),
                                      a.get("spread", 150), a.get("name"), a.get("squadron_example"),
-                                     a.get("member_example"), a.get("face")),
+                                     a.get("member_example"), a.get("face"), a.get("size")),
           {"level": _LEVEL, "centre": _XZ, "member_type": _TYPE, "members": {"type": "integer"},
            "region": {"type": "array", "items": _XZ, "description": "corners in order (default: a square 300 "
                                                                    "around the centre)"},
@@ -188,7 +188,10 @@ TOOLS = [
            "spread": {"type": "number"}, "name": {"type": "string"}, "squadron_example": _EXAMPLE,
            "member_example": _EXAMPLE,
            "face": {**_XZ, "description": "the point members face until they see the player (default: the "
-                                          "level's start point 0)"}}, ["level", "centre", "member_type"]),
+                                          "level's start point 0)"},
+           "size": {"type": "integer", "description": "the members' size in percent (1-255); default the stock "
+                    "squad's, or 100 for another mod's type (the game multiplies it by that type's own scale)"}},
+          ["level", "centre", "member_type"]),
     _tool("place_tribal", "A Tribal to rescue (the player touches it): a reward for exploring. The level must be on "
           "a planet, whose region keeps the count apart from the game's own Tribals.",
           lambda s, a: s.place_tribal(a["level"], a["pos"], a.get("type", "0x11C"), a.get("name")),
