@@ -22,7 +22,8 @@
      "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.\\-]*$"},
      "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
      "hash": {"type": "string"},
-     "project": {"type": "string", "description": "Studio only: the dependency's project folder (relative to this one), to place its object types"}
+     "project": {"type": "string", "description": "Studio only: the dependency's project folder (relative to this one), to place its object types"},
+     "mod": {"type": "string", "description": "Studio only: the folder of a mod that isn't a Studio project (its mod.toml and jfg_assets.json), to place its object types"}
     }
    }
   }

@@ -77,6 +77,37 @@ class PackTypes(unittest.TestCase):
         offset = b.schemas["squadron"].field("baddyType").offset
         self.assertEqual(fixups, [{"at": offset, "type": "u16", "ref": "someone_library:objtype_pad"}])
 
+    def test_mod_folder_dependency(self):
+        # A hand-made mod (mod.toml and jfg_assets.json, no project): its objtypes placed by name, written as "like"
+        import json
+        from pathlib import Path
+
+        from jfgstudio import agent, build
+        from jfgstudio import objects as obj
+        mod = Path(self.tmp.name) / "someone_beetle"
+        mod.mkdir()
+        (mod / "mod.toml").write_text('[manifest]\nid = "someone_beetle"\nversion = "0.2.0"\n', encoding="utf-8")
+        (mod / "jfg_assets.json").write_text(json.dumps({"objtypes": [
+            {"append": "objtype_beetle", "def": "objdef_beetle", "like": 0xB9},
+            {"append": "objtype_spark", "def": "objdef_spark"}]}), encoding="utf-8")
+        s = agent.Session(self.hub.path)
+        with self.assertRaises(agent.AgentError):
+            s.add_dependency("someone_other", None, mod_folder="../someone_beetle")  # not that mod's id
+        out = s.add_dependency(None, None, mod_folder="../someone_beetle")
+        self.assertEqual(out["dependencies"][-1], {"id": "someone_beetle", "version": "0.2.0",
+                                                   "mod": "../someone_beetle"})
+        self.assertEqual(set(out["types"]), {"someone_beetle:objtype/beetle", "someone_beetle:objtype/spark"})
+        hub = proj.load(self.hub.path)
+        info = packtypes.resolve(hub, "someone_beetle:objtype/beetle")
+        self.assertEqual((info["base"], info["fixup"]), (0xB9, "someone_beetle:objtype_beetle"))
+        with self.assertRaises(packtypes.PackTypeError):
+            packtypes.resolve(hub, "someone_beetle:objtype/spark")  # no "like": Studio can't tell how to write it
+        b = object.__new__(build._Builder)
+        b.p, b.schemas = hub, obj.load_schemas()
+        member = {"uid": "m", "type": "someone_beetle:objtype/beetle", "schema": "squadmember", "pos": [0, 0, 0],
+                  "size": 0x20}
+        self.assertEqual(b.entry_fixups(member, 8), [{"at": 8, "type": "u16", "ref": "someone_beetle:objtype_beetle"}])
+
     def test_validate(self):
         hub = proj.load(self.hub.path)
         level = proj.new_level(hub, "room", "Room", "stock:track/1")

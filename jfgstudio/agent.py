@@ -2105,10 +2105,27 @@ class Session:
                               f"{', '.join(map(str, sorted(after)))}: the build refuses it until fixed")
         return out
 
-    def add_dependency(self, id: str, version: str, project: str | None = None) -> dict:
+    def add_dependency(self, id: str | None, version: str | None, project: str | None = None,
+                       mod_folder: str | None = None) -> dict:
         """Another pack this one needs (mod.json "dependencies"): a library such as restored content. `project`: its
-        project folder, so its object types can be placed here (<id>:objtype/<name>)."""
+        project folder, so its object types can be placed here (<id>:objtype/<name>). `mod_folder`: instead, the
+        folder of a mod that isn't a Studio project (its mod.toml and jfg_assets.json "objtypes"); id and version
+        default to its mod.toml's."""
         import re
+
+        from jfgstudio import packtypes
+        mod = None
+        if project and mod_folder:
+            raise AgentError("give project or mod_folder, not both")
+        if mod_folder:
+            folder = Path(mod_folder) if Path(mod_folder).is_absolute() else Path(self.p.path) / mod_folder
+            try:
+                mod = packtypes.read_mod(folder.resolve())
+            except packtypes.PackTypeError as e:
+                raise AgentError(str(e)) from None
+            id, version = id or mod["id"], version or mod["version"]
+            if mod["id"] != id:
+                raise AgentError(f"{mod_folder} is the mod {mod['id']}, not {id}")
         if not proj.DEPENDABLE_ID_RE.match(id or ""):
             raise AgentError(f"{id!r} can't be a dependency: the game's mod loader takes only letters, digits and _ "
                              "in a dependency id (no dots or dashes; not starting with a digit), and refuses to open "
@@ -2127,10 +2144,15 @@ class Session:
             if other.id != id:
                 raise AgentError(f"{project} is the project of {other.id}, not {id}")
             dep["project"] = Path(os.path.relpath(folder.resolve(), Path(self.p.path).resolve())).as_posix()
+        if mod is not None:
+            dep["mod"] = Path(os.path.relpath(folder.resolve(), Path(self.p.path).resolve())).as_posix()
         deps = [d for d in self.p.meta.get("dependencies", []) if d["id"] != id] + [dep]
         self.p.meta["dependencies"] = deps
         self._save()
-        return {"dependencies": deps}
+        out = {"dependencies": deps}
+        if project or mod is not None:
+            out["types"] = packtypes.dependency_types(self.p, id)
+        return out
 
     def make_object_type(self, name: str, base, display_name: str | None = None, behaviour: int | None = None,
                          model: int | None = None, scale: float | None = None, copy_model: bool = False,

@@ -1463,10 +1463,43 @@ def project_window() -> None:
             imgui.text_disabled("none")
         for d in deps:
             imgui.bullet_text(f"{d['id']} {d['version']}")
+            if d.get("project") or d.get("mod"):
+                from jfgstudio import packtypes
+                try:
+                    for ref, about in packtypes.dependency_types(S.project, d["id"]).items():
+                        _muted(f"    {ref}  ({about})")
+                except packtypes.PackTypeError as e:
+                    imgui.text_colored(theme.colour("ERROR"), f"    {e}")
+        if imgui.button("Add a mod folder..."):
+            _add_mod_dependency()
+        if imgui.is_item_hovered():
+            theme.tip("A mod that isn't a Studio project (its mod.toml and jfg_assets.json): the pack needs it, and "
+                      "its object types can be placed as <mod id>:objtype/<name> (the agent's place and place_squad)")
         imgui.tree_pop()
     if imgui.tree_node("Mods page picture"):
         _thumbnail_section()
         imgui.tree_pop()
+
+
+def _add_mod_dependency() -> None:
+    """A dependency on a mod folder (packtypes.read_mod), its id and version from its mod.toml."""
+    from jfgstudio import packtypes
+    folder = pfd.select_folder("A mod's folder (its mod.toml and jfg_assets.json)").result()
+    if not folder:
+        return
+    try:
+        mod = packtypes.read_mod(Path(folder))
+    except packtypes.PackTypeError as e:
+        S.message = str(e)
+        return
+    if not proj.DEPENDABLE_ID_RE.match(mod["id"]) or mod["id"] == S.project.id:
+        S.message = f"{mod['id']}: can't be a dependency of this pack"
+        return
+    rel = Path(os.path.relpath(Path(folder).resolve(), S.project.path.resolve())).as_posix()
+    S.project.meta["dependencies"] = [d for d in S.project.meta.get("dependencies", []) if d["id"] != mod["id"]] + [
+        {"id": mod["id"], "version": mod["version"], "mod": rel}]
+    S.save()
+    S.message = f"{mod['id']}: {len(mod['types'])} object type(s) to place"
 
 
 def _thumbnail_section() -> None:

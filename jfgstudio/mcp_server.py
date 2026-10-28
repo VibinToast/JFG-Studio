@@ -311,12 +311,17 @@ TOOLS = [
            "set": {"type": "object", "description": "fields: action, altAction (0-255), weight (0-31), stance (0-7), "
                    "fireSet (0-126, null = none), loops (0-15)"}}, ["object", "anim", "set"]),
     _tool("add_dependency", "Make the pack need another (mod.json dependencies): a library pack such as restored "
-          "content. Replaces the version if it is already there. With its project folder, its object types can be "
-          "placed here as <id>:objtype/<name>.",
-          lambda s, a: s.add_dependency(a["id"], a["version"], a.get("project")),
-          {"id": {"type": "string"}, "version": {"type": "string", "description": "1.2.3"},
-           "project": {"type": "string", "description": "its .jfgproj folder (absolute, or relative to this one)"}},
-          ["id", "version"]),
+          "content. Replaces the version if it is already there. With its project folder, or the folder of a mod "
+          "that isn't a Studio project (a hand-made one: its mod.toml and jfg_assets.json objtypes), its object types "
+          "can be placed here (place, place_squad) as <id>:objtype/<name>; a mod's are named by their append name "
+          "without objtype_, and are written as their \"like\" stock type. The result lists them.",
+          lambda s, a: s.add_dependency(a.get("id"), a.get("version"), a.get("project"), a.get("mod_folder")),
+          {"id": {"type": "string", "description": "the mod id (with mod_folder: its mod.toml's if left out)"},
+           "version": {"type": "string", "description": "1.2.3 (with mod_folder: its mod.toml's if left out)"},
+           "project": {"type": "string", "description": "its .jfgproj folder (absolute, or relative to this one)"},
+           "mod_folder": {"type": "string", "description": "a mod folder that isn't a Studio project (absolute, or "
+                          "relative to this one)"}},
+          []),
     _tool("make_object_type", "An object type of the pack's own (objtypes/<name>.json): a stock type's definition "
           "with its behaviour, model and scale changed (a working refuel pad that looks like the bomb pad: base 0xB9, "
           "RefuelPoint, model 0x17B; behaviour 0 for a static prop; the AntTank 0x283 made solid: behaviour 49). "
