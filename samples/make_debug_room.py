@@ -1,4 +1,4 @@
-"""Makes a debug room for trying out mod enemies: a flat, walled, roofless room 2500 x 2500 with low walls and four
+"""Makes a debug room for trying out mod enemies: a flat, walled, roofless room 3000 x 3000 with low walls and four
 pillars (walls for rolling enemies to bounce off), reached through a portal just behind where a new game starts.
 
     python samples/make_debug_room.py <out .jfgproj> --mod <mod folder> --type <name>
@@ -22,10 +22,10 @@ import worldkit as wk  # noqa: E402
 from jfgstudio import agent  # noqa: E402
 
 GEN = "JFG-Studio samples/make_debug_room.py"
-HALF = 1250  # the room's inner half-width
-WALL_HEIGHT, THICK = 160, 80
-PILLARS = [(-550, -450), (550, -450), (-550, 450), (550, 450)]
-PILLAR_HALF, PILLAR_HEIGHT = 70, 320
+HALF = 1500  # the room's inner half-width (room for a big rolling enemy: the shellback is 280 long)
+WALL_HEIGHT, THICK = 220, 80
+PILLARS = [(-700, -550), (700, -550), (-700, 550), (700, 550)]
+PILLAR_HALF, PILLAR_HEIGHT = 100, 360
 FIRST_LEVEL = 21  # where a new game starts
 START, LIGHT, GLOW = 0x0D, 0x10, 0xC8
 IMAGES = {"floor": ("metal", 64, 3), "wall": ("stone", 64, 5)}
@@ -73,7 +73,7 @@ def main() -> None:
     for x, z in ((0, 0), (0, -800), (0, 800)):
         s.place("room", LIGHT, [x, z], fields={"red": 255, "green": 245, "blue": 225, "radius": 900}, lift=400)
     region = [[-HALF + 40, -HALF + 40], [HALF - 40, -HALF + 40], [HALF - 40, HALF - 40], [-HALF + 40, HALF - 40]]
-    s.place_squad("room", [0, -700], enemy, members=a.members, region=region, spread=220, name="test squad",
+    s.place_squad("room", [0, -900], enemy, members=a.members, region=region, spread=350, name="test squad",
                   face=[0, HALF - 250])
 
     # The portal, just behind a new game's start point 0 (the example world's stands ahead): turn round to see it
