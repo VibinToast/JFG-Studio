@@ -832,7 +832,7 @@ def scene() -> None:
         payload = imgui.accept_drag_drop_payload_py_id(PREFAB_PAYLOAD)
         if payload is not None:
             mouse = imgui.get_mouse_pos()
-            _place(payload.data_id, _ground_point(mouse.x - origin.x, mouse.y - origin.y, (w, h)))
+            _place(payload.data_id - PAYLOAD_OFFSET, _ground_point(mouse.x - origin.x, mouse.y - origin.y, (w, h)))
         imgui.end_drag_drop_target()
     hovered = imgui.is_item_hovered()
     draw = imgui.get_window_draw_list()
@@ -1573,6 +1573,9 @@ def _thumbnail_section() -> None:
 
 
 PREFAB_PAYLOAD = "JFG_PREFAB"
+# A drag's payload id must not be negative (imgui-bundle takes it unsigned), and the groups, kinds and other mods'
+# types have negative prefab ids: the payload carries pid + PAYLOAD_OFFSET.
+PAYLOAD_OFFSET = 1 << 24
 VARIANT_BASE = 1 << 20  # prefab ids from here: a type with a field set (oid << 4 | value), _split()
 UNCOUNTED = {"Ammo", "Health", "Breakable glass"}  # kind names that are their own plural
 # Types with no fields decoded, by behaviour (the decomp's behaviour table, by its init functions): the category and
@@ -1810,7 +1813,7 @@ def _prefab_row(pid: int, label: str, tip: str) -> None:
     if imgui.is_item_hovered():
         theme.tip(tip)
     if imgui.begin_drag_drop_source():
-        imgui.set_drag_drop_payload_py_id(PREFAB_PAYLOAD, pid)
+        imgui.set_drag_drop_payload_py_id(PREFAB_PAYLOAD, pid + PAYLOAD_OFFSET)
         imgui.text(f"Place {label}")
         imgui.end_drag_drop_source()
 
