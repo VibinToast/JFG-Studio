@@ -17,7 +17,7 @@ import numpy as np
 from imgui_bundle import hello_imgui, imgui, imguizmo
 from imgui_bundle import portable_file_dialogs as pfd
 
-from jfgstudio import __version__, crashlog, edit, refs, settings, stock_edit
+from jfgstudio import __version__, crashlog, edit, packtypes, refs, settings, squads, stock_edit
 from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
@@ -418,6 +418,9 @@ def _squad_title(o: dict) -> str | None:
     schema = S.schema(o)
     if schema is None or schema.key != "squadron":
         return None
+    kind = (o.get("kindFields") or {}).get("baddyType")
+    if isinstance(kind, str) and "/" in kind:  # another mod's or a pack's type: its own name, not its like enemy's
+        return f"{kind.rsplit('/', 1)[1].replace('_', ' ')} squad"
     baddy = S.fields(o, schema).get("baddyType")
     if not baddy:
         return None
@@ -1471,8 +1474,14 @@ def project_window() -> None:
         deps = S.project.meta.get("dependencies", [])
         if not deps:
             imgui.text_disabled("none")
-        for d in deps:
+        for d in list(deps):
             imgui.bullet_text(f"{d['id']} {d['version']}")
+            imgui.same_line()
+            if imgui.small_button(f"Remove##dep{d['id']}"):
+                _remove_dependency(d["id"])
+            if imgui.is_item_hovered():
+                theme.tip("The pack no longer needs it. Objects of its types stay in your levels: remove them too, "
+                          "or the validator and the build will say they can't be found")
             if d.get("project") or d.get("mod"):
                 from jfgstudio import packtypes
                 try:
@@ -1489,6 +1498,16 @@ def project_window() -> None:
     if imgui.tree_node("Mods page picture"):
         _thumbnail_section()
         imgui.tree_pop()
+
+
+def _remove_dependency(mod_id: str) -> None:
+    """Drops a dependency; says how many placed objects still use its types."""
+    S.project.meta["dependencies"] = [d for d in S.project.meta.get("dependencies", []) if d["id"] != mod_id]
+    S.save()
+    used = sum(1 for lv in S.project.levels.values() for o in lv.objects["objects"]
+               if f"{mod_id}:" in json.dumps({k: o.get(k) for k in ("type", "kindFields")}))
+    S.message = f"{mod_id} removed" + (f": {used} placed object(s) still use its types" if used else "")
+    S.validate()
 
 
 def _add_mod_dependency() -> None:
@@ -1585,6 +1604,36 @@ BEHAVIOUR_FOLDS = {
     27: ("Enemies & navigation", "AI junctions"),
 }
 KIND_BASE = -100  # prefab ids -100, -101 ...: the project's kinds, in name order
+MOD_BASE, MOD_MAX = -50, 50  # prefab ids -50 .. -99: other mods' enemy types (dependencies by mod folder), _mod_types
+
+
+def _is_mod(pid: int | None) -> bool:
+    return pid is not None and MOD_BASE - MOD_MAX < pid <= MOD_BASE
+
+
+def _mod_types() -> list[tuple[str, str, int]]:
+    """(ref, label, like) of the object types of the dependencies named by a mod folder (Project > Dependencies > Add
+    a mod folder...): placed as a squad of their "like" stock enemy, written as <mod id>:objtype/<name>. Read when the
+    dependencies change."""
+    deps = S.project.meta.get("dependencies", []) if S.project else []
+    key = json.dumps(deps, sort_keys=True)
+    cache = S.prefab.get("mod_types")
+    if cache and cache[0] == key:
+        return cache[1]
+    out = []
+    for d in deps:
+        if not d.get("mod"):
+            continue
+        try:
+            types = packtypes.dependency_mod(S.project, d["id"])["types"]
+        except (packtypes.PackTypeError, OSError, StopIteration):
+            continue
+        for name, t in sorted(types.items()):
+            if isinstance(t.get("like"), int):
+                out.append((f"{d['id']}:objtype/{name}", f"{name.replace('_', ' ')}  ({d['id']})", t["like"]))
+    out = out[:MOD_MAX]
+    S.prefab["mod_types"] = (key, out)
+    return out
 GROUPS = {-1: ("Squad, region and locked door", "A squadron of stock members, a square navigation region they keep "
                                                  "to, and a door that stays locked until they are dead"),
           -2: ("Exit and return start point", "An exit (set where it leads in the Inspector) and a start point in "
@@ -1634,6 +1683,16 @@ def prefabs() -> None:
             for k, (name, kind) in enumerate(sorted(S.project.kinds.items())):
                 _prefab_row(KIND_BASE - k, f"{kind['name']}  (pack:kind/{name})",
                             f"Made from {kind['base']}: placed with its base's stock entry and fields")
+            imgui.tree_pop()
+    mod_types = _mod_types()
+    if mod_types:
+        flags = imgui.TreeNodeFlags_.default_open
+        if imgui.tree_node_ex(f"Other mods' enemies ({len(mod_types)})##modtypes", flags):
+            for k, (ref, label, like) in enumerate(mod_types):
+                if search and search not in label.lower() and search not in ref.lower():
+                    continue
+                _prefab_row(MOD_BASE - k, label, f"{ref}: an enemy of another mod, run by that mod's code. Placed as "
+                            f"a squad made like the stock enemy 0x{like:X}; players need that mod too.")
             imgui.tree_pop()
     for category in order:
         flags = imgui.TreeNodeFlags_.default_open if search else 0
@@ -1719,7 +1778,8 @@ def _details_height(width: float) -> float:
     """How much of a tall Prefabs window the selected entry's options take, so the list gets the rest."""
     row = imgui.get_frame_height_with_spacing()
     pid = S.prefab["oid"]
-    text = HINT if pid is None else GROUPS[pid][1] if pid in (-2, -3) else "x" * 60 if pid <= KIND_BASE else ""
+    text = HINT if pid is None else GROUPS[pid][1] if pid in (-2, -3) else "x" * 60 if pid <= KIND_BASE or \
+        _is_mod(pid) else ""
     wrapped = imgui.calc_text_size(text, False, max(width, 1.0)).y + imgui.get_style().item_spacing.y if text else 0
     rows = 0 if pid is None else 4 if pid == -1 else 1 if pid < 0 else 2
     if pid is not None and pid >= 0 and S.sprite(_split(pid)[0]):
@@ -1796,6 +1856,9 @@ def _prefab_details() -> None:
             imgui.text_colored(theme.colour("ERROR"), "No stock entry to start from.")
     elif pid <= KIND_BASE:
         _muted("One of the pack's kinds (Kinds window): placed with its base's first stock entry.")
+    elif _is_mod(pid):
+        _muted("Another mod's enemy: a squad of it, with a region to keep to. Its size and moves are the mod's.")
+        _, pf["members"] = imgui.slider_int("Members", pf["members"], 1, 8)
     else:
         _muted(GROUPS[pid][1])
     if imgui.button("Place at view centre"):
@@ -1876,6 +1939,8 @@ def _place(pid: int, pos) -> None:
             door = doors[pf["door"] - 1] if 0 < pf["door"] <= len(doors) else None
             placer.squad(pos, example, baddy, member_examples[0], pf["members"], door,
                          S.objtypes[door]["examples"][0] if door is not None else None, mesh=S.view.mesh)
+        elif _is_mod(pid):
+            _place_mod_squad(placer, pid, pos)
         elif pid == -2:
             placer.exit_pair(pos)
         elif pid == -3:
@@ -1894,16 +1959,51 @@ def _place(pid: int, pos) -> None:
             y = S.view.mesh.floor_height(o["pos"][0], o["pos"][2], below=o["pos"][1] + 60)
             if y is not None:
                 o["pos"][1] = obj.on_ground(y, S.schema(o))
-    what = "kind" if pid <= KIND_BASE else GROUPS[pid][0] if pid < 0 else S.type_name(_split(pid)[0])
+    what = ("kind" if pid <= KIND_BASE else _mod_types()[MOD_BASE - pid][0] if _is_mod(pid) else GROUPS[pid][0]
+            if pid < 0 else S.type_name(_split(pid)[0]))
     h.add(placer.made, f"place {what}")
     S.selection = {o["uid"] for o in placer.made}
     S.message = f"Placed {len(placer.made)} object{'s' if len(placer.made) > 1 else ''}"
-    if pid == -1 and S.view.mesh is not None:
+    if (pid == -1 or _is_mod(pid)) and S.view.mesh is not None:
         holes = sum(placer.key(o) == "regioninfo" for o in placer.made)
         S.message += (f", {holes} hole(s) for cover" if holes else
                       " (no obstacle in its region: a smart squad stands and fires; put a crate in it, then Add cover, "
                       "or draw a hole with the Region tool)")
     S.validate()
+
+
+def _place_mod_squad(placer, pid: int, pos) -> None:
+    """A squad of another mod's type (as the agent's place_squad): a stock squad of its "like" enemy copied (the
+    squadron's unnamed bytes must be that enemy's), the squadron and members written as the mod's type, members at
+    100% (the mod's definition scales them; a stock squad's percent would shrink them). Squads whose members the
+    squadron spawns itself get no member entries."""
+    ref, label, like = _mod_types()[MOD_BASE - pid]
+    if S.squads is None:
+        S.squads = squads.index(S.cat) if S.catalog() is not None else {}
+    found = squads.examples(S.squads, like)
+    if found is None:
+        raise ValueError(f"the game has no squad of 0x{like:X}, the stock enemy {ref} is made like")
+    sq_example, member_example = found
+    members = S.prefab["members"]
+    name = f"{label.split('  (')[0]} squad"
+    if member_example is not None:
+        placer.squad(pos, list(sq_example), like, list(member_example), members, mesh=S.view.mesh)
+    else:  # the squadron spawns its members itself: no member entries (as Placer.squad, without them)
+        squadron_id = placer.free("squadron", "squadronId")
+        region = placer.region(pos)
+        squadron = placer.single(pre.SQUADRON_ID, pos, list(sq_example), name=name,
+                                 fields={"squadronId": squadron_id, "doorId": 0, "region": region, "count": members,
+                                         "baddyType": like, "trigger": pre.TRIGGER_AT_ONCE})
+        if S.view.mesh is not None:
+            placer.cover(S.view.mesh, squadron)
+    for o in placer.made:
+        key = placer.key(o)
+        if key == "squadron":
+            o["name"] = name
+            o.setdefault("fields", {})["size"] = 100
+            o["kindFields"] = {"baddyType": ref}
+        elif key == "squadmember":
+            o["type"] = ref
 
 
 def console() -> None:
