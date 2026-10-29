@@ -276,6 +276,35 @@ def edit_stock_level(project: Project, name: str, level_id: int, display_name: s
     return level
 
 
+def level_references(project: Project, name: str) -> list[str]:
+    """The project's files (other than the level's own) that name level `name` (pack:level/<name>): exits leading to
+    it, planets and galaxies entering it, scripts. Deleting the level leaves them pointing at nothing."""
+    ref = re.compile(r"pack:level/" + re.escape(name) + r"(?![A-Za-z0-9_\-])")
+    own = (Path(project.path) / "levels" / name).resolve()
+    out = []
+    for f in sorted(Path(project.path).rglob("*")):
+        if f.suffix not in (".json", ".lua") or not f.is_file() or own in f.resolve().parents or "build" in f.parts:
+            continue
+        try:
+            if ref.search(f.read_text(encoding="utf-8")):
+                out.append(f.relative_to(project.path).as_posix())
+        except (OSError, UnicodeDecodeError):
+            continue
+    return out
+
+
+def delete_level(project: Project, name: str) -> None:
+    """Removes level `name` from the project and its folder from disk. A stock-level edit going means the pack no
+    longer changes that game level."""
+    import shutil
+    if name not in project.levels:
+        raise ProjectError([f"no level {name}"])
+    folder = Path(project.path) / "levels" / name
+    if folder.is_dir():
+        shutil.rmtree(folder)
+    del project.levels[name]
+
+
 def new_level(project: Project, name: str, display_name: str, track: str) -> Level:
     if not NAME_RE.match(name):
         raise ProjectError([f"{name!r}: level names use lower case letters, digits, _ and -"])

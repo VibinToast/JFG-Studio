@@ -1484,7 +1484,15 @@ def project_window() -> None:
             kind = f"edits stock level {level.base}" if level.base is not None else name
             if imgui.selectable(f"{level.level['name']}  ({kind})##{name}", S.level == name)[0]:
                 S.level, S.selection = name, set()
+            if imgui.begin_popup_context_item(f"levelmenu##{name}"):
+                if imgui.menu_item("Delete level...", "", False)[0]:
+                    _LEVEL_DELETE.update(name=name, refs=proj.level_references(S.project, name), open=True)
+                imgui.end_popup()
+            if imgui.is_item_hovered():
+                theme.tip("Right-click to delete it" + (": the pack then leaves that game level as it is"
+                                                         if level.base is not None else ""))
         imgui.tree_pop()
+    _delete_level_popup()
     if imgui.button("New level"):
         _new_level()
     imgui.same_line()
@@ -1538,6 +1546,50 @@ def _remove_dependency(mod_id: str) -> None:
                if f"{mod_id}:" in json.dumps({k: o.get(k) for k in ("type", "kindFields")}))
     S.message = f"{mod_id} removed" + (f": {used} placed object(s) still use its types" if used else "")
     S.validate()
+
+
+_LEVEL_DELETE = {"name": None, "refs": [], "open": False}  # the level the Delete level popup asks about
+
+
+def _delete_level_popup() -> None:
+    """Asks before a level is deleted (its folder goes, with no undo), naming what still points at it."""
+    d = _LEVEL_DELETE
+    if d["open"]:
+        imgui.open_popup("Delete level")
+        d["open"] = False
+    if not imgui.begin_popup_modal("Delete level", None, imgui.WindowFlags_.always_auto_resize)[0]:
+        return
+    level = S.project.levels.get(d["name"]) if S.project else None
+    if level is None:
+        imgui.close_current_popup()
+        imgui.end_popup()
+        return
+    imgui.text(f"Delete {level.level['name']} ({d['name']})?")
+    if level.base is not None:
+        _muted(f"It edits game level {level.base}: without it, the pack leaves that level as the game has it.")
+    _muted("Its folder is deleted from the project, with everything placed in it. This can't be undone.")
+    if d["refs"]:
+        imgui.text_colored(theme.colour("HIGHLIGHT"), "Still pointing at it (fix these after):")
+        for f in d["refs"][:8]:
+            imgui.bullet_text(f)
+    if imgui.button("Delete"):
+        name = d["name"]
+        try:
+            proj.delete_level(S.project, name)
+        except (proj.ProjectError, OSError) as e:
+            S.message = f"Can't delete {name}: {e}"
+        else:
+            S.histories.pop(name, None)
+            if S.level == name:
+                S.level = next(iter(S.project.levels), None)
+                S.selection = set()
+            S.validate()
+            S.message = f"Deleted level {name}"
+        imgui.close_current_popup()
+    imgui.same_line()
+    if imgui.button("Cancel"):
+        imgui.close_current_popup()
+    imgui.end_popup()
 
 
 _DETAILS = {"key": None, "name": "", "description": ""}  # the fields being edited, for the project they were read from
