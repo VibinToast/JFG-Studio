@@ -22,7 +22,17 @@ from jfgstudio import objects as obj
 from jfgstudio import prefabs as pre
 from jfgstudio import project as proj
 from jfgstudio import validate as val
-from jfgstudio.gui import icons, kind_tools, level_tools, model_viewer, planet_tools, script_tools, setup_window, theme
+from jfgstudio.gui import (
+    icons,
+    kind_tools,
+    layouts,
+    level_tools,
+    model_viewer,
+    planet_tools,
+    script_tools,
+    setup_window,
+    theme,
+)
 from jfgstudio.gui import viewport as vp
 
 gz = imguizmo.im_guizmo
@@ -2046,6 +2056,8 @@ def menus() -> None:
         imgui.separator()
         if imgui.menu_item("Reset layout", "", False)[0]:
             hello_imgui.get_runner_params().docking_params.layout_reset = True
+        imgui.separator()
+        layouts.menu_items(_say)
         imgui.end_menu()
     if imgui.begin_menu("Help"):
         if imgui.menu_item("Setup...", "", False)[0]:
@@ -2291,6 +2303,10 @@ def shortcuts() -> None:
         duplicate()
 
 
+def _say(text: str) -> None:
+    S.message = text
+
+
 def status() -> None:
     if S.project:
         errors = sum(p.severity == val.ERROR for p in S.problems)
@@ -2311,11 +2327,12 @@ def _layout() -> hello_imgui.DockingParams:
 
     d = imgui.Dir
     params = hello_imgui.DockingParams()
+    # The default (owner's, 2026-10-28): Hierarchy, Prefabs and Project on the left; the Scene and its tabs with the
+    # Console under them only; Level, Inspector, Kinds, Triggers and Weapons on the right.
     params.docking_splits = [
-        split("MainDockSpace", "BottomSpace", d.down, 0.3),
-        split("MainDockSpace", "LeftSpace", d.left, 0.2),
-        split("MainDockSpace", "RightSpace", d.right, 0.27),
-        split("BottomSpace", "BottomRightSpace", d.right, 0.5),
+        split("MainDockSpace", "LeftSpace", d.left, 0.19),
+        split("MainDockSpace", "RightSpace", d.right, 0.35),
+        split("MainDockSpace", "BottomSpace", d.down, 0.23),
     ]
 
     def win(label, space, fn):
@@ -2323,7 +2340,7 @@ def _layout() -> hello_imgui.DockingParams:
         w.label, w.dock_space_name, w.gui_function = label, space, guarded(label, fn)
         return w
 
-    # The first window of each space is its front tab: Scene, Hierarchy, Inspector, Project and Console show.
+    # The first window of each space is its front tab: Scene, Hierarchy, Level and Console show.
     params.dockable_windows = [
         win("Scene", "MainDockSpace", scene),
         win("Level Graph", "MainDockSpace", level_graph),
@@ -2332,13 +2349,13 @@ def _layout() -> hello_imgui.DockingParams:
         win("Scripts", "MainDockSpace", script_tools.scripts_window),
         win("Hierarchy", "LeftSpace", hierarchy),
         win("Prefabs", "LeftSpace", prefabs),
-        win("Inspector", "RightSpace", labelled(inspector)),
+        win("Project", "LeftSpace", project_window),
         win("Level", "RightSpace", labelled(level_tools.level_window)),
+        win("Inspector", "RightSpace", labelled(inspector)),
         win("Kinds", "RightSpace", labelled(kind_tools.kinds_window)),
         win("Triggers", "RightSpace", labelled(script_tools.triggers_window)),
         win("Weapons", "RightSpace", labelled(script_tools.weapons_window)),
-        win("Project", "BottomSpace", project_window),
-        win("Console", "BottomRightSpace", console),
+        win("Console", "BottomSpace", console),
     ]
     focus = os.environ.get("JFGSTUDIO_FOCUS")  # tests and screenshots: bring that window to the front
     for w in params.dockable_windows:
@@ -2405,6 +2422,7 @@ def run(project_path: str | None = None, screenshot: str | None = None, frames: 
         io.config_error_recovery_enable_assert = False
 
     params.callbacks.post_init = post_init
+    params.callbacks.pre_new_frame = layouts.pre_new_frame  # a saved layout loads between frames
     counter = {"n": 0}
 
     def gui():
@@ -2412,6 +2430,9 @@ def run(project_path: str | None = None, screenshot: str | None = None, frames: 
         shortcuts()
         new_project_popup()
         settings_popup()
+        layouts.save_popup(_say)
+        if counter["n"] == 3 and os.environ.get("JFGSTUDIO_LAYOUT"):  # tests and screenshots: a saved layout
+            layouts.load(os.environ["JFGSTUDIO_LAYOUT"])
         setup_window.setup_window()
         if screenshot:
             counter["n"] += 1
