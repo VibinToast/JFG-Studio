@@ -722,11 +722,11 @@ def _rings(objs) -> dict:
     return out
 
 
-def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
+def _instances(objs, pickable: bool | str = True) -> tuple[list, dict]:
     """The objects drawn with their models: (path, matrix, tint) for the renderer, and their boxes by uid. Pickable
     ones are remembered for clicking in the Scene."""
     out, boxes = [], {}
-    if pickable:
+    if pickable is True:  # "add": appended to the instances already picked from (the read-only game objects)
         S.instances = []
     squad_sizes = _squad_sizes(objs)
     with_members = {S.fields(o, sc).get("squadron") for o in objs
@@ -831,7 +831,8 @@ def scene() -> None:
     stock = [] if S.game_editable() else S.game_objects()  # read-only game objects: drawn grey, not editable
     if stock:
         stock_keys = _keys(stock)
-        stock_inst, stock_boxes = _instances(stock, pickable=False)
+        # clickable to look at (the Inspector shows them read-only; the gizmo, Delete and the menu's edits leave them)
+        stock_inst, stock_boxes = _instances(stock, pickable="add")
         instances = instances + [(p, m, (0.25, 0.3, 0.4, 0.45)) for p, m, _ in stock_inst]
         lines = vp.marker_lines(objs + stock, {**keys, **stock_keys}, S.selection,
                                 vp.region_links(objs + stock, {**keys, **stock_keys}) + _camera_links(objs + stock)
@@ -883,7 +884,8 @@ def scene() -> None:
         level_tools.scene_tool(origin, w, h, hovered)
         _camera_input(hovered, objs)
         return
-    _scene_menu(origin, w, h, objs, hovered)
+    pickable = objs + stock  # the read-only game objects too: selected to look at and follow, never moved
+    _scene_menu(origin, w, h, pickable, hovered)
     using = _gizmo(origin, w, h, objs)
     if S.gizmo_note:
         draw.add_text(imgui.ImVec2(origin.x + 10, origin.y + 8), imgui.get_color_u32(theme.colour("HIGHLIGHT")),
@@ -891,7 +893,7 @@ def scene() -> None:
     _camera_input(hovered, objs)
     if hovered and imgui.is_mouse_clicked(imgui.MouseButton_.left) and not using and not gz.is_over() \
             and not imgui.get_io().key_alt:
-        _pick(origin, w, h, objs, keys)
+        _pick(origin, w, h, pickable, keys)
         mouse = imgui.get_mouse_pos()
         S.box_start = (mouse.x - origin.x, mouse.y - origin.y)
     _box_select(origin, w, h, objs, draw, using)
@@ -1197,6 +1199,8 @@ def inspector() -> None:
     light = len(sel) == 1 and (sc := S.schema(sel[0])) is not None and sc.key == "doorswitch"
     if light and locked:
         _light_link(sel[0])  # its links select the door and squad even while the light is read-only
+    if locked and len(sel) == 1 and (sc := S.schema(sel[0])) is not None and sc.key == "exit":
+        level_tools.exit_go(sel[0])  # where it leads, and Go to, even while the exit is read-only
     imgui.begin_disabled(locked)
     try:
         _inspector_body(sel, h, light_shown=light and locked)

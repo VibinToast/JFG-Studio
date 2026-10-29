@@ -537,6 +537,19 @@ def exit_picker(o: dict) -> None:
     _go_button(current, sp)
 
 
+def exit_go(o: dict) -> None:
+    """A read-only exit's destination and its Go to (the Inspector shows them above the greyed fields)."""
+    S = _app().S
+    current = exit_target(o, S.fields(o, S.schema(o)))
+    if not current:
+        return
+    names = dict(level_choices())
+    sp = S.fields(o, S.schema(o)).get("startPoint", 0)
+    imgui.text(f"Leads to {names.get(current, current)}, start point {sp}")
+    _go_button(current, sp)
+    imgui.separator()
+
+
 def _go_button(target: str, start_point: int) -> None:
     """Go to the level an exit leads to, with its arrival start point selected and framed: the pack's level, the
     pack's edit of that game level, or (asked) a new edit of it."""
