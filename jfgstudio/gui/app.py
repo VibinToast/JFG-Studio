@@ -1469,6 +1469,7 @@ def project_window() -> None:
         return
     _title(S.project.meta["name"])
     _muted(f"{S.project.id}  {S.project.meta['version']}   {S.project.path}")
+    _project_details()
     if imgui.small_button("Open project folder"):
         _show_project_folder()
     if imgui.is_item_hovered():
@@ -1532,6 +1533,47 @@ def _remove_dependency(mod_id: str) -> None:
                if f"{mod_id}:" in json.dumps({k: o.get(k) for k in ("type", "kindFields")}))
     S.message = f"{mod_id} removed" + (f": {used} placed object(s) still use its types" if used else "")
     S.validate()
+
+
+_DETAILS = {"key": None, "name": "", "description": ""}  # the fields being edited, for the project they were read from
+
+
+def _project_details() -> None:
+    """The pack's name and description (the game's Mods menu shows them), saved when a field is left. The mod id and
+    the folder stay: saves, dependencies and levels' references go by the id."""
+    meta = S.project.meta
+    d = _DETAILS
+    if d["key"] != str(S.project.path):
+        d.update(key=str(S.project.path), name=meta.get("name", ""), description=meta.get("description", ""))
+    imgui.set_next_item_width(-hello_imgui.em_size(6))
+    _, d["name"] = imgui.input_text("Name##project", d["name"])
+    if imgui.is_item_deactivated_after_edit():
+        name = d["name"].strip()
+        if name and name != meta.get("name"):
+            meta["name"] = name
+            S.save()
+            S.message = f"Renamed the project {name}"
+        d["name"] = meta.get("name", "")
+    if imgui.is_item_hovered():
+        theme.tip("The pack's name in the game's Mods menu. Its mod id stays "
+                  f"{S.project.id}: saves and other packs go by that")
+    _, d["description"] = imgui.input_text_multiline("##description", d["description"],
+                                                     imgui.ImVec2(-hello_imgui.em_size(6), hello_imgui.em_size(4.5)),
+                                                     imgui.InputTextFlags_.word_wrap)
+    if imgui.is_item_deactivated_after_edit():
+        text = d["description"].strip()
+        if text != meta.get("description", ""):
+            if text:
+                meta["description"] = text
+            else:
+                meta.pop("description", None)
+            S.save()
+            S.message = "Saved the project's description"
+        d["description"] = meta.get("description", "")
+    imgui.same_line()
+    imgui.text("Description")
+    if imgui.is_item_hovered():
+        theme.tip("What the pack is, shown in the game's Mods menu (its first 120 characters in the list)")
 
 
 def _show_project_folder() -> None:
