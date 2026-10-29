@@ -546,11 +546,11 @@ def exit_go(o: dict) -> None:
     names = dict(level_choices())
     sp = S.fields(o, S.schema(o)).get("startPoint", 0)
     imgui.text(f"Leads to {names.get(current, current)}, start point {sp}")
-    _go_button(current, sp)
+    _go_button(current, sp, "readonly")  # its own ID: the Destination section below has the same button
     imgui.separator()
 
 
-def _go_button(target: str, start_point: int) -> None:
+def _go_button(target: str, start_point: int, key: str = "") -> None:
     """Go to the level an exit leads to, with its arrival start point selected and framed: the pack's level, the
     pack's edit of that game level, or (asked) a new edit of it."""
     A = _app()
@@ -563,7 +563,7 @@ def _go_button(target: str, start_point: int) -> None:
     if name == S.level:
         return
     if name is not None:
-        if imgui.button(f"Go to {S.project.levels[name].level['name']}"):
+        if imgui.button(f"Go to {S.project.levels[name].level['name']}##go{key}"):
             open_level_at(name, start_point)
         if imgui.is_item_hovered():
             theme.tip("Opens that level with this exit's start point selected")
@@ -571,7 +571,7 @@ def _go_button(target: str, start_point: int) -> None:
     if r.is_pack or S.catalog() is None:
         return
     lv = next((x for x in S.cat.levels() if x["id"] == r.number()), None)
-    if lv is not None and imgui.button(f"Edit {lv['name']} and go there"):
+    if lv is not None and imgui.button(f"Edit {lv['name']} and go there##edit{key}"):
         try:
             proj.edit_stock_level(S.project, f"stock{lv['id']}", lv["id"], lv["name"], lv["track"])
         except proj.ProjectError as e:
