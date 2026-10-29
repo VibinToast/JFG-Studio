@@ -128,3 +128,39 @@ def note_recent(project: str) -> None:
             f.write("\n")
     except OSError:
         pass  # a read-only config folder: nothing remembered, nothing broken
+
+
+# ---- each project's last open level (the editor reopens a project on it)
+
+def _levels_path() -> Path:
+    return config_dir() / "last_levels.json"
+
+
+def _last_levels() -> dict:
+    try:
+        with open(_levels_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def last_level(project: str) -> str | None:
+    """The level the editor last had open in a project, or None."""
+    level = _last_levels().get(os.path.normcase(str(Path(project).resolve())))
+    return level if isinstance(level, str) else None
+
+
+def note_level(project: str, level: str) -> None:
+    """Remembers the level open in a project (kept for the RECENT_MAX * 4 projects noted last)."""
+    key = os.path.normcase(str(Path(project).resolve()))
+    data = {k: v for k, v in _last_levels().items() if k != key}
+    data[key] = level
+    data = dict(list(data.items())[-RECENT_MAX * 4:])
+    try:
+        _levels_path().parent.mkdir(parents=True, exist_ok=True)
+        with open(_levels_path(), "w", encoding="utf-8", newline="\n") as f:
+            json.dump(data, f, indent=1)
+            f.write("\n")
+    except OSError:
+        pass  # a read-only config folder: nothing remembered, nothing broken

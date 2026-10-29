@@ -128,7 +128,8 @@ class State:
         self.load_errors = []
         self.triggers, self.triggers_dirty, self.script_file = None, False, None
         self.weapons, self.weapons_dirty = None, False
-        self.level = next(iter(self.project.levels), None)
+        last = None if os.environ.get("JFGSTUDIO_NO_RECENT") else settings.last_level(path)
+        self.level = last if last in self.project.levels else next(iter(self.project.levels), None)
         self.selection.clear()
         self.validate()
         self.message = f"Opened {self.project.meta['name']}"
@@ -2499,6 +2500,19 @@ def shortcuts() -> None:
         duplicate()
 
 
+_NOTED = {"key": None}
+
+
+def _note_level() -> None:
+    """Remembers the level open in the project whenever it changes (Studio reopens the project on it)."""
+    if not S.project or not S.level or os.environ.get("JFGSTUDIO_NO_RECENT"):
+        return
+    key = (str(S.project.path), S.level)
+    if key != _NOTED["key"]:
+        _NOTED["key"] = key
+        settings.note_level(str(S.project.path), S.level)
+
+
 def _say(text: str) -> None:
     S.message = text
 
@@ -2625,6 +2639,7 @@ def run(project_path: str | None = None, screenshot: str | None = None, frames: 
 
     def gui():
         gz.begin_frame()
+        _note_level()
         shortcuts()
         new_project_popup()
         settings_popup()

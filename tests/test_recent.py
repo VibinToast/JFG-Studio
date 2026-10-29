@@ -48,6 +48,15 @@ class RecentTests(unittest.TestCase):
             cli.main(["gui", "other.jfgproj"])
         self.assertEqual(calls, ["sample.jfgproj", last, "other.jfgproj"])
 
+    def test_last_level(self):
+        a, b = self.project("a"), self.project("b")
+        self.assertIsNone(settings.last_level(a))
+        settings.note_level(a, "cave")
+        settings.note_level(b, "room")
+        settings.note_level(a, "portal")
+        self.assertEqual(settings.last_level(a), "portal")
+        self.assertEqual(settings.last_level(b), "room")
+
 
 if __name__ == "__main__":
     unittest.main()
