@@ -173,3 +173,109 @@ def example(types: dict, base: int, behaviour: int | None) -> list | None:
     if not same:
         return None
     return max(same, key=lambda v: v.get("uses", 0))["examples"][0]
+
+
+# ---- a mod folder's own models, for the editor's Scene
+
+class _ModModel:
+    """What jfgformats' export_gltf reads of a ModelData (texture_png; animations are skipped with fps=0), for one
+    model of a mod's pack: its unpacked bytes, with its texture ids set to 0x8000 | k for its k-th own texture."""
+
+    def __init__(self, jf_models, data: bytes, textures: list[bytes]):
+        self.m, self.data, self.textures = jf_models, data, textures
+        self.count, self.tex_count = 1, len(textures)
+        self.png_cache = {}
+
+    def model(self, model_id: int):
+        model = self.m.Model(model_id, self.data)
+        model.file = self.m.read_model_file(self.data)
+        return model
+
+    def animations(self, model):
+        return []
+
+    def _texture(self, tex_id: int) -> bytes:
+        return self.m.unpack_texture_entry(self.textures[min(tex_id & 0x7FFF, len(self.textures) - 1)])[1]
+
+    def texture_frames(self, tex_id: int):
+        """As ModelData.texture_frames: (frames, frame delay, blends with the next frame, byte 0x18)."""
+        import struct
+        data = self._texture(tex_id)
+        flags, = struct.unpack(">h", data[6:8])
+        delay, = struct.unpack(">H", data[0x14:0x16])
+        return self.m.Texture(data).frames, delay, bool(flags & 0x40) and data[0x1B] < 2, data[0x18]
+
+    def texture_wraps(self, tex_id: int):
+        data = self._texture(tex_id)
+        return not data[0x1C] & 2 and data[0x1D] != 0, not data[0x1E] & 2 and data[0x1F] != 0
+
+    def texture_png(self, tex_id: int, frame: int = 0):
+        key = (tex_id, frame)
+        if key not in self.png_cache:
+            m = self.m
+            data = self._texture(tex_id)
+            tex = m.Texture(data)
+            offset = tex.frame_offset(min(frame, tex.frames - 1))
+            pixels = m.decode(tex.format, tex.width, tex.height, data[offset:offset + tex.base_size])
+            mode = m.PNG_MODES[tex.format]
+            self.png_cache[key] = (m.write_png(mode, tex.width, tex.height, pixels), m.alpha_kind(mode, pixels),
+                                   tex.width, tex.height)
+        return self.png_cache[key]
+
+
+def mod_model(project, type_ref: str, jf, cache_dir) -> tuple[str, float] | None:
+    """(.glb path, scale) of the model a mod folder's type shows (its definition's model fixup at +0xE0 and scale
+    set at +0x00 in its jfg_assets.json, the model and textures from the pack's own files), exported into cache_dir
+    the first time and again when the pack's files change; None for a type that isn't a mod folder's, or a pack the
+    editor can't read (it then draws the type's like enemy). jf: the jfgformats module."""
+    import hashlib
+    import importlib
+    import json
+    import struct
+    try:
+        jf_models = importlib.import_module(f"{jf.__name__}.models")
+    except ImportError:
+        return None
+    try:
+        r = refs.parse(type_ref, "objtype")
+    except refs.RefError:
+        return None
+    dep = None if r.is_pack or r.is_stock else next(
+        (d for d in project.meta.get("dependencies", []) if d["id"] == r.namespace), None)
+    if dep is None or not dep.get("mod"):
+        return None
+    folder = (Path(project.path) / dep["mod"]).resolve()
+    try:
+        t = dependency_mod(project, r.namespace)["types"].get(r.name)
+        doc = json.loads((folder / "jfg_assets.json").read_text(encoding="utf-8"))
+        entries = {e["append"]: e for e in doc.get("entries", []) if "append" in e}
+        objdef = entries[t["def"]]
+        model_ref = next(f["ref"] for f in objdef.get("fixups", []) if f.get("at") == 0xE0)
+        entry = entries[model_ref.split(":", 1)[-1]]
+        scale = 1.0
+        for st in objdef.get("set", []):
+            if st.get("at") == 0 and len(st.get("hex", "")) >= 8:
+                scale = struct.unpack(">f", bytes.fromhex(st["hex"][:8]))[0]
+        tex_refs = []
+        for f in entry.get("fixups", []):
+            name = f["ref"].split(":", 1)[-1]
+            if name not in tex_refs:
+                tex_refs.append(name)
+        files = [folder / entry["file"]] + [folder / entries[n]["file"] for n in tex_refs]
+        stamp = hashlib.sha1("|".join(f"{f}:{f.stat().st_mtime_ns}" for f in files).encode()).hexdigest()[:10]
+        out = Path(cache_dir) / f"{r.namespace}_{r.name}_{stamp}.glb"
+        if not out.exists():
+            raw = files[0].read_bytes()
+            data = bytearray(jf_models.unpack(raw) if entry.get("packed") else raw)
+            for f in entry.get("fixups", []):
+                value = tex_refs.index(f["ref"].split(":", 1)[-1]) + f.get("add", 0)
+                fmt = {"u16": ">H", "s16": ">h", "u8": ">B", "u32": ">I"}[f.get("type", "u16")]
+                struct.pack_into(fmt, data, f["at"], value)
+            mm = _ModModel(jf_models, bytes(data), [f.read_bytes() for f in files[1:]])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            tmp = out.with_suffix(".tmp")
+            jf_models.export_gltf(mm, mm.model(0), str(tmp), False, fps=0)
+            tmp.replace(out)
+        return str(out), scale
+    except Exception:  # noqa: BLE001 (a pack the editor can't read: its type is drawn as its like enemy)
+        return None

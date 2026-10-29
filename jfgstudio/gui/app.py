@@ -275,6 +275,17 @@ class State:
             self.model_paths[oid] = path
         return self.model_paths[oid]
 
+    def mod_model(self, type_ref) -> tuple[str, float] | None:
+        """(.glb, scale) of a mod folder's type's own model (packtypes.mod_model), or None: not one, or its pack can't
+        be read (it is drawn as its like enemy). Looked up again when the dependencies change."""
+        if not isinstance(type_ref, str) or not packtypes.is_pack_type(type_ref) or self.catalog() is None:
+            return None
+        key = ("mod", type_ref, json.dumps(self.project.meta.get("dependencies", []), sort_keys=True))
+        if key not in self.model_paths:
+            self.model_paths[key] = packtypes.mod_model(self.project, type_ref, self.cat.jf,
+                                                        settings.data_dir() / "mod_models")
+        return self.model_paths[key]
+
     def sprite(self, oid: int, env: list | None = None) -> dict | None:
         """The catalog's picture of an object type the game draws as a sprite (Catalog.sprite; `env` recolours
         it), or None: a model type, a debug sprite, no catalog, or a jfgformats with no sprite reader."""
@@ -729,18 +740,22 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
         if key == "squadron" and values.get("squadronId") not in with_members and values.get("baddyType"):
             # It spawns its own members (flyers, drones, a Tribal): drawn as its enemy, at the squad's size
             baddy = values["baddyType"]
-            path = S.model_path(baddy)
+            own = S.mod_model((o.get("kindFields") or {}).get("baddyType"))  # another mod's enemy: its own model
+            path = own[0] if own else S.model_path(baddy)
             mesh = S.view.model(path) if path else None
             if mesh is None or not mesh.parts:
                 continue
             yaw_f = schema.role("yaw")
             yaw = obj.angle_of(yaw_f, values.get(yaw_f.name, yaw_f.default)) if yaw_f else 0.0
             m = vp.object_matrix([float(v) for v in o["pos"]], yaw=yaw,
-                                 scale=squad_sizes.get(values.get("squadronId"), 1.0))
+                                 scale=squad_sizes.get(values.get("squadronId"), 1.0) * (own[1] if own else 1.0))
         else:
             # a hidden type (the game draws nothing for it) shows only as its shape, if it has one
             path = None if schema and schema.hidden else S.model_path(oid)
-            own = kind_tools.pack_model(o)
+            mod = S.mod_model(o.get("type"))  # another mod's type: its pack's own model, at its definition's scale
+            if mod:
+                path = mod[0]
+            own = None if mod else kind_tools.pack_model(o)
             if own is not None and S.catalog() is not None:  # a pack type with a model of its own
                 try:
                     path = str(S.cat.model_glb(own))
@@ -759,6 +774,8 @@ def _instances(objs, pickable: bool = True) -> tuple[list, dict]:
             if mesh is None or not mesh.parts:
                 continue
             m = _matrix(o, schema, None if shape else oid, squad_sizes)  # a shape is its own size, not the type's
+            if mod:
+                m = m @ np.diag([mod[1]] * 3 + [1.0])
             if sprite:
                 m = vp.billboard(m[:3, 3], float(np.linalg.norm(m[:3, 0])), S.camera)
         turned = kind_tools.pack_rotate(o)
