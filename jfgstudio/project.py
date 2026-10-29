@@ -87,6 +87,8 @@ class Project:
     galaxies: dict[str, dict] = field(default_factory=dict)
     baddies: list[dict] = field(default_factory=list)  # baddies.json
     objtypes: dict[str, dict] = field(default_factory=dict)  # objtypes/<name>.json
+    # stock-level edits opened only to look at (the editor's): never saved until something in them changes
+    viewing: set[str] = field(default_factory=set)
 
     @property
     def id(self) -> str:
@@ -110,6 +112,8 @@ class Project:
         from jfgstudio import stock_edit  # the game level's objects' changes, kept as "stockEdits"
         write_json(self.path / "project.json", self.meta)
         for level in self.levels.values():
+            if level.name in self.viewing:
+                continue
             stock_edit.sync(level)
             write_json(self.path / "levels" / level.name / "level.json", level.level)
             write_json(self.path / "levels" / level.name / "objects.json", level.objects)

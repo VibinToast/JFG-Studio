@@ -1430,9 +1430,9 @@ def stock_level_popup() -> None:
     """Edit a stock level: what the pack adds to it (objects, header fields) is patched in when the pack loads."""
     d = S.stock_pick
     if d["open"]:
-        imgui.open_popup("Edit a stock level")
+        imgui.open_popup("Open a stock level")
         d["open"] = False
-    if not imgui.begin_popup_modal("Edit a stock level", None, imgui.WindowFlags_.always_auto_resize)[0]:
+    if not imgui.begin_popup_modal("Open a stock level", None, imgui.WindowFlags_.always_auto_resize)[0]:
         return
     if S.catalog() is None:
         imgui.text(f"No catalog: {S.cat_error}")
@@ -1443,21 +1443,17 @@ def stock_level_popup() -> None:
             label = f"{lv['id']}: {lv['name']}"
             if d["filter"] and d["filter"].lower() not in label.lower():
                 continue
-            if imgui.selectable(label, d["id"] == lv["id"])[0]:
+            if imgui.selectable(label, d["id"] == lv["id"], imgui.SelectableFlags_.allow_double_click)[0]:
                 d["id"] = lv["id"]
+                if imgui.is_mouse_double_clicked(imgui.MouseButton_.left):
+                    d["go"] = True
         imgui.end_child()
+        imgui.text_disabled("Opened to look at: it joins the project's levels once you change something in it.")
         imgui.text_disabled("Objects you place are added to the level; its own stay as they are.")
-        if imgui.button("Create") and d["id"] is not None:
-            lv = S.cat.levels()[d["id"]]
-            name = f"stock{lv['id']}"
-            try:
-                proj.edit_stock_level(S.project, name, lv["id"], lv["name"], lv["track"])
-                S.level, S.selection = name, set()
-                S.planets_dirty = True
-                S.validate()
+        if (imgui.button("Open") or d.pop("go", False)) and d["id"] is not None:
+            if view_stock_level(S.cat.levels()[d["id"]]):
+                S.selection = set()
                 imgui.close_current_popup()
-            except proj.ProjectError as e:
-                S.message = "; ".join(e.problems)
         imgui.same_line()
     if imgui.button("Cancel"):
         imgui.close_current_popup()
@@ -1481,6 +1477,8 @@ def project_window() -> None:
         theme.tip("The project's folder in Explorer: its levels, geometry, textures and build")
     if imgui.tree_node_ex("Levels", imgui.TreeNodeFlags_.default_open):
         for name, level in S.project.levels.items():
+            if name in S.project.viewing:
+                continue  # only looked at so far: listed once something in it changes
             kind = f"edits stock level {level.base}" if level.base is not None else name
             if imgui.selectable(f"{level.level['name']}  ({kind})##{name}", S.level == name)[0]:
                 S.level, S.selection = name, set()
@@ -1491,12 +1489,16 @@ def project_window() -> None:
             if imgui.is_item_hovered():
                 theme.tip("Right-click to delete it" + (": the pack then leaves that game level as it is"
                                                          if level.base is not None else ""))
+        if S.level in S.project.viewing:
+            imgui.text_disabled(f"{S.project.levels[S.level].level['name']} (not added yet)")
+            if imgui.is_item_hovered():
+                theme.tip("Opened to look at: it joins the levels, and is saved, once you change something in it")
         imgui.tree_pop()
     _delete_level_popup()
     if imgui.button("New level"):
         _new_level()
     imgui.same_line()
-    if imgui.button("Edit a stock level..."):
+    if imgui.button("Open a stock level..."):
         S.stock_pick["open"] = True
     stock_level_popup()
     if imgui.tree_node_ex("Planets", imgui.TreeNodeFlags_.default_open):
@@ -2565,6 +2567,51 @@ def _note_level() -> None:
         settings.note_level(str(S.project.path), S.level)
 
 
+_VIEWED: dict[str, str] = {}  # a looked-at stock level's contents as opened
+
+
+def _level_state(level) -> str:
+    stock_edit.sync(level)  # the game objects' changes too
+    return json.dumps([level.level, level.objects], sort_keys=True)
+
+
+def view_stock_level(lv: dict) -> str | None:
+    """Opens game level `lv` (a catalog entry): the project's edit of it, or a new one to look at that joins the
+    project's levels (and is saved) only once something in it changes. Returns the level's name."""
+    name = next((k for k, x in S.project.levels.items() if x.base == lv["id"]), None)
+    if name is None:
+        name = f"stock{lv['id']}"
+        try:
+            level = proj.edit_stock_level(S.project, name, lv["id"], lv["name"], lv["track"])
+        except proj.ProjectError as e:
+            S.message = "; ".join(e.problems)
+            return None
+        S.project.viewing.add(name)
+        _VIEWED[name] = _level_state(level)
+    S.level = name
+    S.validate()
+    return name
+
+
+def _settle_viewing() -> None:
+    """A looked-at stock level joins the project when something in it changes, and goes when another level opens."""
+    if not S.project:
+        return
+    for name in list(S.project.viewing):
+        level = S.project.levels.get(name)
+        if level is None:
+            S.project.viewing.discard(name)
+        elif _level_state(level) != _VIEWED.get(name):
+            S.project.viewing.discard(name)
+            S.planets_dirty = True  # unsaved: a new level
+            S.message = f"{level.level['name']} added to the project's levels"
+        elif name != S.level:
+            S.project.viewing.discard(name)
+            del S.project.levels[name]
+            S.histories.pop(name, None)
+            S.validate()
+
+
 def _say(text: str) -> None:
     S.message = text
 
@@ -2691,6 +2738,7 @@ def run(project_path: str | None = None, screenshot: str | None = None, frames: 
 
     def gui():
         gz.begin_frame()
+        _settle_viewing()
         _note_level()
         shortcuts()
         new_project_popup()

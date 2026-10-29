@@ -11,7 +11,6 @@ from imgui_bundle import imgui
 
 from jfgstudio import edit, geometry, refs, squads
 from jfgstudio import prefabs as pre
-from jfgstudio import project as proj
 from jfgstudio.gui import theme
 from jfgstudio.gui import viewport as vp
 
@@ -453,7 +452,8 @@ def add_water_plane(x0, z0, x1, z1, y) -> None:
 def level_choices() -> list[tuple[str, str]]:
     """Every level an exit can lead to: the pack's, then the stock ones from the catalog."""
     S = _app().S
-    out = [(f"pack:level/{name}", f"{lv.level['name']}  (pack: {name})") for name, lv in S.project.levels.items()]
+    out = [(f"pack:level/{name}", f"{lv.level['name']}  (pack: {name})") for name, lv in S.project.levels.items()
+           if name not in S.project.viewing]
     if S.catalog() is not None:
         out += [(f"stock:level/{x['id']}", f"{x['id']}: {x['name']}") for x in S.cat.levels()]
     return out
@@ -571,17 +571,12 @@ def _go_button(target: str, start_point: int, key: str = "") -> None:
     if r.is_pack or S.catalog() is None:
         return
     lv = next((x for x in S.cat.levels() if x["id"] == r.number()), None)
-    if lv is not None and imgui.button(f"Edit {lv['name']} and go there##edit{key}"):
-        try:
-            proj.edit_stock_level(S.project, f"stock{lv['id']}", lv["id"], lv["name"], lv["track"])
-        except proj.ProjectError as e:
-            S.message = "; ".join(e.problems)
-            return
-        S.planets_dirty = True
-        open_level_at(f"stock{lv['id']}", start_point)
+    if lv is not None and imgui.button(f"Go to {lv['name']}##view{key}"):
+        if (name := A.view_stock_level(lv)) is not None:
+            open_level_at(name, start_point)
     if lv is not None and imgui.is_item_hovered():
-        theme.tip("That game level isn't in the project: adds a stock-level edit of it (Edit a stock level) and "
-                  "opens it with this exit's start point selected")
+        theme.tip("Opens that game level with this exit's start point selected. It joins the project's levels "
+                  "once you change something in it")
 
 
 def open_level_at(name: str, start_point: int) -> None:
