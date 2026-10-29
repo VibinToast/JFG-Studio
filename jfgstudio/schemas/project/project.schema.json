@@ -11,6 +11,8 @@
   "name": {"type": "string", "minLength": 1},
   "authors": {"type": "array", "items": {"type": "string"}},
   "description": {"type": "string"},
+  "shortDescription": {"type": "string", "description": "one line for mod lists; the description's first 120 characters when absent"},
+  "tags": {"type": "array", "items": {"type": "string"}, "description": "categories the port's Mods page and Get Mods show (HUD, Enemies, Levels...)"},
   "minimumRecompVersion": {"type": "string"},
   "dependencies": {
    "type": "array",

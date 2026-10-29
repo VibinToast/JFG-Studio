@@ -675,9 +675,12 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
     meta = project.meta
     manifest = {"id": meta["id"], "version": meta["version"], "display_name": meta["name"],
                 "authors": meta.get("authors", []), "description": meta.get("description", ""),
-                "short_description": meta.get("description", "")[:120], "game_id": GAME_ID,
+                "short_description": meta.get("shortDescription") or meta.get("description", "")[:120],
+                "game_id": GAME_ID,
                 "minimum_recomp_version": meta.get("minimumRecompVersion", DEFAULT_MIN_RECOMP),
                 "dependencies": [f"{d['id']}:{d['version']}" for d in meta.get("dependencies", [])]}
+    if meta.get("tags"):  # categories for the port's Mods page and Get Mods (HUD, Enemies, Levels...)
+        manifest["tags"] = list(meta["tags"])
     patch = None
     if patched is not None:
         patch = bps.encode(image, patched)
