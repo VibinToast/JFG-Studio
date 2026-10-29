@@ -131,6 +131,8 @@ class State:
         self.selection.clear()
         self.validate()
         self.message = f"Opened {self.project.meta['name']}"
+        if not os.environ.get("JFGSTUDIO_NO_RECENT"):  # tests and screenshots leave the user's list alone
+            settings.note_recent(path)
 
     def validate(self) -> None:
         self.problems = val.validate(self.project, self.schemas) if self.project else []
@@ -2128,6 +2130,14 @@ def menus() -> None:
             S.new_project["open"] = True
         if imgui.menu_item("Open project...", "Ctrl+O", False)[0]:
             _open_dialog()
+        recent = settings.recent_projects()
+        if imgui.begin_menu("Open recent", bool(recent)):
+            for path in recent:
+                if imgui.menu_item(f"{Path(path).name}##{path}", "", False)[0]:
+                    S.open(path)
+                if imgui.is_item_hovered():
+                    theme.tip(path)
+            imgui.end_menu()
         if imgui.menu_item("Save", "Ctrl+S", False, S.project is not None)[0]:
             S.save()
         if imgui.menu_item("Import geometry...", "", False, S.project is not None)[0]:
@@ -2480,6 +2490,8 @@ def _write_png(path: str, image) -> None:
 
 def run(project_path: str | None = None, screenshot: str | None = None, frames: int = 30) -> int:
     crashlog.install()
+    if screenshot:
+        os.environ["JFGSTUDIO_NO_RECENT"] = "1"  # a screenshot isn't the user opening a project
     if project_path:
         S.open(project_path)
         pick = os.environ.get("JFGSTUDIO_SELECT")  # screenshots: "level:uid" opens that level with the object selected

@@ -96,3 +96,35 @@ def set_value(key: str, value: str | None) -> None:
     with open(_path(), "w", encoding="utf-8", newline="\n") as f:
         json.dump(data, f, indent=1, sort_keys=True)
         f.write("\n")
+
+
+# ---- recent projects (the editor reopens the last one; File > Open recent lists them)
+
+RECENT_MAX = 8
+
+
+def _recent_path() -> Path:
+    return config_dir() / "recent.json"
+
+
+def recent_projects() -> list[str]:
+    """Projects opened in the editor, the last first, those still there only."""
+    try:
+        with open(_recent_path(), encoding="utf-8") as f:
+            paths = json.load(f)
+    except (OSError, ValueError):
+        return []
+    return [p for p in paths if isinstance(p, str) and Path(p).is_dir()][:RECENT_MAX]
+
+
+def note_recent(project: str) -> None:
+    """Puts a project the editor opened first in the recent list."""
+    path = str(Path(project).resolve())
+    paths = [path] + [p for p in recent_projects() if os.path.normcase(p) != os.path.normcase(path)]
+    try:
+        _recent_path().parent.mkdir(parents=True, exist_ok=True)
+        with open(_recent_path(), "w", encoding="utf-8", newline="\n") as f:
+            json.dump(paths[:RECENT_MAX], f, indent=1)
+            f.write("\n")
+    except OSError:
+        pass  # a read-only config folder: nothing remembered, nothing broken

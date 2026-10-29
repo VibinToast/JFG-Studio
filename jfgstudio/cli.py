@@ -11,7 +11,11 @@ from jfgstudio import validate as val
 def cmd_gui(args) -> int:
     from jfgstudio.gui.app import run  # imgui-bundle is only needed for the editor
 
-    return run(project_path=args.project, screenshot=args.screenshot, frames=args.frames)
+    project = args.project
+    if project is None and not args.screenshot:  # the project the editor had open last, else the fallback
+        recent = settings.recent_projects()
+        project = recent[0] if recent else args.fallback
+    return run(project_path=project, screenshot=args.screenshot, frames=args.frames)
 
 
 def cmd_validate(args) -> int:
@@ -111,7 +115,8 @@ def parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command")
 
     gui = sub.add_parser("gui", help="open the editor (the default)")
-    gui.add_argument("project", nargs="?", help="a .jfgproj folder to open")
+    gui.add_argument("project", nargs="?", help="a .jfgproj folder to open (default: the last one opened)")
+    gui.add_argument("--fallback", help="the project to open when none is given and none was opened before")
     gui.add_argument("--screenshot", help="save a PNG of the window after --frames frames, then quit")
     gui.add_argument("--frames", type=int, default=30, help=argparse.SUPPRESS)
     gui.set_defaults(run=cmd_gui)
