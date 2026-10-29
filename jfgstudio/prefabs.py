@@ -148,8 +148,13 @@ REGION_HALF = 300  # a new squad's region: a square this far around it
 class Placer:
     """Makes objects for one level, with uids and link numbers that are free in it (and in what it made so far)."""
 
-    def __init__(self, level: Level, schemas: dict, behaviours: dict | None = None):
+    def __init__(self, level: Level, schemas: dict, behaviours: dict | None = None, catalog=None):
+        """catalog: the user's, for a level that edits a game level: the numbers that level's own objects use
+        (squadrons, regions, doors, start points ...) are then taken too, so a new squad doesn't share a region or a
+        squadron id with one of the game's (two regions under one number: the squad code crashed in IsPointInRegion,
+        play-tested)."""
         self.level, self.schemas, self.behaviours = level, schemas, behaviours or {}
+        self.catalog = catalog
         self.made: list[dict] = []
 
     def _all(self) -> list[dict]:
@@ -184,10 +189,37 @@ class Placer:
         return next(f"{stem}{k}" for k in itertools.count(1) if f"{stem}{k}" not in used)
 
     def free(self, key: str, field: str, start: int = 1) -> int:
-        """The lowest number from `start` that no object of schema `key` uses in `field`."""
+        """The lowest number from `start` that no object of schema `key` uses in `field`: the level's, those made so
+        far, and (with a catalog, in a level editing a game level) the game level's own, as their entries hold it."""
         used = {o.get("fields", {}).get(field) for o in self._all()
                 if (s := obj.schema_for(o, self.schemas, self.behaviours)) and s.key == key}
+        used |= self._game_values(key, field)
         return next(n for n in itertools.count(start) if n not in used)
+
+    def _game_values(self, key: str, field: str) -> set:
+        """The values of `field` in the game level's own objects of schema `key` (deleted ones too: a patch keeps
+        their slot), decoded from their entries, with the project's changes on top."""
+        if self.catalog is None or getattr(self.level, "base", None) is None:
+            return set()
+        from jfgstudio import stock_edit
+        out = set()
+        lists: dict[int, list] = {}
+        for o in stock_edit.materialize(self.level, self.catalog):
+            s = obj.schema_for(o, self.schemas, self.behaviours)
+            if not s or s.key != key:
+                continue
+            g = o["game"]
+            if g["list"] not in lists:
+                try:
+                    lists[g["list"]] = self.catalog.objlist(g["list"])
+                except (IndexError, ValueError, AttributeError):
+                    lists[g["list"]] = []
+            entries = lists[g["list"]]
+            raw = entries[g["index"]][1] if g["index"] < len(entries) and entries[g["index"]] else None
+            values = obj.decode_entry(raw, s).get("fields", {}) if raw else {}
+            values.update(o.get("fields", {}))
+            out.add(values.get(field))
+        return out
 
     def single(self, oid: int, pos, example: tuple[int, int] | None = None, name: str | None = None,
                fields: dict | None = None) -> dict:

@@ -327,7 +327,7 @@ def patrol_point(pos, last) -> None:
     if h is None or point_ex is None or link_ex is None:
         S.message = "Patrol: the catalog has no stock patrol point to start from"
         return
-    placer = pre.Placer(h.level, S.schemas, S.behaviours)
+    placer = pre.Placer(h.level, S.schemas, S.behaviours, S.catalog())
     o = placer.patrol_point(pos, point_ex)
     if last is not None:
         placer.patrol_link(last, o, link_ex)
@@ -343,7 +343,7 @@ def patrol_link(a, b) -> None:
     _, link_ex = _patrol_examples()
     if h is None or link_ex is None:
         return
-    placer = pre.Placer(h.level, S.schemas, S.behaviours)
+    placer = pre.Placer(h.level, S.schemas, S.behaviours, S.catalog())
     if placer.patrol_link(a, b, link_ex) is not None:
         h.add(placer.made, "patrol link")
         S.validate()
@@ -356,7 +356,7 @@ def finish_region() -> None:
     pts = S.region_draft
     if h is None or len(pts) < 3:
         return
-    placer = pre.Placer(h.level, S.schemas, S.behaviours)
+    placer = pre.Placer(h.level, S.schemas, S.behaviours, S.catalog())
     if S.region_hole:
         cx, cz = sum(p[0] for p in pts) / len(pts), sum(p[2] for p in pts) / len(pts)
         area = placer.area_at(cx, cz)
@@ -382,7 +382,7 @@ def add_cover(squadron: dict) -> None:
     h = S.history()
     if h is None or S.view.mesh is None:
         return
-    placer = pre.Placer(h.level, S.schemas, S.behaviours)
+    placer = pre.Placer(h.level, S.schemas, S.behaviours, S.catalog())
     try:
         got = placer.cover(S.view.mesh, squadron)
     except ValueError as e:
@@ -593,13 +593,13 @@ def create_return_exit(o: dict, target_name: str) -> None:
     if arrive is None:
         S.message = f"{target_name} has no start point {sp} to put the return exit beside"
         return
-    placer = pre.Placer(here.level, S.schemas, S.behaviours)
+    placer = pre.Placer(here.level, S.schemas, S.behaviours, S.catalog())
     number = placer.free("startpoint", "startPoint", start=0)
     x, y, z = o["pos"]
     placer.single(pre.START_ID, (x, y, z - 150), name=f"start{number}",
                   fields={"startPoint": number, "player": 0, "yaw": 32})
     here.add(placer.made, "return start point")
-    back = pre.Placer(there.level, S.schemas, S.behaviours)
+    back = pre.Placer(there.level, S.schemas, S.behaviours, S.catalog())
     ax, ay, az = arrive["pos"]
     ex = back.single(pre.EXIT_ID, (ax, ay, az - 200), name=f"exit to {S.project.levels[S.level].level['name']}",
                      fields={"radius": 60, "startPoint": number})

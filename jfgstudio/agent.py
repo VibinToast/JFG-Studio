@@ -1126,7 +1126,7 @@ class Session:
             # No code (behaviour 0), or a behaviour no stock list places (hitanim 49 comes from animation paths):
             # the plain entry, its header alone (decomp MSR "Unused props for the enemy test hub")
             plain = example is None and not (schema and schema.status == "decoded")
-        placer = prefabs.Placer(lv, self.schemas, self._behaviours())
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
         if plain:
             if checked:
                 raise AgentError(f"{kind} is placed with the plain entry (no fields): leave fields out")
@@ -1206,7 +1206,7 @@ class Session:
         if not 1 <= members <= 16:
             raise AgentError("members is 1-16")
         m_oid, m_schema, m_kind = self._type(member_type)
-        placer = prefabs.Placer(lv, self.schemas, self._behaviours())
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
         sq_schema = self.schemas["squadron"]
         matched = self.squad_examples(m_oid) if squadron_example is None else None
         native = None
@@ -1320,7 +1320,7 @@ class Session:
         return made
 
     def _region_corners(self, lv: proj.Level, region) -> list[dict]:
-        return prefabs.Placer(lv, self.schemas, self._behaviours()).corners(region)
+        return prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog()).corners(region)
 
     def _behaviour(self, sq: dict) -> int | None:
         """A squadron's normal behaviour (+0x0D): its field, else its stock entry's; None when unknown."""
@@ -1333,7 +1333,7 @@ class Session:
         return behaviour
 
     def _holes_of(self, lv: proj.Level, region) -> list[int]:
-        return prefabs.Placer(lv, self.schemas, self._behaviours()).holes_of(region)
+        return prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog()).holes_of(region)
 
     def add_cover(self, level: str, squadron: str) -> list[dict]:
         """Makes the obstacles inside a squad's region holes of it (prefabs.Placer.cover): a smart squad's members
@@ -1345,7 +1345,7 @@ class Session:
         if self._key(sq) != "squadron":
             raise AgentError(f"{squadron!r} is not a squadron of {level}")
         mesh = self._mesh(level)
-        placer = prefabs.Placer(lv, self.schemas, self._behaviours())
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
         try:
             got = placer.cover(mesh, sq)
         except ValueError as e:
@@ -1467,7 +1467,7 @@ class Session:
         if hit_points is not None:
             fields["hitPoints"] = _as_int(hit_points, "hit_points")
         centre = ((ax + bx) / 2, float(bottom) + width / 2, (az + bz) / 2)
-        placer = prefabs.Placer(lv, self.schemas, self._behaviours())
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
         placer.single(0x12B, centre, None, name="glass", fields=fields)
         made = self._add(lv, placer.made, "glass")
         made.append({"note": f"a pane {fields['size'] * 5.12:.0f} a side; check in the game that it fills the opening "
@@ -1671,7 +1671,7 @@ class Session:
         locks again when the level reloads. `switch_lift`: its height over the floor (on a wall, say)."""
         lv = self._level(level)
         target_schema = self.schemas["target"]
-        placer = prefabs.Placer(lv, self.schemas, self._behaviours())
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
         used_ids = {o.get("fields", {}).get("doorId") for o in lv.objects["objects"]
                     if self._key(o) in ("door", "squadron", "target")}
         existing = None
@@ -1741,7 +1741,7 @@ class Session:
             sq = self._object(lv, squadron)
             if self._key(sq) != "squadron":
                 raise AgentError(f"{squadron!r} is not a squadron of {level}")
-        placer = prefabs.Placer(lv, self.schemas, self._behaviours())
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
         nodes = [placer.patrol_point(self._pos(lv, pt, node_schema, True), node_ex) for pt in points]
         if wait is not None:
             for n in nodes:
@@ -1880,7 +1880,7 @@ class Session:
                              "looks like a hidden teleport: join areas of a level by passages, and use exits to leave "
                              "for another level")
         st = self.schemas["startpoint"]
-        dst_placer = prefabs.Placer(dst, self.schemas, self._behaviours())
+        dst_placer = prefabs.Placer(dst, self.schemas, self._behaviours(), self.catalog())
         mine = {o.get("fields", {}).get("startPoint") for o in dst.objects["objects"] if self._key(o) == "startpoint"}
         base = self._base_starts(dst)
         arrived = []
@@ -1900,7 +1900,7 @@ class Session:
                               fields={"player": 0, "startPoint": number, yaw_f.name if yaw_f else "yaw": yaw})
             arrived = self._add(dst, dst_placer.made, "arrival")
         ex = self.schemas["exit"]
-        src_placer = prefabs.Placer(src, self.schemas, self._behaviours())
+        src_placer = prefabs.Placer(src, self.schemas, self._behaviours(), self.catalog())
         o = src_placer.single(prefabs.EXIT_ID, self._pos(src, exit_pos, ex, True), name=name or f"to {to_level}",
                               fields={"radius": _as_int(radius, "radius"), "startPoint": number})
         o["target"] = f"pack:level/{to_level}"

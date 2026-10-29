@@ -1958,7 +1958,7 @@ def _place(pid: int, pos) -> None:
         S.message = "Open a level first"
         return
     pf = S.prefab
-    placer = pre.Placer(h.level, S.schemas, S.behaviours)
+    placer = pre.Placer(h.level, S.schemas, S.behaviours, S.catalog())  # a game level's own ids are taken too
     try:
         if pid <= KIND_BASE:
             name, kind = sorted(S.project.kinds.items())[KIND_BASE - pid]
