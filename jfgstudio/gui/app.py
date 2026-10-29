@@ -9,6 +9,7 @@ import json
 import math
 import os
 import struct
+import sys
 import threading
 import zlib
 from pathlib import Path
@@ -1468,6 +1469,10 @@ def project_window() -> None:
         return
     _title(S.project.meta["name"])
     _muted(f"{S.project.id}  {S.project.meta['version']}   {S.project.path}")
+    if imgui.small_button("Open project folder"):
+        _show_project_folder()
+    if imgui.is_item_hovered():
+        theme.tip("The project's folder in Explorer: its levels, geometry, textures and build")
     if imgui.tree_node_ex("Levels", imgui.TreeNodeFlags_.default_open):
         for name, level in S.project.levels.items():
             kind = f"edits stock level {level.base}" if level.base is not None else name
@@ -1527,6 +1532,19 @@ def _remove_dependency(mod_id: str) -> None:
                if f"{mod_id}:" in json.dumps({k: o.get(k) for k in ("type", "kindFields")}))
     S.message = f"{mod_id} removed" + (f": {used} placed object(s) still use its types" if used else "")
     S.validate()
+
+
+def _show_project_folder() -> None:
+    """The open project's folder in the system's file browser (Explorer on Windows)."""
+    path = str(S.project.path)
+    try:
+        if sys.platform == "win32":
+            os.startfile(path)  # noqa: S606 (Windows: the folder in Explorer)
+        else:
+            import subprocess
+            subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", path])  # noqa: S603, S607
+    except OSError as e:
+        S.message = f"Can't open {path}: {e}"
 
 
 def _add_mod_dependency() -> None:
@@ -2150,6 +2168,8 @@ def menus() -> None:
             S.new_project["open"] = True
         if imgui.menu_item("Open project...", "Ctrl+O", False)[0]:
             _open_dialog()
+        if imgui.menu_item("Open project folder", "", False, S.project is not None)[0]:
+            _show_project_folder()
         recent = settings.recent_projects()
         if imgui.begin_menu("Open recent", bool(recent)):
             for path in recent:
