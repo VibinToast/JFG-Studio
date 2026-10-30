@@ -1352,7 +1352,7 @@ class Session:
             raise AgentError(f"{target}: no such level in the project")
 
     def place_squad(self, level: str, centre, member_type, members: int = 3, region=None, door=None,
-                    door_type=None, door_pos=None, door_fields: dict | None = None, spread: float = 150,
+                    door_type=None, door_pos=None, door_fields: dict | None = None, spread: float | None = None,
                     name: str | None = None, squadron_example=None, member_example=None,
                     face=None, size: int | None = None, region_of: str | None = None) -> list[dict]:
         """A squadron, its members around `centre` and the region they keep to; with `door` ("new" with door_type
@@ -1368,6 +1368,8 @@ class Session:
         members = _as_int(members, "members")
         if not 1 <= members <= 16:
             raise AgentError("members is 1-16")
+        if spread is None:  # a lone lookout or turret stands at its centre (on its perch or plinth)
+            spread = 150 if members > 1 else 0
         m_oid, m_schema, m_kind = self._type(member_type)
         placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
         sq_schema = self.schemas["squadron"]
@@ -1421,7 +1423,9 @@ class Session:
                 region = [[cx - h, cz - h], [cx + h, cz - h], [cx + h, cz + h], [cx - h, cz + h]]
             if len(region) < 3:
                 raise AgentError("region is at least three [x, z] corners, in order around it")
-            corners = [self._corner(lv, c, (cx, cz), cy) for c in region]
+            # the corners take the lowest dry floor at each (the game reads a region in x, z only): not a perch or
+            # block top by them, whatever height the squad stands at
+            corners = [self._corner(lv, c, (cx, cz)) for c in region]
             region_id = placer.polygon(corners)
         # Never the catalog's name: that is the player's game data, and uids and names are written into the project.
         label = name or (m_kind.rsplit("/", 1)[1].replace("_", " ") if m_kind else "enemy")
@@ -1540,6 +1544,9 @@ class Session:
         except ValueError as e:
             raise AgentError(str(e)) from e
         made = self._add(lv, placer.made, "cover") if placer.made else []
+        if got.get("edge") and got["holes"]:
+            made.append({"note": f"{got['edge']} obstacle(s) touch region {got['region']}'s edge and got no hole (a "
+                                 "hole there would cut the outline): move the corners clear of them for cover"})
         if got.get("joined"):
             made.append({"note": f"{got['joined']} obstacle(s) in region {got['region']} overlapped others and share "
                                  "their hole: move them apart (or draw holes by hand) for a hole each"})
@@ -1577,13 +1584,11 @@ class Session:
                 return r
         return None
 
-    def _corner(self, lv: proj.Level, c, centre, below: float | None = None) -> list:
-        """A region corner on the floor under it (at or below `below`: a squad on a tower's gallery), or at the floor
-        height of the region's centre where there is none (past a wall: a region is 2D, the game ignores its corners'
-        height)."""
+    def _corner(self, lv: proj.Level, c, centre) -> list:
+        """A region corner on the lowest dry floor under it, or at the floor height of the region's centre where
+        there is none (past a wall: a region is 2D, the game ignores its corners' height)."""
         try:
-            return self._pos(lv, [c[0], below, c[-1]] if below is not None else [c[0], c[-1]],
-                             self.schemas["regionpoint"], True)
+            return self._pos(lv, [c[0], c[-1]], self.schemas["regionpoint"], True)
         except AgentError:
             y = self._pos(lv, list(centre), self.schemas["regionpoint"], True)[1]
             return [round(float(c[0])), y, round(float(c[-1]))]

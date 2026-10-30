@@ -919,3 +919,18 @@ class RunnerFindings(AgentTest):
         self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + crate, (), KILL)
         made = self.s.place_squad("home", [0, 0], "0x29", members=1)
         self.assertFalse([o for o in made if o.get("schema") == "regioninfo"])
+
+    def test_lone_lookout_on_its_plinth(self):
+        self.with_catalog()
+        plinth = _block(-60, -60, 60, 60, 0, 300)
+        block = _block(250, 250, 400, 400, 0, 220)  # under one corner of the default square
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + plinth + block, (), KILL)
+        made = self.s.place_squad("home", [0, 320, 0], "0x29", members=1)
+        member = next(o for o in made if o.get("schema") == "squadmember")
+        self.assertEqual((member["pos"][0], member["pos"][2]), (0, 0))
+        self.assertGreater(member["pos"][1], 299)
+        corners = [o for o in self.s.p.levels["home"].objects["objects"]
+                   if o["type"] == "stock:objtype/0x5" and o["fields"]["region"] == next(
+                       o for o in made if o.get("type") == "stock:objtype/0x4F")["fields"]["region"]]
+        self.assertTrue(all(c["pos"][1] < 10 or c["pos"][1] > 299 for c in corners), [c["pos"] for c in corners])
+        self.assertFalse([c for c in corners if 200 < c["pos"][1] < 250])  # not on the block's top

@@ -190,7 +190,7 @@ TOOLS = [
           "Members face the start point (or face); flying squads are placed to drop in and cruise over the floor.",
           lambda s, a: s.place_squad(a["level"], a["centre"], a["member_type"], a.get("members", 3), a.get("region"),
                                      a.get("door"), a.get("door_type"), a.get("door_pos"), a.get("door_fields"),
-                                     a.get("spread", 150), a.get("name"), a.get("squadron_example"),
+                                     a.get("spread"), a.get("name"), a.get("squadron_example"),
                                      a.get("member_example"), a.get("face"), a.get("size"), a.get("region_of")),
           {"level": _LEVEL, "member_type": _TYPE, "members": {"type": "integer"},
            "centre": {**_POS, "description": "[x, z]: the lowest dry floor with room there; [x, y, z]: the floor at "
@@ -200,7 +200,9 @@ TOOLS = [
            "region": {"type": "array", "items": _XZ, "description": "corners in order (default: a square 300 "
                                                                    "around the centre)"},
            "door": {"type": "string"}, "door_type": _TYPE, "door_pos": _POS, "door_fields": {"type": "object"},
-           "spread": {"type": "number"}, "name": {"type": "string"}, "squadron_example": _EXAMPLE,
+           "spread": {"type": "number", "description": "members' distance from the centre (default 150; 0 for "
+                                                       "one member: a lookout stands at the centre)"},
+           "name": {"type": "string"}, "squadron_example": _EXAMPLE,
            "member_example": _EXAMPLE,
            "face": {**_XZ, "description": "the point members face until they see the player (default: the "
                                           "level's start point 0)"},
