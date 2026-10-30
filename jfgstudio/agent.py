@@ -658,6 +658,12 @@ class Session:
         if found:
             out.append(("zFighting", found, "faces in one plane overlap (either facing): they flicker. Move one off "
                         "the other (a wall set in a few units, a decal's back 2 behind its front)"))
+        found = gc.open_colliders(mesh.kind_triangles("hidden"), mesh.kind_triangles("solid"),
+                                  mesh.kind_triangles("water"))
+        if found:
+            out.append(("openCollider", found, "an invisible (collider) wall stands in the open: the floor or water "
+                        "goes on past it, so the player walks into nothing (play-tested). End the open ground or water "
+                        "at a barrier the player sees (rocks, a steep reef, a cliff) with the collider behind it"))
         found = gc.water_under_floor(mesh.collision, mesh.kind_triangles("water"))
         if found:
             out.append(("waterUnderFloor", found, f"water lies up to {gc.WATER_UNDER} under solid floor: the hero "
@@ -2545,9 +2551,10 @@ class Session:
                     findings = []
                 for key, found, problem in findings:
                     problems.append(val.Problem(val.WARNING, {"slivers": "floor-slivers", "zFighting": "z-fighting",
-                                                              "waterUnderFloor": "water-under-floor"}[key],
+                                                              "waterUnderFloor": "water-under-floor",
+                                                              "openCollider": "invisible-wall"}[key],
                                                 f"levels/{name}/level.json",
-                                                f"{len(found)}{'+' if key == 'zFighting' and len(found) >= 20 else ''}"
+                                                f"{len(found)}{'+' if len(found) >= 20 else ''}"
                                                 f" place(s), one at {found[0]}: {problem}"))
             for name, lv in self.p.levels.items():  # nothing above: black where the sky should be
                 if lv.base is None and lv.level.get("sky", -1) == -1 and self._open_to_sky(name):

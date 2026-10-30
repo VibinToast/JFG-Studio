@@ -74,7 +74,8 @@ cover = jfg64.rock("cover", radius=95, squash=1.2, location=(x, y, jfg64.ground_
   `floor-slivers`: floor faces reaching across a segment split, so keep floor triangles in tiles of 300 or less
   (never dissolve flat ground into big n-gons); `z-fighting`: faces in one plane overlapping, so set a wall a few
   units in and a decal's back 2 behind its front; `water-under-floor`: water just under solid floor (the hero sinks
-  through it), so keep water inside its hollow, clear of the banks and the shore's sand.
+  through it), so keep water inside its hollow, clear of the banks and the shore's sand; `invisible-wall`: a
+  collider wall with floor or water going on past it, so end open ground and water at a barrier the player sees.
 - **Cover** a squad can hide behind must hide it: about 100 tall and 80 across or more (rock radius 90+, squash
   1.0-1.4). The guide's radius-60 rocks come out about 40 tall: landmarks and steps, not cover (`add_cover` warns
   and makes no hole for them).

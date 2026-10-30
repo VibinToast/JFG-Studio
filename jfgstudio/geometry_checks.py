@@ -7,6 +7,8 @@
   plane, a decal's front and back in one place.
 - water under floor: a water surface just under solid floor: the hero sank through the sand over a tide pool
   whose water reached 8 under it.
+- open colliders: an invisible (collider) wall with floor or water going on past it at its foot: the player sees
+  open ground or sea and walks into nothing (play-tested in open water). End it at a barrier the player can see.
 
 Each returns the places it found ([x, y, z], rounded), numpy only.
 """
@@ -142,4 +144,45 @@ def water_under_floor(collision, water) -> list[list[int]]:
             if ((h > py + 0.5) & (h <= py + WATER_UNDER)).any():
                 out.append([round(float(px)), round(float(py)), round(float(pz))])
                 break
+    return out
+
+
+OPEN_PROBE = 80  # how far either side of a collider wall to look for floor or water at its foot
+OPEN_STEP = 60  # and how far over or under its foot that floor may be
+
+
+def open_colliders(hidden, solid, water, limit: int = 20) -> list[list[int]]:
+    """Places on invisible (collider) walls where the floor or water the player sees goes on at the wall's foot on
+    both sides: a wall in the open. Up to `limit`."""
+    from jfgstudio.gui.viewport import heights_at
+    h = np.asarray(hidden, np.float64).reshape(-1, 3, 3)
+    if not len(h):
+        return []
+    s = np.asarray(solid, np.float64).reshape(-1, 3, 3)
+    sn, _ = _normals(s) if len(s) else (np.zeros((0, 3)), None)
+    floors = s[sn[:, 1] > 0.7] if len(s) else s
+    walk = np.concatenate([floors, np.asarray(water, np.float64).reshape(-1, 3, 3)])
+    n, area = _normals(h)
+    out = []
+    for tri, normal, a in zip(h, n, area, strict=True):
+        if a < 1e-3 or abs(normal[1]) > 0.3:
+            continue  # a collider floor or roof, not a wall
+        side = np.array([normal[0], 0.0, normal[2]])
+        side /= max(np.linalg.norm(side), 1e-9)
+        base = float(tri[:, 1].min())
+        lo = tri[np.argsort(tri[:, 1])[:2]]  # its foot: the two lowest corners
+        for f in (0.25, 0.5, 0.75):
+            p = lo[0] + (lo[1] - lo[0]) * f
+            both = True
+            for sign in (1, -1):
+                q = p + side * sign * OPEN_PROBE
+                ys = heights_at(walk, float(q[0]), float(q[2]))
+                if not ((ys > base - OPEN_STEP) & (ys < base + OPEN_STEP)).any():
+                    both = False
+                    break
+            if both:
+                out.append([round(float(c)) for c in p])
+                break
+        if len(out) >= limit:
+            break
     return out

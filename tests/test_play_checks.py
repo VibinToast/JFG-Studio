@@ -64,6 +64,16 @@ class Geometry(unittest.TestCase):
         self.assertEqual(geometry_checks.water_under_floor(sand, deep), [])
 
 
+class OpenColliders(unittest.TestCase):
+    def test_an_invisible_wall_in_the_sea(self):
+        sea = np.array(_quad(-1000, -1000, 1000, 1000, -20), "f8")
+        wall = np.array([[(-500, -60, 0), (500, -60, 0), (500, 300, 0)], [(-500, -60, 0), (500, 300, 0),
+                                                                         (-500, 300, 0)]], "f8")
+        self.assertTrue(geometry_checks.open_colliders(wall, np.zeros((0, 3, 3)), sea))
+        shore = np.array(_quad(-1000, -1000, 1000, 0, -20), "f8")  # water on one side only: the level's edge
+        self.assertEqual(geometry_checks.open_colliders(wall, np.zeros((0, 3, 3)), shore), [])
+
+
 class Cover(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
