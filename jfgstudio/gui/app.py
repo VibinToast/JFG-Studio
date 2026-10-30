@@ -332,6 +332,12 @@ class State:
         """(dome .glb, mode) for a level's sky (header +0x58 is a definition index; +0x69 the mode), or None."""
         d = level.get("sky", -1)
         mode = level["header"].get("loadTexture", 0)
+        if isinstance(d, str):  # the pack's own dome (skies/<name>.glb), drawn as the game draws a stock one
+            try:
+                path = self.project.sky_path(refs.parse(d, "sky").name)
+            except refs.RefError:
+                return None
+            return (str(path), mode) if path.is_file() and mode in (0, 1) else None
         if d is None or d < 0 or mode not in (0, 1) or self.catalog() is None:
             return None
         key = ("sky", d)

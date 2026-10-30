@@ -268,11 +268,13 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   `fogNear`. Around 700 the fog starts at the hero's feet, and none of the game's levels starts below 900. Change it
   a few units at a time. A `fogzone`'s `near` / `far` are on the same scale: for local mist go a little under the
   level's own values (a trial's zone at 150 turned the view white).
+- **Sky of the pack's own**: `make_sky` (colours from straight up to the horizon to below: noon, dusk, storm) or
+  `import_sky` (a dome modelled in Blender, faces inwards, its own images: clouds, a moon, stars), then
+  `set_level {"sky": "pack:sky/<name>"}`. Played in the port: it shows like the game's own skies.
 - **Weather**: `set_level {"weather": "rain"}` (or `"snow"`, `"none"`, a stock level id to copy, or
   `{"like": 42, "weatherVelX": -300}` to change a copy). Start from a game level's block: intensity or opacity 0
   shows nothing. Rain over intensity 191 has lightning; most rainy levels let the rain set the fog
-  (`weatherFlags` 0). Rain is drawn only in the one-player view. Not yet seen in a pack level in the port: say so
-  when you hand the level over.
+  (`weatherFlags` 0). Rain is drawn only in the one-player view (played in a pack level in the port: it shows).
 
 ## Objects
 

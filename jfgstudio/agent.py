@@ -893,6 +893,26 @@ class Session:
         dest.write_bytes(src_path.read_bytes())
         return {"music": f"pack:music/{name}", "use": f"set_level(level, {{\"music\": \"pack:music/{name}\"}})"}
 
+    def import_sky(self, src: str, name: str | None = None) -> dict:
+        """A sky dome .glb copied into the project's skies/ (checked as the build makes it), for set_level sky."""
+        from jfgstudio import skies
+        try:
+            out = skies.add(self.p, src, name)
+        except skies.SkyError as e:
+            raise AgentError(str(e)) from None
+        out["use"] = f"set_level(level, {{\"sky\": \"{out['sky']}\"}})"
+        return out
+
+    def make_sky(self, name: str, top, horizon, bottom=None) -> dict:
+        """A sky dome of colours alone (skies.gradient): from top (straight up) to horizon to bottom."""
+        from jfgstudio import skies
+        try:
+            out = skies.make(self.p, name, top, horizon, bottom)
+        except skies.SkyError as e:
+            raise AgentError(str(e)) from None
+        out["use"] = f"set_level(level, {{\"sky\": \"{out['sky']}\"}})"
+        return out
+
     def set_thumbnail(self, src: str | None) -> dict:
         try:
             dest = proj.set_thumbnail(self.p, src or None)

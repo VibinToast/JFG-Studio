@@ -159,6 +159,7 @@ TOOLS = [
            "planet": {"type": "string"}}, ["name", "display_name", "geometry"]),
     _tool("set_level", "Change a level's settings: name, track, sky, music (pack:music/<name>), planet, ambient, "
           "weather, and header fields by name in \"header\" (fogNear, fogFar, fogR/G/B, tune ...). null removes one. "
+          "sky: a stock dome definition (stock_levels lists each level's), -1, or pack:sky/<name> (import_sky). "
           "weather: \"none\", \"snow\", \"rain\" (the game's own: levels 141 and 42), a stock level id to copy its "
           "block (snow 141; rain 17, 25, 42, 43, 115, 136), or {\"like\": id, ...fields} with weather (particles), "
           "weatherIntensity (1-255, rain lightning from 192), weatherOpacity (1-255, flashes from 128), "
@@ -408,6 +409,19 @@ TOOLS = [
     _tool("import_music", "Copy an .ogg into the project's music.", lambda s, a: s.import_music(a["path"],
                                                                                                 a.get("name")),
           {"path": {"type": "string"}, "name": {"type": "string"}}, ["path"]),
+    _tool("import_sky", "Copy a sky dome .glb into the project (skies/<name>.glb) for set_level {\"sky\": "
+          "\"pack:sky/<name>\"}: a dome, sphere or cylinder modelled with its faces pointing inwards, with its own "
+          "images and vertex colours (not lit). The game draws it behind everything, centred on the camera at its "
+          "own size (its domes reach 260-9000 units). Checked as the build makes it (images, radius).",
+          lambda s, a: s.import_sky(a["path"], a.get("name")),
+          {"path": {"type": "string"}, "name": {"type": "string", "description": "sky name (default: the file's)"}},
+          ["path"]),
+    _tool("make_sky", "A sky dome of colours alone, no Blender: a sphere around the camera shading from top "
+          "(straight up) through horizon to bottom (below the horizon; horizon's when left out), saved as "
+          "skies/<name>.glb for set_level sky. A noon sky: deep blue over pale blue; dusk: indigo over orange; "
+          "a storm: dark slate over grey. For clouds, a moon or stars, model one in Blender and import_sky it.",
+          lambda s, a: s.make_sky(a["name"], a["top"], a["horizon"], a.get("bottom")),
+          {"name": {"type": "string"}, "top": _RGB, "horizon": _RGB, "bottom": _RGB}, ["name", "top", "horizon"]),
     _tool("set_thumbnail", "The pack's picture on the game's mods page: copy a square PNG or DDS (512 x 512 works) "
           "into the project as thumb.png / thumb.dds; an empty path removes it (packs without one show Studio's icon).",
           lambda s, a: s.set_thumbnail(a["path"]), {"path": {"type": "string"}}, ["path"]),

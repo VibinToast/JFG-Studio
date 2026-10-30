@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 CATEGORIES = {
     "level", "track", "objlist", "objtype", "kind", "model", "texture", "anim", "sound", "music", "text", "world",
-    "mappoint", "disc", "weapon",
+    "mappoint", "disc", "weapon", "sky",
 }
 
 _RE = re.compile(r"^(?P<ns>[a-z0-9][a-z0-9_.\-]*):(?P<cat>[a-z]+)/(?P<name>[A-Za-z0-9_.\-]+)$")

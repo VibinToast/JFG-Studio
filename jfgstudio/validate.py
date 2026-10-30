@@ -327,6 +327,14 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
     lf = f"levels/{level.name}/level.json"
     of = f"levels/{level.name}/objects.json"
     header = level.level["header"]
+    sky = level.level.get("sky")
+    if isinstance(sky, str):
+        r = _ref(sky, "sky", lf, None, out)
+        if r and not project.sky_path(r.name).is_file():
+            out.append(Problem(ERROR, "sky", lf, f"{sky}: skies/{r.name}.glb does not exist"))
+        elif r and level.level.get("base"):
+            out.append(Problem(ERROR, "sky", lf, "a stock level's edit keeps the game level's sky: a pack sky goes on "
+                                                 "a level of the pack's own"))
     if level.level.get("base"):
         _ref(level.level["base"], "level", lf, None, out)
         if level.level.get("planet"):

@@ -6,6 +6,7 @@
     levels/<name>/level.json        header fields by name, track, sky, music
     levels/<name>/objects.json      placed objects
     geometry/<name>.glb             tracks from Blender (pack:track/<name>)
+    skies/<name>.glb                sky domes from Blender (pack:sky/<name>: a level's "sky"; build.py skies)
     music/<name>.ogg                music (pack:music/<name>)
     kinds/<name>.json, kinds/<name>/  object types made from stock ones, with their textures (pack:kind/<name>)
     baddies.json                    patches of the game's enemy animation tables (baddy_patches.py), optional
@@ -103,6 +104,14 @@ class Project:
 
     def geometry_path(self, name: str) -> Path:
         return self.path / "geometry" / f"{name}.glb"
+
+    def sky_path(self, name: str) -> Path:
+        return self.path / "skies" / f"{name}.glb"
+
+    def skies(self) -> list[str]:
+        """The names of the project's sky domes (skies/<name>.glb)."""
+        folder = self.path / "skies"
+        return sorted(f.stem for f in folder.glob("*.glb")) if folder.is_dir() else []
 
     def kind_texture(self, name: str, slot: int | str) -> Path:
         return self.path / "kinds" / name / f"{int(slot)}.png"
@@ -272,7 +281,8 @@ def create(path: Path | str, mod_id: str, name: str, author: str = "") -> Projec
     if problems:
         raise ProjectError(problems)
     project = Project(path, meta)
-    for folder in ("levels", "planets", "geometry", "music", "kinds", "textures", "text", "scripts", "prefabs"):
+    for folder in ("levels", "planets", "geometry", "music", "kinds", "textures", "text", "scripts", "prefabs",
+                   "skies"):
         (path / folder).mkdir(parents=True, exist_ok=True)
     project.save()
     return project

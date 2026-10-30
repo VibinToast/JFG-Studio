@@ -139,10 +139,16 @@ def level_window() -> None:
                 h.set_value(edit.LEVEL, ("ambient",), new if any(v != -1 for v in new) else None, "ambient loop")
 
     if imgui.collapsing_header("Sky and fog", imgui.TreeNodeFlags_.default_open):
-        skies = _stock_choices(lambda lv: lv["sky"] if lv["sky"] != -1 else None)
+        own = [(f"pack:sky/{n}", f"{n}  (skies/{n}.glb)") for n in S.project.skies()]
+        skies = own + _stock_choices(lambda lv: lv["sky"] if lv["sky"] != -1 else None)
         picked = _combo("Sky", lv.get("sky", -1), skies, "none (clear colour)")
         if picked is not _UNCHANGED:
             h.set_value(edit.LEVEL, ("sky",), picked, "level sky")
+            S.validate()
+        if imgui.is_item_hovered():
+            theme.tip("The dome drawn behind everything: one of the game's, or the pack's own (a .glb from Blender)")
+        if h.level.base is None and imgui.button("Add a sky .glb..."):
+            add_sky(h)
         clear = [hd.get(k, 0) / 255 for k in ("clearR", "clearG", "clearB")]
         changed, clear = imgui.color_edit3("Clear colour", clear)
         if changed:
@@ -266,6 +272,25 @@ def add_music() -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, dest)
     S.message = f"music/{dest.name} added: pick it as a level's Music"
+
+
+def add_sky(h) -> None:
+    """Copies a sky dome .glb into the project's skies/ (checked as the build makes it) and gives it to the level."""
+    from imgui_bundle import portable_file_dialogs as pfd
+
+    from jfgstudio import skies
+    S = _app().S
+    picked = (pfd.open_file("Sky dome (.glb)", "", ["glTF binary", "*.glb"]).result() or [None])[0]
+    if not picked:
+        return
+    try:
+        out = skies.add(S.project, picked)
+    except (skies.SkyError, OSError) as e:
+        S.message = f"Can't add the sky: {e}"
+        return
+    h.set_value(edit.LEVEL, ("sky",), out["sky"], "level sky")
+    S.validate()
+    S.message = f"Sky {out['sky']} added ({out['images']} images, reaching {out['radius']} units)"
 
 
 # ---------------------------------------------------------------- Region and Water tools in the Scene

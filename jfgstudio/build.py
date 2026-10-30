@@ -42,6 +42,7 @@ SETS = (
     (0x41, 0x42, "animseq", "raw"),
 )
 MODEL_TABLE, MODEL_DATA, OBJDEF_TABLE, OBJDEF_DATA = 0x26, 0x27, 0x2E, 0x2F
+SKY_DEF = 180  # dome3: a pack sky's definition is a copy of it (one model, scale 1.0, no texture scroll)
 
 
 class BuildError(Exception):
@@ -306,6 +307,49 @@ class _Builder:
                      f"{len(kind.get('textures') or {})} new textures")
         return entries, objtypes, animrows
 
+    def skies(self) -> list[dict]:
+        """The pack's own sky domes (skies/<name>.glb) its levels use, as new entries: each one's images, the model
+        jfgformats' import_new makes of it (unlit: a sky shows its own colours), and a definition copied from a stock
+        dome's with that model (decomp MSR "Sky": header +0x58 is a definition index initSky spawns; every stock dome
+        is a definition of one model at scale 1.0). The levels name the definition through a fixup at +0x58."""
+        used = sorted({refs.parse(lv.level["sky"], "sky").name for lv in self.p.levels.values()
+                       if isinstance(lv.level.get("sky"), str)})
+        if not used:
+            return []
+        defs_table, _ = self.jf.read_table(self.catalog.assets.section(OBJDEF_TABLE))
+        raw = self.catalog.assets.section(OBJDEF_DATA)[defs_table[SKY_DEF]:defs_table[SKY_DEF + 1]]
+        arr = struct.unpack_from(">i", raw, 0x30)[0]
+        entries = []
+        for name in used:
+            path = self.p.sky_path(name)
+            try:
+                r = self.models.import_new(str(path), name=f"sky_{name}", lit=False, log=lambda *a: None)
+            except Exception as e:  # noqa: BLE001 (the importer's own errors: what Blender has to change)
+                raise BuildError([f"skies/{name}.glb: {e}"]) from e
+            from jfgformats import gltf
+            doc, blob = gltf.read_glb(str(path))
+            for k in range(len(doc.get("textures", []))):
+                try:
+                    png = gltf.image_bytes(doc, blob, k)
+                except self.jf.FormatError:
+                    continue  # import_new has refused it already
+                if self.game_textures().game_art(png):
+                    raise BuildError([f"skies/{name}.glb: one of its images is the game's own, which a pack can't "
+                                      "carry (each player has them in their own game): paint the sky yourself"])
+            for t in r["textures"]:
+                entries.append({"table": 0x01, "data": 0x00, "what": "texture", "index": None, "raw": t["entry"],
+                                "append": f"texture_sky_{name}_{t['key']}"})
+            entries.append({"table": MODEL_TABLE, "data": MODEL_DATA, "what": "model", "index": None,
+                            "raw": r["packed"], "append": f"model_sky_{name}", "packed": True,
+                            "fixups": [{"at": f["at"], "type": f["type"], "ref": f"texture_sky_{name}_{f['texture']}",
+                                        "add": f["or"]} for f in r["textureRefs"]]})
+            entries.append({"table": OBJDEF_TABLE, "data": OBJDEF_DATA, "what": "objdef", "index": None, "raw": None,
+                            "append": f"objdef_sky_{name}", "copyOf": SKY_DEF,
+                            "fixups": [{"at": arr + 4 * i, "type": "u32", "ref": f"model_sky_{name}"}
+                                       for i in range(raw[0x1F])]})
+            self.log(f"sky {name}: {len(r['textures'])} images, a dome definition made from {SKY_DEF}'s")
+        return entries
+
     # the asset side
     def assets(self) -> list[dict]:
         """Every entry the pack adds or replaces: {table, data, what, index, raw, append (a name, or None)}."""
@@ -379,7 +423,7 @@ class _Builder:
             if planet:  # the planet's region: the port numbers it (a fixup below), its levels are 0, 1, 2... in it
                 fields["regionIndex"] = self.region_levels(planet).index(name)
             fields.update({"track": track.number() if track.is_stock else track_ids[track.name],
-                           "track2": level.level.get("sky", -1),
+                           "track2": SKY_DEF if isinstance(level.level.get("sky"), str) else level.level.get("sky", -1),
                            "objectList0": slots["slot0"], "objectList1": slots["slot1"]})
             if level.level.get("ambient"):
                 fields["ambientSounds"] = (list(level.level["ambient"]) + [-1, -1, -1])[:3]
@@ -407,6 +451,9 @@ class _Builder:
                 self.log(f"level {name}: {len(level.level['paths'])} animation paths (block animseq_{name})")
             if not track.is_stock:
                 fixups.append({"at": 0x54, "type": "s16", "ref": f"track_{track.name}"})  # header +0x54: the track
+            if isinstance(level.level.get("sky"), str):  # header +0x58: the pack's sky dome definition
+                fixups.append({"at": 0x58, "type": "s16",
+                               "ref": f"objdef_sky_{refs.parse(level.level['sky'], 'sky').name}"})
             if planet:  # header +0x102: the region
                 fixups.append({"at": 0x102, "type": "u8", "ref": f"region_{planet}"})
             if "fixedObjectLists" not in level.level:  # header +0xCA slot 0, +0x56 slot 1: the appended lists
@@ -629,7 +676,7 @@ def build(project: Project, out: str | Path, rom_path: str | None = None, log=pr
         changes = b.assets()
         kind_entries, objtypes, animrows = b.kinds()
         type_entries, own_types = b.own_types()
-        kind_entries += type_entries
+        kind_entries += type_entries + b.skies()
         objtypes += own_types
         level_patches = b.patches()
         regions = b.regions()

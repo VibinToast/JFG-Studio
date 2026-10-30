@@ -18,7 +18,7 @@
   },
   "track": {"type": "string", "description": "pack:track/<name> (geometry/<name>.glb) or stock:track/<n>"},
   "editStock": {"type": "boolean", "description": "an edit of a stock level: its own objects may be changed and removed too (objects.json stockEdits); off, they are read-only and only added objects change it"},
-  "sky": {"type": "integer", "minimum": -1, "description": "sky object id (header +0x58), -1 = none (black)"},
+  "sky": {"anyOf": [{"type": "integer", "minimum": -1}, {"type": "string", "pattern": "^pack:sky/[a-z0-9_][a-z0-9_-]*$"}], "description": "the sky dome (header +0x58): a stock definition index, -1 = none (the clear colour), or pack:sky/<name> (skies/<name>.glb)"},
   "header": {
    "type": "object",
    "description": "header fields by name (decomp levels.py names); unnamed fields come from the neutral template",
