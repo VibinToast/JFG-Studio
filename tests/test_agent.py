@@ -873,3 +873,19 @@ class RunnerFindings(AgentTest):
         out = self.s.object_values("gemini", "squad1")
         self.assertEqual(out["values"]["squadronId"], 7)
         self.assertIn("region", out["own"])
+
+    def test_key_door_with_its_key_later(self):
+        self.with_catalog()
+        out = self.s.place_key_door("home", "0x1AD", [0, 0])
+        self.assertEqual(out[0]["fields"]["keyLock"], 2)
+        self.assertIn("place(level", out[-1]["note"])
+
+    def test_members_off_cover_tops_and_cover_under_a_roof(self):
+        self.with_catalog()
+        blocks = sum((_block(x, -40, x + 80, 40, 0, 110) for x in (-180, 100)), [])
+        roof = [[t[0], t[2], t[1]] for t in _quad(-1000, -1000, 1000, 1000, 600)] + _quad(-1000, -1000, 1000, 1000, 620)
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + blocks + roof, (), KILL)
+        made = self.s.place_squad("home", [0, 0], "0x29", members=4, spread=140)
+        members = [o for o in made if o.get("schema") == "squadmember"]
+        self.assertTrue(all(m["pos"][1] < 40 for m in members), [m["pos"] for m in members])
+        self.assertTrue([o for o in made if o.get("schema") == "regioninfo" or "hole" in str(o.get("uid", ""))])

@@ -27,6 +27,8 @@ COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obsta
 COVER_STEP = 20  # the grid obstacles() looks on
 COVER_MAX = 12  # holes Placer.cover makes at most per region
 COVER_MIN = 40  # an obstacle narrower than this both ways is too small to hide behind: no hole (a trial gave 20s)
+COVER_TOP = 300  # tops higher than this over the region's ground are roofs and ceilings, not cover (under a cave's
+#                  roof every cell's column has the roof's top in it: no holes, play-tested)
 COVER_LINK = 10  # cells this far over the region's ground join obstacle pieces (a lumpy rock's dip); plain ground
 #                  between them keeps boulders and crates apart (five boulders became one hole, play-tested)
 COVER_THIN = 60  # an obstacle thinner than this one way (a net rack 180 x 20) is no cover either: members got stuck on
@@ -112,8 +114,8 @@ def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float
 
     cells = {(i, j) for i in range(nx) for j in range(nz) if inside(poly, *at(i, j))}
     tops = {c: heights_at(mesh.collision, *at(*c), facing=1) for c in cells}
-    blocked = {c for c in cells if (tops[c] > ground + COVER_RISE).any()}
-    raised = {c for c in cells if (tops[c] > ground + COVER_LINK).any()}
+    blocked = {c for c in cells if ((tops[c] > ground + COVER_RISE) & (tops[c] < ground + COVER_TOP)).any()}
+    raised = {c for c in cells if ((tops[c] > ground + COVER_LINK) & (tops[c] < ground + COVER_TOP)).any()}
     seen, boxes, edge, joined = set(), [], 0, 0
     for c in sorted(blocked):
         if c in seen:

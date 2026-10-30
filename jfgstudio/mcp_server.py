@@ -241,12 +241,13 @@ TOOLS = [
            "slots": {"type": "array", "items": {"type": "integer"}}, "seed": {"type": "integer"}},
           ["name", "colour"]),
     _tool("place_key_door", "A door that needs a coloured key, and the key (on the floor at key_pos; in key_level if "
-          "given). The colour is the first one the pack's doors don't use yet, unless colour names one.",
-          lambda s, a: s.place_key_door(a["level"], a["door_type"], a["door_pos"], a["key_pos"], a.get("colour"),
+          "given). The colour is the first one the pack's doors don't use yet, unless colour names one. Without "
+          "key_pos, the door alone (its key goes in a level not made yet: the result says how to place it).",
+          lambda s, a: s.place_key_door(a["level"], a["door_type"], a["door_pos"], a.get("key_pos"), a.get("colour"),
                                         a.get("facing"), a.get("key_level")),
           {"level": _LEVEL, "door_type": _TYPE, "door_pos": _POS, "key_pos": _POS,
            "colour": {"type": ["string", "integer"], "description": "a key's name (\"red key\") or keyLock number"},
-           "facing": _FACING, "key_level": _LEVEL}, ["level", "door_type", "door_pos", "key_pos"]),
+           "facing": _FACING, "key_level": _LEVEL}, ["level", "door_type", "door_pos"]),
     _tool("place_switch_door", "A shootable switch that keeps a door locked until the player shoots it: door \"new\" "
           "(with door_type and door_pos) or a door's uid. Shot, it opens the door and sets one of the pack's game "
           "flags (handed out from 103), so the door stays open after a reload; saved false: the door locks again on "

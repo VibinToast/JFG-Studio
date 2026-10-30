@@ -57,6 +57,7 @@ DOOR_CLEARANCE = 120  # doors, exits and start points placed by [x, z]: the lowe
 STAND_CLEARANCE = {"squadron": 90, "squadmember": 90, None: 90, "regionpoint": 0}
 POLY_LIST_DEFAULT = 90  # level header polyList (+0xEA) in the game's levels and the new-level template
 ITEM_CLEARANCE = 40  # pickups, crates, switches and the rest
+MEMBER_RISE = 40  # a squad member standing this far over its squadron's ground is on something: moved off it
 INSIDE_REACH = 600  # walls this close on every side, under the back of a floor: inside a solid block or hut
 OPEN_FLOOR_KEYS = ("door", "exit", "startpoint")
 SPREAD_TRIES = 24  # place_squad looks this many places around the centre for a dry spot for each member
@@ -1188,7 +1189,9 @@ class Session:
         if below is None:
             key = schema.key if schema is not None else None
             need = DOOR_CLEARANCE if key in OPEN_FLOOR_KEYS else STAND_CLEARANCE.get(key, ITEM_CLEARANCE)
-            y = self._open_floor(mesh, x, z, need, solid_ok=key in OPEN_FLOOR_KEYS)
+            # a door goes in a wall whose opening isn't modelled; a region corner's height doesn't matter (the game
+            # reads regions in x, z), so the ground under a lantern post will do
+            y = self._open_floor(mesh, x, z, need, solid_ok=key in OPEN_FLOOR_KEYS or key == "regionpoint")
         else:
             y = self._floor(mesh, x, z, below)
         if y is None:
@@ -1445,6 +1448,10 @@ class Session:
                 dry = (cx + spread * math.sin(a), cz + spread * math.cos(a))
                 wet.append(k)
             at = self._pos(lv, spot(*dry), self.schemas["squadmember"], True)
+            if cy is None and at[1] > sq_pos[1] + MEMBER_RISE:  # on a block or crate: beside it, at the squad's ground
+                beside = self._ground_spot(lv, at[0], at[2], sq_pos[1])
+                if beside is not None:
+                    at = beside
             m_fields = {"squadron": squadron_id}
             if target is not None:
                 m_fields["yaw"] = self._toward(self.schemas["squadmember"], (at[0], at[2]), target)
@@ -1661,6 +1668,21 @@ class Session:
         at = self.surface_at(level, [[x, z]])[0]
         return at["floor"] is not None and at.get("kind") != "lava" and "water" not in at and "kill" not in at
 
+    def _ground_spot(self, lv: proj.Level, x: float, z: float, ground: float) -> list[int] | None:
+        """A dry place near (x, z) standing no more than MEMBER_RISE over `ground` (off the top of a block or crate
+        it landed on: two squad members stood on 110-tall cover blocks, play-tested); None when there is none."""
+        member = self.schemas["squadmember"]
+        for k in range(1, 25):
+            r = 40 * ((k + 7) // 8)
+            a = 2 * math.pi * (k % 8) / 8
+            px, pz = x + r * math.cos(a), z + r * math.sin(a)
+            if not self._dry(lv.name, px, pz):
+                continue
+            at = self._pos(lv, [px, pz], member, True)
+            if at[1] <= ground + MEMBER_RISE:
+                return at
+        return None
+
     def _dry_spot(self, level: str, x: float, z: float, cx: float, cz: float) -> tuple[float, float] | None:
         """(x, z) when it is dry, else the nearest dry spot found on rings around it (pulled towards the squad's
         centre (cx, cz) first); None when there is none close by."""
@@ -1787,10 +1809,11 @@ class Session:
             raise AgentError(f"{what} is [r, g, b], 0-255")
         return tuple(max(0, min(255, _as_int(c, what))) for c in v)
 
-    def place_key_door(self, level: str, door_type, door_pos, key_pos, colour=None, facing: float | None = None,
-                       key_level: str | None = None) -> list[dict]:
+    def place_key_door(self, level: str, door_type, door_pos, key_pos=None, colour=None,
+                       facing: float | None = None, key_level: str | None = None) -> list[dict]:
         """A door that needs a coloured key, and that key (in `key_level`, this level by default). `colour`: a key's
-        name ("red key") or keyLock number; by default the first colour no door of the pack uses yet."""
+        name ("red key") or keyLock number; by default the first colour no door of the pack uses yet. Without
+        `key_pos` the door alone: its key goes in a level made later (the result says how to place it)."""
         lv = self._level(level)
         door_schema = self.schemas["door"]
         names = door_schema.field("keyLock").enum
@@ -1808,12 +1831,16 @@ class Session:
             lock = _as_int(colour, "colour")
             if not 2 <= lock < 2 + len(KEY_IDS):
                 raise AgentError(f"keyLock {lock} is not a key (2-{1 + len(KEY_IDS)})")
-        self._level(key_level or level)
+        if key_pos is not None:
+            self._level(key_level or level)
         door = self.place(lv.name, door_type, door_pos, fields={"keyLock": lock}, facing=facing,
                           name=names[lock] + " door")
         if door[0].get("schema") != "door":
             self.undo(lv.name)
             raise AgentError(f"{door_type!r} is not a door type (behaviour 7)")
+        if key_pos is None:
+            return door + [{"note": f"the {names[lock]} isn't placed yet: once its level exists, place it there with "
+                                    f"place(level, \"0x{KEY_IDS[lock - 2]:X}\", pos, name=\"{names[lock]}\")"}]
         key = self.place(key_level or level, f"0x{KEY_IDS[lock - 2]:X}", key_pos, name=names[lock])
         return door + key
 
