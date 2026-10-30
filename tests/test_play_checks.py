@@ -219,3 +219,26 @@ class SlagFlats(unittest.TestCase):
             again = proj.load(p.path)
             self.assertEqual(again.levels["gemini"].objects["objects"][0]["name"], "renamed elsewhere")
             self.assertEqual(again.levels["home"].level["name"], "Home edited here")
+
+
+class Caldera(unittest.TestCase):
+    """What an agent building a ring arena found (Corsair Reach 3.3)."""
+
+    def test_a_tall_building_and_cover_by_a_cliff(self):
+        core = _block(-120, -120, 120, 120, 0, 300)  # a building 300 tall in the middle
+        rock = _block(220, -40, 280, 40, 0, 110)  # 40 from the cliff's sloping foot
+        foot = [[(300, 0, -400), (300, 0, 400), (320, 30, 400)], [(300, 0, -400), (320, 30, 400), (320, 30, -400)]]
+        cliff = _block(320, -400, 600, 400, 0, 500)
+        mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + core + rock + foot + cliff, (), KILL)
+        poly = [(-400, -400), (400, -400), (400, 400), (-400, 400)]
+        boxes, edge, _ = prefabs.obstacles(mesh, poly, 0)
+        self.assertEqual(len(boxes), 2, boxes)  # the building and the rock; the cliff touches the edge
+        self.assertGreaterEqual(edge, 1)
+
+    def test_flags_the_pack_s_lua_uses(self):
+        from jfgstudio import scripts
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            (p.path / "scripts" / "story.lua").write_text(
+                "local beats = { { flag = 104 }, { set_flag = 127 } }\nif jfg.flag(126) then end\n", encoding="utf-8")
+            self.assertEqual(scripts.lua_flags(p), {104, 126, 127})

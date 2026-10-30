@@ -27,8 +27,8 @@ COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obsta
 COVER_STEP = 20  # the grid obstacles() looks on
 COVER_MAX = 12  # holes Placer.cover makes at most per region
 COVER_MIN = 40  # an obstacle narrower than this both ways is too small to hide behind: no hole (a trial gave 20s)
-COVER_TOP = 300  # tops higher than this over the region's ground are roofs and ceilings, not cover (under a cave's
-#                  roof every cell's column has the roof's top in it: no holes, play-tested)
+COVER_TOP = 2000  # tops higher than this over the region's ground are too far up to tell; roofs and ceilings are
+#                   left out by their undersides (standing), so a 300-tall building is cover
 COVER_LINK = 10  # cells this far over the region's ground join obstacle pieces (a lumpy rock's dip); plain ground
 #                  between them keeps boulders and crates apart (five boulders became one hole, play-tested)
 COVER_THIN = 60  # an obstacle thinner than this one way (a net rack 180 x 20) is no cover either: members got stuck on
@@ -149,7 +149,14 @@ def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float
                     seen.add(n)
                     todo.append(n)
         if touches:
-            edge += 1
+            # joined to something at the edge (a cliff rising there) by its raised foot: its own blocked parts that
+            # keep clear of the edge still get holes (obstacles 40 from an arena's wall joined it, play-tested)
+            parts, rest = _blocked_parts(group, blocked, cells)
+            edge += rest
+            for part in parts:
+                x0, z0 = at(min(g[0] for g in part), min(g[1] for g in part))
+                x1, z1 = at(max(g[0] for g in part), max(g[1] for g in part))
+                boxes.append((x0 - COVER_STEP / 2, z0 - COVER_STEP / 2, x1 + COVER_STEP / 2, z1 + COVER_STEP / 2))
             continue
         group = [g for g in group if g in blocked]
         x0, z0 = at(min(g[0] for g in group), min(g[1] for g in group))
@@ -181,6 +188,32 @@ def region_ground(mesh, poly) -> float | None:
         return None
     lows.sort()
     return lows[len(lows) // 2]
+
+
+def _blocked_parts(group, blocked, cells) -> tuple[list[list], int]:
+    """A group's blocked cells split into pieces joined by blocked cells alone: (the pieces clear of the region's
+    edge, how many touch it)."""
+    todo_cells = [c for c in group if c in blocked]
+    seen, parts, touching = set(), [], 0
+    for c in todo_cells:
+        if c in seen:
+            continue
+        part, stack, touches = [], [c], False
+        seen.add(c)
+        while stack:
+            i, j = stack.pop()
+            part.append((i, j))
+            for n in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                if n not in cells:
+                    touches = True
+                elif n in blocked and n not in seen:
+                    seen.add(n)
+                    stack.append(n)
+        if touches:
+            touching += 1
+        else:
+            parts.append(part)
+    return parts, touching
 
 
 def _overlap(a, b, gap: float = 0.0) -> bool:

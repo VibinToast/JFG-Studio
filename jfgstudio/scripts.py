@@ -248,6 +248,20 @@ def pack_scripts(project) -> dict[str, bytes]:
     return out
 
 
+def lua_flags(project) -> set[int]:
+    """Game flag numbers the pack's own Lua names (scripts/*.lua: flag = n, set_flag(n), stop_flag = 127 ...):
+    held by its code, so never handed out to a switch or an upgrade."""
+    import re
+    out = set()
+    folder = Path(project.path) / "scripts"
+    for f in sorted(folder.glob("*.lua")) if folder.is_dir() else []:
+        if f.name.startswith("_"):
+            continue  # Studio's own (triggers, weapons): their flags are counted from triggers.json
+        text = f.read_text(encoding="utf-8", errors="replace")
+        out |= {int(n) for n in re.findall(r"[A-Za-z_]*flag\s*(?:=|\()\s*(\d+)", text)}
+    return out
+
+
 def check(project) -> list[str]:
     """Problems with the triggers (the validator's "triggers" rule)."""
     out = []

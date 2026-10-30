@@ -55,6 +55,7 @@ DOOR_CLEARANCE = 120  # doors, exits and start points placed by [x, z]: the lowe
 # Everything else placed by [x, z] also takes the lowest dry floor with room for it, not the highest surface (squad
 # members and Tribals landed on hut roofs, a hull's top, a crate stack and palm fronds, play-tested): this much room
 STAND_CLEARANCE = {"squadron": 90, "squadmember": 90, None: 90, "regionpoint": 0}
+TRIGGER_ZONE = ("triggerX", "triggerY", "triggerZ", "triggerRadius", "triggerHalfHeight")  # a squadron's own zone
 POLY_LIST_DEFAULT = 90  # level header polyList (+0xEA) in the game's levels and the new-level template
 ITEM_CLEARANCE = 40  # pickups, crates, switches and the rest
 MEMBER_RISE = 40  # a squad member standing this far over its squadron's ground is on something: moved off it
@@ -982,11 +983,12 @@ class Session:
         out["use"] = f"set_level(level, {{\"sky\": \"{out['sky']}\"}})"
         return out
 
-    PROJECT_KEYS = ("name", "version", "description", "shortDescription", "tags", "authors")
+    PROJECT_KEYS = ("name", "version", "description", "shortDescription", "tags", "authors", "reservedFlags")
 
     def set_project(self, values: dict) -> dict:
         """The pack's settings in project.json (what the game's Mods page shows): name, version, description,
-        shortDescription, tags, authors; null removes an optional one. Made over project.json as it is on disk now,
+        shortDescription, tags, authors, reservedFlags (game flags only the pack's own code sets: never handed
+        out to switches or upgrades); null removes an optional one. Made over project.json as it is on disk now,
         so a hand edit since the project was opened is kept."""
         if not isinstance(values, dict) or not values:
             raise AgentError("values is an object of project settings")
@@ -1544,7 +1546,7 @@ class Session:
         except ValueError as e:
             raise AgentError(str(e)) from e
         made = self._add(lv, placer.made, "cover") if placer.made else []
-        if got.get("edge") and got["holes"]:
+        if got.get("edge"):
             made.append({"note": f"{got['edge']} obstacle(s) touch region {got['region']}'s edge and got no hole (a "
                                  "hole there would cut the outline): move the corners clear of them for cover"})
         if got.get("joined"):
@@ -1881,6 +1883,7 @@ class Session:
                  if a.get("do") == "flag"}
         used |= {val.UPGRADE_FLAG + o.get("fields", {}).get("upgrade", 0) for lv in self.p.levels.values()
                  for o in lv.objects["objects"] if obj.stock_id(o) == val.HEALTH_UPGRADE}
+        used |= scripts.lua_flags(self.p) | set(self.p.meta.get("reservedFlags", []))
         return {f for f in used if isinstance(f, int)}
 
     def _move_squad(self, lv: proj.Level, sq: dict, to) -> list[dict]:
@@ -2792,7 +2795,8 @@ class Session:
                         trigger = self._catalog.stock_entry(o["stock"]["list"], o["stock"]["entry"])[0x29]
                     except Exception:  # noqa: BLE001 (the build reports a bad stock entry)
                         continue
-                if trigger is not None and trigger & 0xF == 1 and lv.base is None:
+                own_zone = any(k in o.get("fields", {}) for k in TRIGGER_ZONE)  # set for this level
+                if trigger is not None and trigger & 0xF == 1 and lv.base is None and not own_zone:
                     problems.append(val.Problem(val.WARNING, "squad-trigger", f"levels/{lv.name}/objects.json",
                                                 "the squadron spawns when a hero enters a zone copied from a stock "
                                                 "level (+0x1F-+0x23 from where that squad stood): it may never appear "
