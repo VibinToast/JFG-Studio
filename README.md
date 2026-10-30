@@ -1,7 +1,7 @@
 <h1 align="center"><img src="docs/images/banner.png" alt="JFG-Studio" width="100%"></h1>
 
 A standalone level and modpack editor for
-**[Jet Force Gemini: Recompiled](https://github.com/VibinToast/JetForceGemini-Recomp)**. It builds `.nrm` packs the
+**[Jet Force Gemini: Recompiled](https://github.com/VibinToast/JetForceGemini-Recompiled)**. It builds `.nrm` packs the
 game loads from its Mods list. You need your own US ROM; nothing from the game is in this repository or in what it
 ships.
 
