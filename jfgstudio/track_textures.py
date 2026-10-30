@@ -21,8 +21,9 @@ class TrackTextures:
         self._models = None
 
     def of(self, track: str, glb: str | Path | None = None) -> list[dict]:
-        """[{"index", "width", "height", "rgba"}] of track ref `track` ("stock:track/N", or a pack track with its
-        .glb `glb`), in texture-list order."""
+        """[{"index", "width", "height", "rgba", "game" (the game texture id it shows, or None for the pack's own
+        image), "new" (that image's key)}] of track ref `track` ("stock:track/N", or a pack track with its .glb
+        `glb`), in texture-list order."""
         from jfgformats import models, png, tracks
         r = refs.parse(track, "track")
         key = (track,) if r.is_stock else (track, str(glb), Path(glb).stat().st_mtime)
@@ -42,7 +43,9 @@ class TrackTextures:
         for k, entry in enumerate(entries):
             data = new.get(k) or md.texture_png(entry[0] | 0x8000)[0]
             w, h, rgba = png.read_png(data)
-            out.append({"index": k, "width": w, "height": h, "rgba": rgba})
+            game = None if k in new else entry[0] & 0x7FFF
+            out.append({"index": k, "width": w, "height": h, "rgba": rgba, "game": game,
+                        "new": k if k in new else None})
         self.cache[key] = out
         return out
 

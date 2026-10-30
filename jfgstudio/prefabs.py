@@ -113,9 +113,19 @@ def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float
         return min(xs) + (i + 0.5) * COVER_STEP, min(zs) + (j + 0.5) * COVER_STEP
 
     cells = {(i, j) for i in range(nx) for j in range(nz) if inside(poly, *at(i, j))}
-    tops = {c: heights_at(mesh.collision, *at(*c), facing=1) for c in cells}
-    blocked = {c for c in cells if ((tops[c] > ground + COVER_RISE) & (tops[c] < ground + COVER_TOP)).any()}
-    raised = {c for c in cells if ((tops[c] > ground + COVER_LINK) & (tops[c] < ground + COVER_TOP)).any()}
+    def standing(c, low: float) -> bool:
+        """An up-facing top in the cell between low and COVER_TOP over the ground with no underside between it and
+        low: a block standing on the ground, not a beam or a gantry overhead (a gantry 300 up merged every block
+        under it into one, play-tested)."""
+        x, z = at(*c)
+        ups = heights_at(mesh.collision, x, z, facing=1)
+        downs = heights_at(mesh.collision, x, z, facing=-1)
+        for t in ups[(ups > ground + low) & (ups < ground + COVER_TOP)]:
+            if not ((downs > ground + low) & (downs < t - 1)).any():
+                return True
+        return False
+    blocked = {c for c in cells if standing(c, COVER_RISE)}
+    raised = {c for c in cells if standing(c, COVER_LINK)}
     # pillars up to the ceiling have no top: a cell whose point at cover height is inside something solid
     from jfgstudio.gui.viewport import inside_solid
     for c in cells - blocked:

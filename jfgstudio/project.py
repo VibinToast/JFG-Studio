@@ -100,6 +100,10 @@ class Project:
     # project.json as last read or written: save leaves the file alone while meta is unchanged, so an edit made by
     # hand (or by another program) while the project is open isn't overwritten
     meta_saved: dict | None = field(default=None, repr=False)
+    # each level's level.json and objects.json as last read or written: save writes a level only when it changed
+    # here, so another program's edit of a level this one didn't touch isn't overwritten with a stale copy (an agent
+    # editing through Studio's code while the MCP server held the project, play-tested)
+    levels_saved: dict[str, str] = field(default_factory=dict, repr=False)
 
     @property
     def id(self) -> str:
@@ -136,8 +140,12 @@ class Project:
             if level.name in self.viewing:
                 continue
             stock_edit.sync(level)
+            now = dumps(level.level) + dumps(level.objects)
+            if self.levels_saved.get(level.name) == now:
+                continue
             write_json(self.path / "levels" / level.name / "level.json", level.level)
             write_json(self.path / "levels" / level.name / "objects.json", level.objects)
+            self.levels_saved[level.name] = now
         for name, planet in self.planets.items():
             write_json(self.path / "planets" / f"{name}.json", planet)
         for name, kind in self.kinds.items():
@@ -247,6 +255,7 @@ def load(path: Path | str) -> Project:
         raise ProjectError(problems)
     project = Project(path, meta, levels, planets, kinds, galaxies, baddies, objtypes, prefabs)
     project.meta_saved = json.loads(json.dumps(meta))
+    project.levels_saved = {name: dumps(lv.level) + dumps(lv.objects) for name, lv in levels.items()}
     return project
 
 

@@ -434,7 +434,8 @@ TOOLS = [
           lambda s, a: s.object_values(a["level"], a["uid"]), {"level": _LEVEL, "uid": {"type": "string"}},
           ["level", "uid"]),
     _tool("track_textures", "A level's track texture list in the game's order: the numbers a texscroll's texture "
-          "field takes (index, width, height): match them to your materials' images by size and order.",
+          "field takes: index, width, height, and the game texture each shows (game, sameAs: its identical "
+          "copies in the game, as a material named 0x1547 shows as 0x1546) or own (your image).",
           lambda s, a: s.track_textures(a["level"]), {"level": _LEVEL},
           ["level"]),
     _tool("set_project", "The pack's settings the game's Mods page shows: name, version, description, "

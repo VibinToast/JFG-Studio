@@ -67,8 +67,12 @@ def _fits(dt: np.ndarray, radius: float, res: float) -> np.ndarray:
     return out
 
 
-def _reached(mask: np.ndarray, seeds: list[tuple[int, int]]) -> np.ndarray:
-    """The cells of `mask` joined (8 ways) to any seed cell."""
+STEP = 70  # neighbouring floor cells this close in height are joined (the game's steps are about 70)
+
+
+def _reached(mask: np.ndarray, seeds: list[tuple[int, int]], low: np.ndarray | None = None) -> np.ndarray:
+    """The cells of `mask` joined (8 ways) to any seed cell; with `low` (each cell's floor height) only across a step
+    of STEP or less, so a flat cliff top the player can't climb to is left out."""
     out = np.zeros_like(mask)
     for i, j in seeds:
         if 0 <= i < mask.shape[0] and 0 <= j < mask.shape[1] and mask[i, j]:
@@ -77,7 +81,12 @@ def _reached(mask: np.ndarray, seeds: list[tuple[int, int]]) -> np.ndarray:
         grown = out.copy()
         for di in (-1, 0, 1):
             for dj in (-1, 0, 1):
-                grown |= np.roll(np.roll(out, di, 0), dj, 1)
+                moved = np.roll(np.roll(out, di, 0), dj, 1)
+                if low is not None:
+                    near = np.roll(np.roll(low, di, 0), dj, 1)
+                    with np.errstate(invalid="ignore"):
+                        moved &= np.abs(near - low) <= STEP
+                grown |= moved
         grown &= mask
         if (grown == out).all():
             return out
@@ -87,8 +96,9 @@ def _reached(mask: np.ndarray, seeds: list[tuple[int, int]]) -> np.ndarray:
 def study(tris: np.ndarray, starts=None) -> tuple[dict, bytes] | None:
     """(numbers, floor map PNG) of a level's collision triangles (n, 3, 3), Y up. The map: the lowest floor of each
     spot from above (up is -z), brighter = higher, darker where roofed, orange where it is a narrow passage. With
-    `starts` ([(x, z)]: the level's start points), only the floor joined to them counts: backdrop geometry outside
-    the play area (distant piers, a far shore) is left out ("backdrop": its area)."""
+    `starts` ([(x, z)]: the level's start points), only the floor joined to them by steps counts: backdrop geometry
+    outside the play area (distant piers, a far shore) and cliff tops past a climb are left out ("backdrop": their
+    area). The lowest floor of each spot is measured, so floors over others (decks) aren't joined through."""
     tris = np.asarray(tris, np.float64)
     if len(tris) < 2:
         return None
@@ -108,7 +118,7 @@ def study(tris: np.ndarray, starts=None) -> tuple[dict, bytes] | None:
     mask = ~np.isnan(low)
     backdrop = 0
     if starts:
-        reached = _reached(mask, [(int((z - lo[2]) / res), int((x - lo[0]) / res)) for x, z in starts])
+        reached = _reached(mask, [(int((z - lo[2]) / res), int((x - lo[0]) / res)) for x, z in starts], low)
         if reached.any():
             backdrop = int(mask.sum() - reached.sum())
             mask = reached

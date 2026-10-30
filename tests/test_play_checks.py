@@ -185,3 +185,37 @@ class PreviewBox(unittest.TestCase):
         whole = preview.render(sea, [], obj.load_schemas(), size=256)[1]["unitsPerPixel"]
         cropped = preview.render(sea, [], obj.load_schemas(), size=256, box=[-300, -300, 300, 300])[1]
         self.assertLess(cropped["unitsPerPixel"], whole / 5)  # QuadMesh's bounds are +-2000
+
+
+class SlagFlats(unittest.TestCase):
+    """What an agent building a level of blocks under a gantry found (Corsair Reach 3.1)."""
+
+    def test_a_beam_overhead_is_no_cover(self):
+        blocks = sum((_block(x, -40, x + 80, 40, 0, 110) for x in (-200, 100)), [])
+        beam = _down(_quad(-300, -60, 300, 60, 260)) + _quad(-300, -60, 300, 60, 290)  # underside and top
+        mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + blocks + beam, (), KILL)
+        boxes, _, joined = prefabs.obstacles(mesh, [(-300, -300), (300, -300), (300, 300), (-300, 300)], 0)
+        self.assertEqual((len(boxes), joined), (2, 0))
+
+    def test_a_cliff_top_is_not_walkable(self):
+        ground = _grid(10, 100)  # 1000 x 1000
+        plateau = _quad(600, -500, 1400, 500, 400)  # flat, 400 up past a sheer face
+        both = np.array(ground + plateau, "f8")
+        stats, _ = layout_study.study(both, [(0.0, 0.0)])
+        self.assertGreater(stats["backdrop"], 0)
+        ramp = [[(500, 0, -500), (500, 0, 500), (600, 60, 500)], [(500, 0, -500), (600, 60, 500), (600, 60, -500)]]
+        steps = np.array(ground + ramp + _quad(600, -500, 1400, 500, 60), "f8")  # one step up: joined
+        self.assertNotIn("backdrop", layout_study.study(steps, [(0.0, 0.0)])[0])
+
+    def test_a_save_leaves_levels_it_did_not_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = sample_project(Path(tmp))
+            p.save()
+            other = proj.load(p.path)  # a second program with the project open
+            other.levels["gemini"].objects["objects"][0]["name"] = "renamed elsewhere"
+            other.save()
+            p.levels["home"].level["name"] = "Home edited here"
+            p.save()  # its gemini is stale but unchanged here: not written over
+            again = proj.load(p.path)
+            self.assertEqual(again.levels["gemini"].objects["objects"][0]["name"], "renamed elsewhere")
+            self.assertEqual(again.levels["home"].level["name"], "Home edited here")

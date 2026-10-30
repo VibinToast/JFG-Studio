@@ -2220,8 +2220,9 @@ class Session:
                 "named": named}
 
     def track_textures(self, level: str) -> list[dict]:
-        """A level's track texture list (what a texscroll's `texture` numbers): each one's index, width and height,
-        in the order the game holds them."""
+        """A level's track texture list (what a texscroll's `texture` numbers): each one's index, width, height and
+        the game texture it shows ("game", with "sameAs" for the game's identical copies) or "own" for the pack's
+        image, in the order the game holds them."""
         if self.catalog() is None:
             raise AgentError(f"the catalog is not available ({self._catalog_error})")
         from jfgstudio.track_textures import TrackTextures
@@ -2234,7 +2235,19 @@ class Session:
                 raise AgentError(f"{glb.name} is not in the project's geometry folder")
         if self._track_textures is None:
             self._track_textures = TrackTextures(self._catalog)
-        return [{k: v for k, v in t.items() if k != "rgba"} for t in self._track_textures.of(track, glb)]
+        out = []
+        for t in self._track_textures.of(track, glb):
+            row = {k: v for k, v in t.items() if k not in ("rgba", "new")}
+            if t["game"] is not None:
+                row["game"] = f"0x{t['game']:04X}"
+                same = [f"0x{i:04X}" for i in self._library().copies(t["game"]) if i != t["game"]]
+                if same:
+                    row["sameAs"] = same  # the game's identical copies: a material named by one shows as another
+            else:
+                row.pop("game")
+                row["own"] = True
+            out.append(row)
+        return out
 
     def save_prefab(self, level: str, uids: list[str], name: str, description: str = "") -> dict:
         """Saves objects of a level (its own, or the game level's) as one of the project's prefabs

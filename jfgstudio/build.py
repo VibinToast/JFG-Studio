@@ -374,9 +374,10 @@ class _Builder:
                 self.poly_need[name] = result["polyListNeed"]
             art = [key for key, png in result.get("newTextures", {}).items() if self.game_textures().game_art(png)]
             if art:
-                raise BuildError([f"geometry/{glb.name}: {len(art)} image(s) are the game's own art but not level "
-                                  "textures (a model's or the menus', say). A pack can't carry them: use the game's "
-                                  "level textures (game_textures) or images of your own"])
+                raise BuildError([f"geometry/{glb.name}: image(s) {', '.join(str(k) for k in art)} (their order in "
+                                  "the import) have the same pixels as images of the game's own (a model's or the "
+                                  "menus', say: a plain colour may match one by chance). A pack can't carry them: "
+                                  "use the game's level textures (game_textures), or change a pixel or two of yours"])
             if result.get("textures"):
                 raise BuildError([f"geometry/{glb.name}: it changes the pixels of stock textures, which a pack can't "
                                   "carry yet; give those materials their own images"])

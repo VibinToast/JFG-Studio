@@ -117,6 +117,9 @@ class Library:
             doc = json.loads(path.read_text(encoding="utf-8"))
         self._index = {int(k, 16): v for k, v in doc["textures"].items()}
         self._by_key = {v["key"]: v for v in self._index.values()}
+        self._same: dict[str, list[int]] = {}  # pixels -> every level texture with them (the game has copies)
+        for k, v in sorted(self._index.items()):
+            self._same.setdefault(v["key"], []).append(k)
         self._art = set(json.loads((self.dir / "art.json").read_text(encoding="utf-8"))["keys"])
 
     # reading
@@ -128,6 +131,13 @@ class Library:
 
     def path(self, tex: int) -> Path:
         return self.dir / f"{tex:04X}.png"
+
+    def copies(self, tex: int) -> list[int]:
+        """The game's level textures with the same pixels as `tex` (itself included): 0x1546 and 0x1547 look alike."""
+        if self._by_key is None:
+            self._load()
+        v = self._index.get(tex)
+        return self._same.get(v["key"], [tex]) if v else [tex]
 
     def level_texture(self, png: bytes) -> dict | None:
         """The game level texture with these pixels, or None."""
