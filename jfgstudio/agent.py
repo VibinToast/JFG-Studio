@@ -783,14 +783,23 @@ class Session:
             out["next"] = "settle_objects puts sunk and floating ones on the floor; move the others yourself"
         return out
 
-    def preview(self, level: str, size: int = 512, out: str | None = None, colours: bool = False) -> dict:
+    def preview(self, level: str, size: int = 512, out: str | None = None, colours: bool = False,
+                box=None) -> dict:
         """A top-down picture of the level with its objects ("png": the bytes), and its legend; `out` also saves it.
         An edit of a game level also shows that level's own start points and exits, grey. `colours`: the baked
-        vertex colours instead of the surface kinds."""
+        vertex colours instead of the surface kinds. The picture is cropped to the level's solid geometry (a sea out
+        to the horizon is left out), or to `box` [x0, z0, x1, z1]."""
         lv = self._level(level)
+        mesh = self._mesh(level)
+        if box is None and len(mesh.collision):
+            pts = np.asarray(mesh.collision).reshape(-1, 3)
+            lo, hi = pts.min(axis=0), pts.max(axis=0)
+            box = [float(lo[0]), float(lo[2]), float(hi[0]), float(hi[2])]
+        elif box is not None and (len(box) != 4 or box[2] <= box[0] or box[3] <= box[1]):
+            raise AgentError("box is [x0, z0, x1, z1] with x1 > x0 and z1 > z0")
         png, legend = preview.render(self._mesh(level), lv.objects["objects"] + self.base_objects(lv), self.schemas,
                                      self._behaviours(), _as_int(size, "size"), bool(colours),
-                                     paths=lv.level.get("paths", []))
+                                     paths=lv.level.get("paths", []), box=box)
         if out:
             Path(out).write_bytes(png)
             legend["saved"] = str(out)
@@ -1412,7 +1421,7 @@ class Session:
                 region = [[cx - h, cz - h], [cx + h, cz - h], [cx + h, cz + h], [cx - h, cz + h]]
             if len(region) < 3:
                 raise AgentError("region is at least three [x, z] corners, in order around it")
-            corners = [self._corner(lv, c, (cx, cz)) for c in region]
+            corners = [self._corner(lv, c, (cx, cz), cy) for c in region]
             region_id = placer.polygon(corners)
         # Never the catalog's name: that is the player's game data, and uids and names are written into the project.
         label = name or (m_kind.rsplit("/", 1)[1].replace("_", " ") if m_kind else "enemy")
@@ -1568,11 +1577,13 @@ class Session:
                 return r
         return None
 
-    def _corner(self, lv: proj.Level, c, centre) -> list:
-        """A region corner on the floor under it, or at the floor height of the region's centre where there is none
-        (past a wall: a region is 2D, the game ignores its corners' height)."""
+    def _corner(self, lv: proj.Level, c, centre, below: float | None = None) -> list:
+        """A region corner on the floor under it (at or below `below`: a squad on a tower's gallery), or at the floor
+        height of the region's centre where there is none (past a wall: a region is 2D, the game ignores its corners'
+        height)."""
         try:
-            return self._pos(lv, [c[0], c[-1]], self.schemas["regionpoint"], True)
+            return self._pos(lv, [c[0], below, c[-1]] if below is not None else [c[0], c[-1]],
+                             self.schemas["regionpoint"], True)
         except AgentError:
             y = self._pos(lv, list(centre), self.schemas["regionpoint"], True)[1]
             return [round(float(c[0])), y, round(float(c[-1]))]

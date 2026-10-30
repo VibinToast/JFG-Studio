@@ -185,10 +185,14 @@ def _paths(c: Canvas, paths: list[dict]) -> None:
 
 
 def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = None, size: int = 512,
-           colours: bool = False, paths: list[dict] | None = None) -> tuple[bytes, dict]:
+           colours: bool = False, paths: list[dict] | None = None, box=None) -> tuple[bytes, dict]:
     """(PNG bytes, legend) of a level from above. Objects with "base" are a game level's own (drawn grey);
-    `colours` draws the baked vertex colours instead of the surface kinds; `paths`, the level's animation paths."""
+    `colours` draws the baked vertex colours instead of the surface kinds; `paths`, the level's animation paths;
+    `box` [x0, z0, x1, z1] crops it (the geometry's bounds when left out)."""
     lo, hi = mesh.bounds
+    if box is not None:
+        lo = np.array([float(box[0]), float(lo[1]), float(box[1])])
+        hi = np.array([float(box[2]), float(hi[1]), float(box[3])])
     c = Canvas(lo, hi, max(64, min(int(size), 2048)))
     _surfaces(c, mesh, colours)
     _paths(c, paths or [])

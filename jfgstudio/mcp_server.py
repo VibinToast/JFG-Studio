@@ -121,11 +121,15 @@ TOOLS = [
           "start points, exits (their radius), squads and their regions, animation paths, doors (across their "
           "facing), keys and pickups drawn on (an edit of a game level: that level's own start points and exits, "
           "grey). Up is -z. Look at it after laying a level out.",
-          lambda s, a: s.preview(a["level"], a.get("size", 512), a.get("out"), a.get("colours", False)),
+          lambda s, a: s.preview(a["level"], a.get("size", 512), a.get("out"), a.get("colours", False),
+                                 a.get("box")),
           {"level": _LEVEL, "size": {"type": "integer", "description": "pixels across (default 512, at most 2048)"},
            "colours": {"type": "boolean", "description": "the baked vertex colours (the level's mood) instead of "
                                                          "the surface kinds"},
-           "out": {"type": "string", "description": "also save the PNG here"}}, ["level"]),
+           "out": {"type": "string", "description": "also save the PNG here"},
+           "box": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4,
+                   "description": "[x0, z0, x1, z1] to show (default: the level's solid geometry, without a sea "
+                                  "out to the horizon)"}}, ["level"]),
     _tool("check_placement", "A level's objects that should stand on the floor but are buried, floating, sunk or over "
           "a pit, with where each would stand.", lambda s, a: s.check_placement(a["level"]),
           {"level": _LEVEL}, ["level"]),
