@@ -403,6 +403,7 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
 
     total = obj.LIST_HEADER_SIZE
     squadrons, members, doors, region_corners, starts, switches = [], [], [], defaultdict(set), [], []
+    crates = []
     region_points, holes = defaultdict(list), set()
     patrol_nodes, patrol_links, counts = [], [], Counter()
     for o in items:
@@ -452,6 +453,8 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
             doors.append(o)
         elif key == "target":
             switches.append(o)
+        elif key == "damagecrate":
+            crates.append(o)
         elif key == "regionpoint" and "region" in fields:
             region_corners[fields["region"]].add(fields.get("corner"))
             region_points[fields["region"]].append((fields.get("corner", 0), o["pos"][0], o["pos"][2]))
@@ -480,6 +483,7 @@ def _check_objects(project: Project, level, schemas, of: str, stock_base: bool =
         out.append(Problem(ERROR, "list-size", of, f"the object list is 0x{total:X} bytes; the game's buffer is "
                                                    f"0x{obj.LIST_BUFFER_SIZE:X} (header included)"))
     out += _check_winding({r: p for r, p in region_points.items() if r not in holes}, of)  # an edit's own regions too
+    out += _check_clutter(squadrons, crates, region_points, holes, of)
     if stock_base:
         return out
     out += _check_squads(squadrons, members, doors, region_corners, of, switches)
@@ -538,6 +542,24 @@ def _check_winding(region_points, of) -> list[Problem]:
                                                             "the game finds nothing inside it, so its squad stands "
                                                             "still and never turns. fix_squad (or reversing the "
                                                             "corner numbers) mends it"))
+    return out
+
+
+def _check_clutter(squadrons, crates, region_points, holes, of) -> list[Problem]:
+    """Breakable crates and drums inside a squad's region: its members walk into them and get stuck there (they aren't
+    cover either: only the region's holes are, play-tested)."""
+    from jfgstudio.prefabs import inside
+    out = []
+    regions = {o.get("fields", {}).get("region") for o in squadrons} - {None} - holes
+    for region in sorted(regions):
+        pts = [(x, z) for _, x, z in sorted(region_points.get(region, []), key=lambda p: p[0] or 0)]
+        if len(pts) < 3:
+            continue
+        for c in crates:
+            if inside(pts, c["pos"][0], c["pos"][2]):
+                out.append(Problem(WARNING, "squad-clutter", of, f"a crate or drum inside squad region {region}: the "
+                                   "squad's members get stuck on it. Keep squad regions to open ground with simple "
+                                   "cover (modelled, add_cover); put crates outside them", c["uid"]))
     return out
 
 

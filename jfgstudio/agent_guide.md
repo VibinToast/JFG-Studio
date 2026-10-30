@@ -70,6 +70,11 @@ cover = jfg64.rock("cover", radius=95, squash=1.2, location=(x, y, jfg64.ground_
 - **Heights**: `ground_height(obj, x, y)` is the highest surface there: under a roofed room that's the roof's top.
   Pass `below` (the room's floor + 100) for the floor. Studio's `surface_at` is the same: pass its `below`. Off the
   mesh it's None (a rock there raises an error naming it).
+- **Geometry the game handles badly** (`validate` and `geometry_info` find each; all play-tested):
+  `floor-slivers`: floor faces reaching across a segment split, so keep floor triangles in tiles of 300 or less
+  (never dissolve flat ground into big n-gons); `z-fighting`: faces in one plane overlapping, so set a wall a few
+  units in and a decal's back 2 behind its front; `water-under-floor`: water just under solid floor (the hero sinks
+  through it), so keep water inside its hollow, clear of the banks and the shore's sand.
 - **Cover** a squad can hide behind must hide it: about 100 tall and 80 across or more (rock radius 90+, squash
   1.0-1.4). The guide's radius-60 rocks come out about 40 tall: landmarks and steps, not cover (`add_cover` warns
   and makes no hole for them).
@@ -176,7 +181,7 @@ Describe things by what they do; the catalog's names are the player's (never wri
 | Jetpack fuel | `place` `refuel` (0xB9) | its cylinder (`radius`, `bottom`, `top`) and `maxFuel`; by climbs and gaps |
 | Crates, barrels | `place` `damagecrate` (0x135 crate, 0x168 explosive drum) | breakable; rests on the floor; drums explode |
 | Scenery | `place` a `staticprop` type (behaviour 54: `object_types` behaviour=54) | crates, trees, torches, huts, crystals: solid |
-| Light, glow, beams | `light`, `glow`, `lightbeam` | up to the level header's `lights` slots (24 unless set); 50 glows |
+| Light, beams | `light`, `lightbeam` | up to the level header's `lights` slots (24 unless set). **Not `glow`** (0xC8): the owner finds the glow sprites distracting ("do not put these lights anywhere"): light with `light` objects and baked vertex colour |
 | Sound | `audio` | wind, water, machines where they are |
 | Flowing water, lava | `texscroll` | makes a surface's texture move |
 | A camera shot when a door opens | `cutcamera` (0x1AE) and the door's lock light `cutscene` = its `id` | the camera sits at its position looking along `yaw` / `pitch` (positive looks up) for `duration` frames (121 = 2 s); its own `id` per shot, not 0 |
@@ -198,7 +203,8 @@ Enemies besides ants (`place_squad` with the type's id; `object_types` names the
 
 - **Ground**: 0x9C, 0x99 (shielded), 0x12F (captains), 0x121 (undead), 0x143 (armoured gunners: most of the
   game's squads of them are sentries; `place_squad` takes its one smart squad), 0xEE, 0xBE, 0xBD, 0xEF, 0x122
-  (beetles and bugs), 0xE1 (small, fast), 0xF5 (a gun turret: doesn't move). Set `health` and `size` on the
+  (beetles and bugs), 0xE1 (small, fast; it hangs from a thread: in an open room it dangles in the air, so keep it
+  to low ceilings, nests and tunnels, play-tested), 0xF5 (a gun turret: doesn't move). Set `health` and `size` on the
   squadron for tougher or bigger ones.
 - **Flying**: 0x54, 0x2D, 0x29, 0x152, 0x150, 0x2B, 0x151, 0x149. Their squadron spawns its own members and
   launches them down to a spot below it (`offsetY`): `place_squad` places the squadron high and sets that spot about
@@ -296,7 +302,9 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   rectangle over open floor they stand and fire. `place_squad` makes every block, rock or pillar of the level's
   geometry inside the region a hole (crate objects don't count: model the cover) (`add_cover` does it for a squad made before; `validate` warns: `squad-cover`); members also keep out of
   holes. Give each member its own cover: with fewer obstacles than members, two captains ran to the same rock
-  and stood inside each other (play-tested). So give a squad's area things to hide behind (about 100 tall and 80 across: smaller ones get no hole), and
+  and stood inside each other (play-tested). **Keep squad regions to open ground with simple cover**: members got
+  stuck on breakable crates and drums in their region, on raised decks and on thin racks (play-tested); `validate`
+  warns on crates in a region (`squad-clutter`), and `add_cover` skips obstacles thinner than 60 (no cover). So give a squad's area things to hide behind (about 100 tall and 80 across: smaller ones get no hole), and
   keep obstacles off the region's edge. Keep a region to **4 corners**: only those are play-tested (`validate`
   notes others), so move an edge clear of an obstacle rather than cutting round it. Each obstacle gets one hole, and
   squads sharing a region share its holes. Play-tested: ants in a counter-clockwise region with two crates made holes run between cover,
@@ -352,7 +360,7 @@ doesn't write). Use ramps, ledges and the jetpack instead.
   slot's size, or `make_kind`'s `textures` takes PNGs of exactly those sizes. Never copy or recolour the game's own
   images into a pack. Use it as `pack:kind/<name>`: `place_squad`'s `member_type`, or `place`. Health and speed
   aren't part of a kind: they belong to the squad (`squadron` fields `health`, `maxSpeed`, `minSpeed`).
-- **Mood**: `fogzone`, `light`, `glow`, and the level header's fog colour and distances (see Fog); music per level.
+- **Mood**: `fogzone`, `light` (not `glow`: see the table above), and the level header's fog colour and distances (see Fog); music per level.
 - **The game's own levels**: `stock_levels` lists them (`stock:level/<id>`; `search` by name, `world`); it says
   where a new game starts, the usual way back to the game and a good place for a portal.
 - **Doors, exits and start points** placed by `[x, z]` go on the lowest dry floor there with room above it: inside

@@ -97,6 +97,9 @@ class Project:
     prefabs: dict[str, dict] = field(default_factory=dict)  # prefabs/<name>.json (save_prefab writes them at once)
     # stock-level edits opened only to look at (the editor's): never saved until something in them changes
     viewing: set[str] = field(default_factory=set)
+    # project.json as last read or written: save leaves the file alone while meta is unchanged, so an edit made by
+    # hand (or by another program) while the project is open isn't overwritten
+    meta_saved: dict | None = field(default=None, repr=False)
 
     @property
     def id(self) -> str:
@@ -126,7 +129,9 @@ class Project:
 
     def save(self) -> None:
         from jfgstudio import stock_edit  # the game level's objects' changes, kept as "stockEdits"
-        write_json(self.path / "project.json", self.meta)
+        if self.meta != self.meta_saved:
+            write_json(self.path / "project.json", self.meta)
+            self.meta_saved = json.loads(json.dumps(self.meta))
         for level in self.levels.values():
             if level.name in self.viewing:
                 continue
@@ -240,7 +245,9 @@ def load(path: Path | str) -> Project:
         baddies = _read(path / "baddies.json", "baddies", problems) or []
     if problems:
         raise ProjectError(problems)
-    return Project(path, meta, levels, planets, kinds, galaxies, baddies, objtypes, prefabs)
+    project = Project(path, meta, levels, planets, kinds, galaxies, baddies, objtypes, prefabs)
+    project.meta_saved = json.loads(json.dumps(meta))
+    return project
 
 
 def prefab_name(display: str) -> str:

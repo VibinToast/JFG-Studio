@@ -27,6 +27,8 @@ COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obsta
 COVER_STEP = 20  # the grid obstacles() looks on
 COVER_MAX = 12  # holes Placer.cover makes at most per region
 COVER_MIN = 40  # an obstacle narrower than this both ways is too small to hide behind: no hole (a trial gave 20s)
+COVER_THIN = 60  # an obstacle thinner than this one way (a net rack 180 x 20) is no cover either: members got stuck on
+#                  thin racks made holes (play-tested)
 # The numbers that tie a level's objects together, by their fields' "link" (schemas): the field that gives one out,
 # the lowest to give, and the value meaning none. A saved prefab's numbers that it gives out itself are renumbered
 # when it is placed; those it only names are kept (a squad saved without its door still locks that door's id).
@@ -129,6 +131,29 @@ def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float
         x1, z1 = at(max(g[0] for g in group), max(g[1] for g in group))
         boxes.append((x0 - COVER_STEP / 2, z0 - COVER_STEP / 2, x1 + COVER_STEP / 2, z1 + COVER_STEP / 2))
     return merge_boxes(boxes, COVER_STEP), edge
+
+
+def region_ground(mesh, poly) -> float | None:
+    """The ground of a region of (x, z) corners: the median, over the region, of the lowest up-facing floor at each
+    point (a squadron standing on a boulder gave its region a ground 120 up, and no holes, play-tested)."""
+    from jfgstudio.gui.viewport import heights_at
+    xs, zs = [p[0] for p in poly], [p[1] for p in poly]
+    step = max(COVER_STEP, (max(xs) - min(xs) + max(zs) - min(zs)) / 60)
+    lows = []
+    x = min(xs) + step / 2
+    while x < max(xs):
+        z = min(zs) + step / 2
+        while z < max(zs):
+            if inside(poly, x, z):
+                h = heights_at(mesh.collision, x, z, facing=1)
+                if len(h):
+                    lows.append(float(h.min()))
+            z += step
+        x += step
+    if not lows:
+        return None
+    lows.sort()
+    return lows[len(lows) // 2]
 
 
 def _overlap(a, b, gap: float = 0.0) -> bool:
@@ -328,14 +353,17 @@ class Placer:
         to the corners of holes and inward corners of their region, where the hero can't see them; in a rectangle
         over open floor they stand and fire (decomp MSR mod #6). Obstacles a hole already covers are left. Returns
         {"region", "holes": made, "edge": obstacles touching the edge, "old": holes it had, "small": obstacles too
-        small to hide behind (under COVER_MIN across), "convex"}."""
+        small to hide behind (under COVER_MIN across, or thinner than COVER_THIN), "convex"}. The ground the obstacles
+        stand on is the region's own (region_ground), not the floor under the squadron."""
         region = squadron.get("fields", {}).get("region")
         corners = self.corners(region)
         if len(corners) < 3:
             raise ValueError(f"the squadron's region {region} has no corners here")
         poly = [(o["pos"][0], o["pos"][2]) for o in corners]
         sx, sy, sz = squadron["pos"]
-        ground = mesh.floor_height(sx, sz, sy + COVER_RISE)
+        ground = region_ground(mesh, poly)
+        if ground is None:
+            ground = mesh.floor_height(sx, sz, sy + COVER_RISE)
         ground = sy if ground is None else ground
         boxes, edge = obstacles(mesh, poly, ground)
         holes = self.holes_of(region)
@@ -350,7 +378,7 @@ class Placer:
             x0, z0, x1, z1 = box
             if any(_overlap(box, o) for o in old) or made >= COVER_MAX:
                 continue  # a hole is there already
-            if x1 - x0 < COVER_MIN and z1 - z0 < COVER_MIN:
+            if x1 - x0 < COVER_MIN and z1 - z0 < COVER_MIN or min(x1 - x0, z1 - z0) < COVER_THIN:
                 small += 1
                 continue
             self.hole([(x0, ground, z0), (x0, ground, z1), (x1, ground, z1), (x1, ground, z0)], region)

@@ -416,7 +416,11 @@ TOOLS = [
           lambda s, a: s.import_sky(a["path"], a.get("name")),
           {"path": {"type": "string"}, "name": {"type": "string", "description": "sky name (default: the file's)"}},
           ["path"]),
-    _tool("make_sky", "A sky dome of colours alone, no Blender: a sphere around the camera shading from top "
+    _tool("set_project", "The pack's settings the game's Mods page shows: name, version, description, "
+          "shortDescription (one line for mod lists), tags (e.g. [\"Levels\", \"Enemies\"]), authors. null removes "
+          "an optional one. Applied over project.json as it is on disk, so a hand edit is kept.",
+          lambda s, a: s.set_project(a["values"]), {"values": {"type": "object"}}, ["values"]),
+    _tool("make_sky","A sky dome of colours alone, no Blender: a sphere around the camera shading from top "
           "(straight up) through horizon to bottom (below the horizon; horizon's when left out), saved as "
           "skies/<name>.glb for set_level sky. A noon sky: deep blue over pale blue; dusk: indigo over orange; "
           "a storm: dark slate over grey. For clouds, a moon or stars, model one in Blender and import_sky it.",

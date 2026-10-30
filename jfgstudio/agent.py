@@ -52,6 +52,11 @@ SMART, SENTRY = squads.SMART, squads.SENTRY
 IMAGE_PIXELS = 2048  # a new image is stored as one 16-bit texture of at most 4 KB: bigger ones are shrunk
 LAVA_FLOOR_DEPTH = 100  # lava needs a solid floor at most this far under it, or Juno falls through
 DOOR_CLEARANCE = 120  # doors, exits and start points placed by [x, z]: the lowest floor with this much room above
+# Everything else placed by [x, z] also takes the lowest dry floor with room for it, not the highest surface (squad
+# members and Tribals landed on hut roofs, a hull's top, a crate stack and palm fronds, play-tested): this much room
+STAND_CLEARANCE = {"squadron": 90, "squadmember": 90, None: 90, "regionpoint": 0}
+ITEM_CLEARANCE = 40  # pickups, crates, switches and the rest
+INSIDE_REACH = 600  # walls this close on every side, under the back of a floor: inside a solid block or hut
 OPEN_FLOOR_KEYS = ("door", "exit", "startpoint")
 SPREAD_TRIES = 24  # place_squad looks this many places around the centre for a dry spot for each member
 
@@ -352,9 +357,15 @@ class Session:
                 "note": "the picture shows them in this order, left to right, with each id under it. header: the "
                         "level's music (tune), fog and ambience, for set_level's header to match its mood"}
 
-    def _layout_of(self, mesh) -> tuple[dict, bytes]:
+    def _layout_of(self, mesh, starts=None) -> tuple[dict, bytes]:
+        """layout_study of a mesh; with `starts`, its water left out and only the land joined to them measured."""
         from jfgstudio import layout_study
-        found = layout_study.study(mesh.collision)
+        tris = np.asarray(mesh.collision, np.float64).reshape(-1, 3, 3)
+        if starts:
+            water = {t.tobytes() for t in np.asarray(mesh.kind_triangles("water"), np.float64).reshape(-1, 3, 3)}
+            if water:
+                tris = np.array([t for t in tris if t.tobytes() not in water]).reshape(-1, 3, 3)
+        found = layout_study.study(tris, starts)
         if found is None:
             raise AgentError("the level has too little floor to measure")
         return found
@@ -372,8 +383,12 @@ class Session:
         return {"png": png, "level": f"{lv['id']}: {lv['name']}", "world": lv["world"], **stats}
 
     def level_layout(self, level: str) -> dict:
-        """stock_level_layout for a level of the project: compare your layout with the game's."""
-        stats, png = self._layout_of(self._mesh(level))
+        """stock_level_layout for a level of the project: compare your layout with the game's. Only the land its start
+        points lead to is measured: backdrop geometry outside the play area (across water) is left out ("backdrop")."""
+        lv = self._level(level)
+        starts = [(float(o["pos"][0]), float(o["pos"][2])) for o in lv.objects["objects"]
+                  if self._key(o) == "startpoint"]
+        stats, png = self._layout_of(self._mesh(level), starts)
         return {"png": png, "level": level, **stats}
 
     def texture_sheet(self, ids) -> dict:
@@ -624,6 +639,29 @@ class Session:
             out["water"] = {"hovering": len(hovering), "at": hovering[:3],
                             "problem": "water hovers over the floor at its edge: sink it into a hollow so its edge "
                                        "meets the bank (or lay it on the floor)"}
+        for key, found, problem in self._geometry_findings(mesh):
+            out[key] = {"count": len(found), "at": found[:3], "problem": problem}
+        return out
+
+    def _geometry_findings(self, mesh) -> list[tuple[str, list, str]]:
+        """(key, places, problem) for geometry_checks' findings in a mesh: slivers, z-fighting, water under floor."""
+        from jfgstudio import geometry_checks as gc
+        out = []
+        parts = getattr(mesh, "parts", None)
+        found = gc.slivers(mesh.collision, np.concatenate([p[0] for p in parts]) if parts else None)
+        if found:
+            out.append(("slivers", found, "floor triangles reach across a segment split (the importer splits a level "
+                        "into segments and the game tests a floor only in the one holding its centre): the hero falls "
+                        "through them there or sticks \"falling\" (play-tested). Cut big floor faces into tiles of "
+                        "300 or less (don't dissolve flat ground into big n-gons)"))
+        found = gc.coplanar(getattr(mesh, "visible", mesh.collision))
+        if found:
+            out.append(("zFighting", found, "faces in one plane overlap (either facing): they flicker. Move one off "
+                        "the other (a wall set in a few units, a decal's back 2 behind its front)"))
+        found = gc.water_under_floor(mesh.collision, mesh.kind_triangles("water"))
+        if found:
+            out.append(("waterUnderFloor", found, f"water lies up to {gc.WATER_UNDER} under solid floor: the hero "
+                        "sinks through that floor (play-tested). Keep water inside its hollow, clear of the banks"))
         return out
 
     def _glb_images(self, name: str) -> dict[str, tuple[int, int]]:
@@ -903,6 +941,36 @@ class Session:
         out["use"] = f"set_level(level, {{\"sky\": \"{out['sky']}\"}})"
         return out
 
+    PROJECT_KEYS = ("name", "version", "description", "shortDescription", "tags", "authors")
+
+    def set_project(self, values: dict) -> dict:
+        """The pack's settings in project.json (what the game's Mods page shows): name, version, description,
+        shortDescription, tags, authors; null removes an optional one. Made over project.json as it is on disk now,
+        so a hand edit since the project was opened is kept."""
+        if not isinstance(values, dict) or not values:
+            raise AgentError("values is an object of project settings")
+        unknown = set(values) - set(self.PROJECT_KEYS)
+        if unknown:
+            raise AgentError(f"unknown project settings {sorted(unknown)}; known: {', '.join(self.PROJECT_KEYS)} "
+                             "(dependencies: add_dependency)")
+        try:
+            meta = json.loads((self.p.path / "project.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            meta = copy.deepcopy(self.p.meta)
+        for k, v in values.items():
+            if v is None:
+                if k in ("name", "version"):
+                    raise AgentError(f"{k} can't be removed")
+                meta.pop(k, None)
+            else:
+                meta[k] = v
+        errors = list(jsonschema.Draft202012Validator(proj._SCHEMAS["project"]).iter_errors(meta))
+        if errors:
+            raise AgentError("not a valid project.json: " + "; ".join(e.message for e in errors[:3]))
+        self.p.meta = meta
+        self._save()
+        return {k: meta.get(k) for k in self.PROJECT_KEYS if k in meta}
+
     def make_sky(self, name: str, top, horizon, bottom=None) -> dict:
         """A sky dome of colours alone (skies.gradient): from top (straight up) to horizon to bottom."""
         from jfgstudio import skies
@@ -1086,8 +1154,10 @@ class Session:
             return [round(x), round(float(pos[1]) + lift), round(z)]
         below = float(pos[1]) if len(pos) == 3 else None
         mesh = self._mesh(level.name)
-        if below is None and schema is not None and schema.key in OPEN_FLOOR_KEYS:
-            y = self._open_floor(mesh, x, z)
+        if below is None:
+            key = schema.key if schema is not None else None
+            need = DOOR_CLEARANCE if key in OPEN_FLOOR_KEYS else STAND_CLEARANCE.get(key, ITEM_CLEARANCE)
+            y = self._open_floor(mesh, x, z, need, solid_ok=key in OPEN_FLOOR_KEYS)
         else:
             y = self._floor(mesh, x, z, below)
         if y is None:
@@ -1095,20 +1165,35 @@ class Session:
             raise AgentError(f"no floor under ({x:g}, {z:g}){where}: check surface_at, or give on_floor false")
         return [round(x), obj.on_ground(y, schema) + round(lift), round(z)]
 
-    def _open_floor(self, mesh, x: float, z: float) -> float | None:
-        """Where a door, exit or start point at (x, z) goes: the lowest dry floor with at least DOOR_CLEARANCE free
+    def _open_floor(self, mesh, x: float, z: float, need: float = DOOR_CLEARANCE,
+                    solid_ok: bool = True) -> float | None:
+        """Where something placed at (x, z) goes: the lowest dry floor with at least `need` free
         above it (up to the next surface: a lintel's underside, a roof, or the top of a wall whose opening's top isn't
         modelled), so it lands inside a roofed room or doorway, not on top; floors under water, lava or a kill floor
         are skipped (the bridge, not the river bed). With several floors there, a note says which were passed over:
-        give [x, y, z] for another."""
-        from jfgstudio.gui.viewport import floor_of, heights_at
+        give [x, y, z] for another. Unless `solid_ok` (a door goes in a wall whose opening isn't modelled), a floor
+        inside something solid is passed over too."""
+        from jfgstudio.gui.viewport import floor_of, heights_at, raycast
         floors = sorted(set(heights_at(mesh.collision, x, z, facing=1).tolist()))
         surfaces = sorted(set(heights_at(mesh.collision, x, z).tolist()))
+        ceilings = set(heights_at(mesh.collision, x, z, facing=-1).tolist())
         wet = [y for y in (floor_of(mesh.kind_triangles(k), x, z) for k in ("water", "lava", "kill")) if y is not None]
+
+        def inside(f: float, above: float) -> bool:
+            """The floor is inside something solid (the ground under a block or a closed hut): the next surface over
+            it is the back of a floor, and walls close round it on every side. A single-sided canopy (palm fronds)
+            leaves the sides open."""
+            if solid_ok or above == math.inf or any(abs(c - above) < 1 for c in ceilings):
+                return False
+            for d in ((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 0.0, -1.0)):
+                t = raycast(mesh.collision, (x, f + 2, z), d)
+                if t is None or t > INSIDE_REACH:
+                    return False
+            return True
         chosen = None
         for f in floors:
             above = next((s for s in surfaces if s > f + 1), math.inf)
-            if above - f >= DOOR_CLEARANCE and not any(w > f for w in wet):
+            if above - f >= need and not any(w > f for w in wet) and not inside(f, above):
                 chosen = f
                 break
         if chosen is None and floors:
@@ -1385,7 +1470,8 @@ class Session:
         made = self._add(lv, placer.made, "cover") if placer.made else []
         if got["small"]:
             made.append({"warning": f"{got['small']} obstacle(s) in region {got['region']} are under "
-                                    f"{prefabs.COVER_MIN} across: too small to hide behind, so no hole. Cover the "
+                                    f"{prefabs.COVER_MIN} across or thinner than {prefabs.COVER_THIN}: too small to "
+                                    "hide behind (members get stuck on thin racks), so no hole. Cover the "
                                     "player can't see over is about 100 tall and 80 across (rock radius 90+)"})
         if not got["holes"] and not got["old"] and got["convex"] and self._behaviour(sq) == SMART:
             made.append({"warning": f"region {got['region']} has no obstacle inside it and no inward corner: its "
@@ -2453,6 +2539,16 @@ class Session:
                     problems.append(val.Problem(val.WARNING, "water", f"levels/{name}/level.json",
                                                 f"water hovers over the floor at {len(hovering)} edge(s) (one at "
                                                 f"{hovering[0]}): sink it into a hollow so its edge meets the bank"))
+                try:
+                    findings = self._geometry_findings(self._mesh(name))
+                except AgentError:
+                    findings = []
+                for key, found, problem in findings:
+                    problems.append(val.Problem(val.WARNING, {"slivers": "floor-slivers", "zFighting": "z-fighting",
+                                                              "waterUnderFloor": "water-under-floor"}[key],
+                                                f"levels/{name}/level.json",
+                                                f"{len(found)}{'+' if key == 'zFighting' and len(found) >= 20 else ''}"
+                                                f" place(s), one at {found[0]}: {problem}"))
             for name, lv in self.p.levels.items():  # nothing above: black where the sky should be
                 if lv.base is None and lv.level.get("sky", -1) == -1 and self._open_to_sky(name):
                     problems.append(val.Problem(val.WARNING, "sky", f"levels/{name}/level.json",

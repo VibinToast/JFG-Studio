@@ -67,9 +67,28 @@ def _fits(dt: np.ndarray, radius: float, res: float) -> np.ndarray:
     return out
 
 
-def study(tris: np.ndarray) -> tuple[dict, bytes] | None:
+def _reached(mask: np.ndarray, seeds: list[tuple[int, int]]) -> np.ndarray:
+    """The cells of `mask` joined (8 ways) to any seed cell."""
+    out = np.zeros_like(mask)
+    for i, j in seeds:
+        if 0 <= i < mask.shape[0] and 0 <= j < mask.shape[1] and mask[i, j]:
+            out[i, j] = True
+    while True:
+        grown = out.copy()
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                grown |= np.roll(np.roll(out, di, 0), dj, 1)
+        grown &= mask
+        if (grown == out).all():
+            return out
+        out = grown
+
+
+def study(tris: np.ndarray, starts=None) -> tuple[dict, bytes] | None:
     """(numbers, floor map PNG) of a level's collision triangles (n, 3, 3), Y up. The map: the lowest floor of each
-    spot from above (up is -z), brighter = higher, darker where roofed, orange where it is a narrow passage."""
+    spot from above (up is -z), brighter = higher, darker where roofed, orange where it is a narrow passage. With
+    `starts` ([(x, z)]: the level's start points), only the floor joined to them counts: backdrop geometry outside
+    the play area (distant piers, a far shore) is left out ("backdrop": its area)."""
     tris = np.asarray(tris, np.float64)
     if len(tris) < 2:
         return None
@@ -87,6 +106,17 @@ def study(tris: np.ndarray) -> tuple[dict, bytes] | None:
     low = _raster(floors, res, lo[0], lo[2], nx, nz, True)
     ceil = _raster(ceilings, res, lo[0], lo[2], nx, nz, True) if len(ceilings) else np.full_like(low, np.nan)
     mask = ~np.isnan(low)
+    backdrop = 0
+    if starts:
+        reached = _reached(mask, [(int((z - lo[2]) / res), int((x - lo[0]) / res)) for x, z in starts])
+        if reached.any():
+            backdrop = int(mask.sum() - reached.sum())
+            mask = reached
+            low[~mask] = np.nan
+            ys, xs = np.nonzero(mask)  # the footprint of what is left
+            lo, hi = lo.copy(), hi.copy()
+            lo[0], hi[0] = lo[0] + xs.min() * res, lo[0] + (xs.max() + 1) * res
+            lo[2], hi[2] = lo[2] + ys.min() * res, lo[2] + (ys.max() + 1) * res
     with np.errstate(invalid="ignore"):
         roofed = mask & (ceil > low + 40) & (ceil < low + 1500)
     dt = _distance(mask)  # in cells
@@ -113,6 +143,8 @@ def study(tris: np.ndarray) -> tuple[dict, bytes] | None:
         "passage_width": round(float(np.median(2 * dt[ridge] * res))) if ridge.any() else None,
         "clearance": round(float(np.median(clear))) if len(clear) else None,
     }
+    if backdrop:
+        stats["backdrop"] = round(float(backdrop * res * res))
     norm = (low - np.nanmin(low)) / max(float(np.nanmax(low) - np.nanmin(low)), 1.0)
     img = np.zeros(mask.shape + (3,))
     img[mask] = np.stack([0.25 + 0.6 * norm, 0.35 + 0.45 * norm, 0.3 + 0.15 * (1 - norm)], -1)[mask]

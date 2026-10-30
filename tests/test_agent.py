@@ -459,7 +459,7 @@ class TrialFindings(AgentTest):
         self.assertEqual(out, {"prefab": "ant_gate", "name": "Ant gate", "objects": 8})
         self.assertEqual(self.s.summary()["prefabs"]["ant_gate"]["objects"], 8)
         made = self.s.place_prefab("gemini", "Ant gate", [300, 300])
-        self.assertEqual(len(made), 8)
+        self.assertEqual(len([o for o in made if "uid" in o]), 8)
         self.assertFalse(self.errors())
         with self.assertRaises(agent.AgentError):
             self.s.place_prefab("gemini", "nothing", [0, 0])

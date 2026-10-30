@@ -74,7 +74,8 @@ spread and tiers in range.
 4. **Cover:** pillars and crates in the rooms (`add_cover` makes them holes), alcoves (small rooms off a hall), ledges
    on the walls.
 5. **Gates:** doors between sections (key doors, switch doors, squad-locked doors) are natural at room exits.
-6. **Light:** indoor levels are lit by lights (`light`, `glow`), not the sun: bake a darker ambient, and place lights
+6. **Light:** indoor levels are lit by lights (`light` objects; never `glow` sprites: the owner finds them
+   distracting), not the sun: bake a darker ambient, and place lights
    at doorways and in rooms.
 
 **Check:** `level_layout(level)`. Aim for roofed over 60%, passages 7%–67% (about a third), no open ground over 1,600,
@@ -155,7 +156,7 @@ A planet's levels join into a route, the way the game's do:
   a side level or two with Tribals to rescue and other rewards, that comes back to the main path (an exit into a
   later level) or leaves the world. Make the side path worth it, and lock the main door behind a key, switch or
   squad so that choosing is a real choice.
-- **Mark the doors**: a light or glow over each exit door, and a different feel for each way (the side path's door
+- **Mark the doors**: a light over each exit door, and a different feel for each way (the side path's door
   in a side room, the main one at the end of the main hall).
 - Every level has a way back to where the player came in (an exit, or the route itself), and no exit leads into
   its own level (Studio refuses that).
@@ -174,7 +175,9 @@ Play-tested lessons (a test valley got all of these wrong):
   raised there, keep to it here.
 - **Never let the player out.** Every level is closed. `jfg64.terrain` and `jfg64.layout` add an invisible
   collider wall at the edge and over open walls (`boundary`; keep it on). A level meant to have drops (cliffs,
-  islands) needs a kill floor below them.
+  islands) needs a kill floor below them. **Open water ends at a natural barrier** the hero can't climb (a steep
+  reef, rocks, a cliff), with the collider behind it: an invisible wall standing in open water stood out
+  (play-tested).
 - **A sky for every level**: `set_level` `sky`, a game level's of the same theme (`stock_levels` lists each one's).
   Without one the player sees black above. `validate` warns (`sky`).
 - **Flat ground for flat things.** Refuel pads, crates, drums, chests, start points, exits and doors need level
@@ -195,6 +198,8 @@ Play-tested lessons (a test valley got all of these wrong):
 - **Water lies in a hollow**, its edge meeting the bank: a sheet raised over flat ground hovers (play-tested).
 - **What the player must reach is reachable**: a key on a 210-high block was out of reach (play-tested). Give
   climbs steps of about 70; `check_placement` says when a key is out of reach.
+- **Squad regions on open ground with simple cover**: members got stuck on crates and drums (objects) in their
+  region, raised decks and thin racks (play-tested). Keep clutter outside the region.
 - **One cover per enemy**: with fewer obstacles than members, two ran to the same rock and overlapped.
 - **Rocks for cover are big** (radius 90+, about 100 tall) and modelled: crate objects aren't cover. Radius-60
   rocks are landmarks. Keep squad regions to 4

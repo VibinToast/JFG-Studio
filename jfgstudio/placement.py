@@ -9,7 +9,7 @@ to floor" places them.
 import math
 
 from jfgstudio import objects as obj
-from jfgstudio.gui.viewport import floor_of, raycast
+from jfgstudio.gui.viewport import floor_of, heights_at, raycast
 
 STANDS = {"startpoint", "squadron", "squadmember", "health", "ammo", "key", "chest", "collectable", "token", "door",
           "doorswitch", "onoffswitch", "cellswitch", "damagecrate", "refuel", "exit", "patrolpoint", "staticprop"}
@@ -30,15 +30,21 @@ CRATE_SIZE = 39  # the game's usual crate size, which CLEAR's damagecrate radius
 CLIP = 25  # a floor this far above an object's own, within its CLEAR radius, is something it clips into
 RING = ((1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7))
 ENCLOSED = 200  # solid this close above and on all four sides: inside something (a block raised around it)
+ROOF_MATCH = 40  # a floor round an object this close in height to a surface over it is that roof, not a rock beside it
+CLIP_REACH = 160  # floors round an object up to this far over its own are what it can clip into; higher ones (a roof
+#                   over it: a key in a ship's hold, items in a cave) are not (the wall rays catch taller rocks)
 
 
 def _enclosed(mesh, x: float, y: float, z: float) -> float | None:
     """How far up the solid over an object is, when it is also walled in close on every side; else None. Under a
-    deck or in a wide room the side rays run free."""
+    deck or in a wide room the side rays run free, and in a small roofed room (a Tribal's cabin) the surface over it
+    is a ceiling, facing down: inside a block it is the back of the block's top."""
     at = (x, y + 1, z)
     up = raycast(mesh.collision, at, UP)
     if up is None or up > ENCLOSED:
         return None
+    if (abs(heights_at(mesh.collision, x, z, facing=-1) - (y + 1 + up)) < 1).any():
+        return None  # a ceiling: a room
     for d in SIDES:
         t = raycast(mesh.collision, at, d)
         if t is None or t > ENCLOSED:
@@ -95,10 +101,14 @@ def check(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = No
         if clear is not None and s.key == "damagecrate":  # a bigger crate needs more room (39: the game's usual)
             clear *= max(1.0, o.get("fields", {}).get("size", CRATE_SIZE) / CRATE_SIZE)
         if clear is not None:
-            near = [mesh.floor_height(x + dx * clear, z + dz * clear) for dx, dz in RING]
+            near = [mesh.floor_height(x + dx * clear, z + dz * clear, f + CLIP_REACH) for dx, dz in RING]
             # and a wall with nothing behind it (a level's outer wall has no floor past it to rise)
             walls = [raycast(mesh.collision, (x, f + CLIP, z), (dx, 0.0, dz)) for dx, dz in RING]
-            hit_floor = any(h is not None and h > f + CLIP for h in near)
+            # a floor round it that is also over it is a roof over both (a ship's deck over its hold, a cove's
+            # overhang), not a rock beside it
+            over = heights_at(mesh.collision, x, z)
+            over = over[over > f + CLIP]
+            hit_floor = any(h is not None and h > f + CLIP and not (abs(over - h) < ROOF_MATCH).any() for h in near)
             hit_wall = any(d is not None and d < clear * math.hypot(dx, dz)
                            for d, (dx, dz) in zip(walls, RING, strict=True))
             if hit_floor or hit_wall:
