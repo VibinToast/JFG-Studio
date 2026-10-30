@@ -1,0 +1,18 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "prefabs/<name>.json: objects saved together, to place again from the Prefabs window (prefabs.py)",
+ "type": "object",
+ "required": ["format", "name", "objects"],
+ "additionalProperties": false,
+ "properties": {
+  "format": {"const": 1},
+  "name": {"type": "string", "minLength": 1, "description": "shown in the Prefabs window"},
+  "description": {"type": "string", "description": "what it is for, shown under its name"},
+  "objects": {
+   "type": "array",
+   "minItems": 1,
+   "description": "objects as in objects.json, each pos from the prefab's anchor (the middle of their footprint, at the lowest one's height); the schema of their items is objects.json's, with lift (project.py)",
+   "items": {}
+  }
+ }
+}

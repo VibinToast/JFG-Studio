@@ -453,6 +453,17 @@ class TrialFindings(AgentTest):
         self.s.set_level("home", {"header": {"fogNear": 988}})
         self.assertEqual(fog(), [])
 
+    def test_saved_prefab_tools(self):
+        squad = ["squad1", "ant1", "ant2", "door1", "rp0", "rp1", "rp2", "rp3"]
+        out = self.s.save_prefab("gemini", squad, "Ant gate", "a squad and its door")
+        self.assertEqual(out, {"prefab": "ant_gate", "name": "Ant gate", "objects": 8})
+        self.assertEqual(self.s.summary()["prefabs"]["ant_gate"]["objects"], 8)
+        made = self.s.place_prefab("gemini", "Ant gate", [300, 300])
+        self.assertEqual(len(made), 8)
+        self.assertFalse(self.errors())
+        with self.assertRaises(agent.AgentError):
+            self.s.place_prefab("gemini", "nothing", [0, 0])
+
     def test_preview(self):
         self.with_catalog()
         self.s.place_squad("home", [0, -400], "0x29", members=2, door="new", door_type="0x1AD", door_pos=[0, -150])

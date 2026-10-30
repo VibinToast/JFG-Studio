@@ -118,9 +118,9 @@ TOOLS = [
           {"ids": {"type": "array", "items": {"type": "string"}, "description": "hex ids, as game_textures gives"}},
           ["ids"]),
     _tool("level_preview", "A top-down picture of a level: the geometry shaded by height and coloured by surface, with "
-          "start points, exits (their radius), squads and their regions, doors (across their facing), keys and "
-          "pickups drawn on (an edit of a game level: that level's own start points and exits, grey). Up is -z. "
-          "Look at it after laying a level out.",
+          "start points, exits (their radius), squads and their regions, animation paths, doors (across their "
+          "facing), keys and pickups drawn on (an edit of a game level: that level's own start points and exits, "
+          "grey). Up is -z. Look at it after laying a level out.",
           lambda s, a: s.preview(a["level"], a.get("size", 512), a.get("out"), a.get("colours", False)),
           {"level": _LEVEL, "size": {"type": "integer", "description": "pixels across (default 512, at most 2048)"},
            "colours": {"type": "boolean", "description": "the baked vertex colours (the level's mood) instead of "
@@ -295,6 +295,18 @@ TOOLS = [
     _tool("revert_game_objects", "Put the game level's objects (uids, or all) back as the game has them.",
           lambda s, a: s.revert_game_objects(a["level"], a.get("uids")),
           {"level": _LEVEL, "uids": {"type": "array", "items": {"type": "string"}}}, ["level"]),
+    _tool("save_prefab", "Save objects of a level (its own, or the game level's) as one of the project's prefabs, to "
+          "place again in any level with place_prefab (or the editor's Prefabs window). project_summary lists them.",
+          lambda s, a: s.save_prefab(a["level"], a["uids"], a["name"], a.get("description", "")),
+          {"level": _LEVEL, "uids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+           "name": {"type": "string"}, "description": {"type": "string"}}, ["level", "uids", "name"]),
+    _tool("place_prefab", "Place one of the project's prefabs with its anchor (the middle of its footprint, at its "
+          "lowest object) at pos. Squad, door, region, patrol-node, cutscene and start-point numbers it gives out are "
+          "renumbered to free ones; numbers it only names are kept. on_floor (default): each object stands as high "
+          "over the floor under it as when saved.",
+          lambda s, a: s.place_prefab(a["level"], a["prefab"], a["pos"], a.get("on_floor", True)),
+          {"level": _LEVEL, "prefab": {"type": "string", "description": "its file name or name"}, "pos": _POS,
+           "on_floor": {"type": "boolean"}}, ["level", "prefab", "pos"]),
     _tool("delete_objects", "Delete objects by uid (the game level's own: removed from it, with edit_game_objects "
           "on).", lambda s, a: s.delete_objects(a["level"], a["uids"]),
           {"level": _LEVEL, "uids": {"type": "array", "items": {"type": "string"}}}, ["level", "uids"]),

@@ -13,7 +13,9 @@ it; the player plays it. Every tool saves the project as it goes, and each level
 4. A start point first: type `startpoint`, fields `startPoint` 0, `player` 0. Exits into a level arrive at one of its
    start points, by number, for player 0.
 5. Lay out the play: `surface_at` and `find_flat` tell you where the floor is; `place` puts objects on it.
-6. Enemies with `place_squad`, doors and keys, pickups, lights; levels joined with `connect`.
+6. Enemies with `place_squad`, doors and keys, pickups, lights; levels joined with `connect`. A set-up you will
+   repeat (a guard post, a camp, a squad with its door): `save_prefab` it once and `place_prefab` it in each level;
+   its squad, door, region and start point numbers are renumbered so copies don't share them.
 7. Reshaping a level later: export it again from Blender and `reimport_geometry` it into the level (one undo step).
    Its objects stay; the result lists the ones the new shape left buried, floating, sunk or over a pit.
    `settle_objects` puts those with a floor back on it; move the rest yourself.

@@ -36,6 +36,7 @@ REGION_RGB = (255, 110, 110)
 HOLE_RGB = (255, 90, 200)  # a hole of a region: an obstacle squads take cover behind
 PATROL_RGB = (90, 190, 255)  # patrol points and the links between them
 BASE_RGB = (150, 150, 150)
+PATH_RGB = (255, 178, 51)  # animation paths, as the Scene draws them
 
 
 def _png(rgb: np.ndarray) -> bytes:
@@ -168,13 +169,29 @@ def hole_regions(objects: list[dict], schemas: dict, behaviours: dict | None = N
     return prefabs.hole_regions(objects, key)
 
 
+def _paths(c: Canvas, paths: list[dict]) -> None:
+    """Animation paths (level.json "paths"): a line through each one's points, closed when it loops (the game runs
+    the last node back to the first), and a cross where its object is spawned."""
+    for p in paths:
+        pts = [c.px(q[0], q[2]) for q in p.get("points", []) if len(q) == 3]
+        ends = pts[1:] + (pts[:1] if p.get("loop") and len(pts) > 2 else [])
+        for a, b in zip(pts, ends, strict=False):
+            for dx, dy in ((0, 0), (1, 0), (0, 1)):
+                c.line((a[0] + dx, a[1] + dy), (b[0] + dx, b[1] + dy), PATH_RGB)
+        if pts:
+            x, y = pts[0]
+            c.line((x - 4, y), (x + 4, y), PATH_RGB)
+            c.line((x, y - 4), (x, y + 4), PATH_RGB)
+
+
 def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = None, size: int = 512,
-           colours: bool = False) -> tuple[bytes, dict]:
+           colours: bool = False, paths: list[dict] | None = None) -> tuple[bytes, dict]:
     """(PNG bytes, legend) of a level from above. Objects with "base" are a game level's own (drawn grey);
-    `colours` draws the baked vertex colours instead of the surface kinds."""
+    `colours` draws the baked vertex colours instead of the surface kinds; `paths`, the level's animation paths."""
     lo, hi = mesh.bounds
     c = Canvas(lo, hi, max(64, min(int(size), 2048)))
     _surfaces(c, mesh, colours)
+    _paths(c, paths or [])
     corners: dict[int, list] = {}
     keyed = []
     for o in objects:
@@ -213,6 +230,8 @@ def render(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = N
                         "squad": "red square (squadron) and red dots (members), red outline (their region)",
                         "hole": "pink crossed outline: a hole of a region, where squads take cover",
                         "patrol": "blue dots (patrol points) joined by blue lines (the links squads walk)",
+                        "path": "orange line through an animation path's points (closed when it loops), a cross "
+                                "where its object is spawned",
                         "door": "yellow bar across its facing", "key": "gold diamond",
                         "pickups": "green dots", "lights": "pale yellow dots", "other": "purple dots",
                         "grey": "the game level's own start points and exits, under an edit of it"}}

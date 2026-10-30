@@ -620,6 +620,10 @@ def _object_menu(o: dict) -> None:
             h.set_value(o["uid"], ("pos",), [o["pos"][0], obj.on_ground(y, sc), o["pos"][2]], "drop to floor")
     if sc and sc.key == "squadron" and imgui.menu_item("Add cover", "", False, writable and S.view.mesh is not None)[0]:
         level_tools.add_cover(o)
+    if imgui.menu_item("Save as prefab...", "", False, h is not None)[0]:
+        ask_save_prefab((S.selection if o["uid"] in S.selection else set()) | {o["uid"]})
+    if imgui.is_item_hovered():
+        theme.tip("Saves it (and the rest of the selection) to place again from Prefabs, in any level")
     if imgui.menu_item("Remove from the level" if game else "Delete", "Del", False, writable)[0]:
         if o["uid"] not in S.selection:
             S.selection = {o["uid"]}
@@ -1213,6 +1217,11 @@ def _inspector_body(sel: list[dict], h, light_shown: bool = False) -> None:
     if len(sel) > 1:
         imgui.text(f"{len(sel)} objects selected")
         _muted("W moves them together; Delete removes them; Ctrl+D duplicates them.")
+        if imgui.button("Save as prefab..."):
+            ask_save_prefab({o["uid"] for o in sel})
+        if imgui.is_item_hovered():
+            theme.tip("Saves them together, to place again from Prefabs in any level (with new squad, door and "
+                      "region numbers)")
         return
     o = sel[0]
     uid = o["uid"]
@@ -1550,6 +1559,52 @@ def _remove_dependency(mod_id: str) -> None:
     S.validate()
 
 
+_SAVE_PREFAB = {"uids": [], "name": "", "description": "", "open": False}  # what Save as prefab saves
+
+
+def ask_save_prefab(uids) -> None:
+    """Opens Save as prefab for these objects (the selection)."""
+    _SAVE_PREFAB.update(uids=sorted(uids), open=True)
+
+
+def save_prefab_popup() -> None:
+    """Saves the selected objects as one of the project's prefabs (prefabs/<name>.json), listed in Prefabs to place
+    again in any level."""
+    d = _SAVE_PREFAB
+    if d["open"]:
+        imgui.open_popup("Save as prefab")
+        d["open"] = False
+    if not imgui.begin_popup_modal("Save as prefab", None, imgui.WindowFlags_.always_auto_resize)[0]:
+        return
+    objs = [o for o in S.all_objects() if o["uid"] in set(d["uids"])]
+    imgui.text(f"{len(objs)} object{'s' if len(objs) != 1 else ''} saved together")
+    imgui.set_next_item_width(hello_imgui.em_size(22))
+    _, d["name"] = imgui.input_text("Name", d["name"])
+    imgui.set_next_item_width(hello_imgui.em_size(22))
+    _, d["description"] = imgui.input_text("Description", d["description"])
+    exists = S.project and proj.prefab_name(d["name"]) in S.project.prefabs
+    if exists:
+        imgui.text_colored(theme.colour("HIGHLIGHT"), "Replaces the prefab of that name.")
+    _muted("Prefabs window > Saved prefabs places it again, in any level of the project.")
+    imgui.begin_disabled(not objs or not d["name"].strip())
+    if imgui.button("Save"):
+        try:
+            doc = pre.capture(objs, d["name"], S.schemas, S.behaviours, values=S.fields, mesh=S.view.mesh,
+                              description=d["description"])
+            name = proj.save_prefab(S.project, doc)
+        except (ValueError, proj.ProjectError, OSError) as e:
+            S.message = f"Can't save the prefab: {e}"
+        else:
+            S.message = f"Saved the prefab {doc['name']} (prefabs/{name}.json)"
+            d["name"] = d["description"] = ""
+        imgui.close_current_popup()
+    imgui.end_disabled()
+    imgui.same_line()
+    if imgui.button("Cancel"):
+        imgui.close_current_popup()
+    imgui.end_popup()
+
+
 _LEVEL_DELETE = {"name": None, "refs": [], "open": False}  # the level the Delete level popup asks about
 
 
@@ -1744,12 +1799,52 @@ BEHAVIOUR_FOLDS = {
     136: ("Enemies & navigation", "Region ids"), 149: ("Enemies & navigation", "AI points"),
     27: ("Enemies & navigation", "AI junctions"),
 }
-KIND_BASE = -100  # prefab ids -100, -101 ...: the project's kinds, in name order
+KIND_BASE = -100  # prefab ids -100 .. -9999: the project's kinds, in name order
+TYPE_BASE = -10000  # prefab ids -10000 .. -19999: the pack's and its dependency projects' object types, _pack_types
+SAVED_BASE = -20000  # prefab ids from -20000 down: the project's saved prefabs (prefabs/), in name order
 MOD_BASE, MOD_MAX = -50, 50  # prefab ids -50 .. -99: other mods' enemy types (dependencies by mod folder), _mod_types
 
 
 def _is_mod(pid: int | None) -> bool:
     return pid is not None and MOD_BASE - MOD_MAX < pid <= MOD_BASE
+
+
+def _is_kind(pid: int | None) -> bool:
+    return pid is not None and TYPE_BASE < pid <= KIND_BASE
+
+
+def _is_type(pid: int | None) -> bool:
+    return pid is not None and SAVED_BASE < pid <= TYPE_BASE
+
+
+def _is_saved(pid: int | None) -> bool:
+    return pid is not None and pid <= SAVED_BASE
+
+
+def _saved() -> list[tuple[str, dict]]:
+    """(file name, prefab) of the project's saved prefabs, by name."""
+    return sorted(S.project.prefabs.items(), key=lambda kv: kv[1]["name"].lower()) if S.project else []
+
+
+def _pack_types() -> list[tuple[str, str]]:
+    """(ref, label) of the object types of the pack's own (pack:objtype/<name>) and of its dependencies that are
+    Studio projects (<mod id>:objtype/<name>; a mod folder's are under Other mods' enemies)."""
+    if not S.project:
+        return []
+    deps = [d for d in S.project.meta.get("dependencies", []) if d.get("project")]
+    key = json.dumps([deps, S.project.objtypes], sort_keys=True)
+    cache = S.prefab.get("pack_types")
+    if cache and cache[0] == key:
+        return cache[1]
+    out = [(f"pack:objtype/{n}", t["name"]) for n, t in sorted(S.project.objtypes.items())]
+    for d in deps:
+        try:
+            types = packtypes.dependency_project(S.project, d["id"]).objtypes
+        except (packtypes.PackTypeError, proj.ProjectError, OSError):
+            continue
+        out += [(f"{d['id']}:objtype/{n}", f"{t['name']}  ({d['id']})") for n, t in sorted(types.items())]
+    S.prefab["pack_types"] = (key, out)
+    return out
 
 
 def _mod_types() -> list[tuple[str, str, int]]:
@@ -1802,11 +1897,20 @@ def prefabs() -> None:
                   "one of a type that shares their behaviour)")
     below = 0.0 if wide else _details_height(avail.x)
     imgui.begin_child("types", imgui.ImVec2(0, -below))
+    search = pf["search"].lower()
+    saved = _saved()
+    if saved and imgui.tree_node_ex(f"Saved prefabs ({len(saved)})##saved", imgui.TreeNodeFlags_.default_open):
+        for k, (name, doc) in enumerate(saved):
+            if search and search not in doc["name"].lower() and search not in doc.get("description", "").lower():
+                continue
+            n = len(doc["objects"])
+            about = doc["description"] + "\n" if doc.get("description") else ""
+            _prefab_row(SAVED_BASE - k, doc["name"], f"{about}{n} object{'s' if n > 1 else ''}, prefabs/{name}.json")
+        imgui.tree_pop()
     if imgui.tree_node_ex("Groups", imgui.TreeNodeFlags_.default_open):
         for gid, (name, tip) in GROUPS.items():
             _prefab_row(gid, name, tip)
         imgui.tree_pop()
-    search = pf["search"].lower()
     groups: dict[str, list] = {}
     for oid, t in S.objtypes.items():
         schema = obj.schema_for_id(oid, S.schemas, S.behaviours)
@@ -1824,6 +1928,16 @@ def prefabs() -> None:
             for k, (name, kind) in enumerate(sorted(S.project.kinds.items())):
                 _prefab_row(KIND_BASE - k, f"{kind['name']}  (pack:kind/{name})",
                             f"Made from {kind['base']}: placed with its base's stock entry and fields")
+            imgui.tree_pop()
+    pack_types = _pack_types()
+    if pack_types:
+        flags = imgui.TreeNodeFlags_.default_open
+        if imgui.tree_node_ex(f"Pack object types ({len(pack_types)})##packtypes", flags):
+            for k, (ref, label) in enumerate(pack_types):
+                if search and search not in label.lower() and search not in ref.lower():
+                    continue
+                _prefab_row(TYPE_BASE - k, label, f"{ref}: an object type made from a stock definition (objtypes/), "
+                            "placed with a stock entry of its behaviour, or its plain entry")
             imgui.tree_pop()
     mod_types = _mod_types()
     if mod_types:
@@ -1921,8 +2035,10 @@ def _details_height(width: float) -> float:
     pid = S.prefab["oid"]
     text = HINT if pid is None else GROUPS[pid][1] if pid in (-2, -3) else "x" * 60 if pid <= KIND_BASE or \
         _is_mod(pid) else ""
+    if _is_saved(pid) and -pid + SAVED_BASE < len(_saved()):
+        text = "x" * 120 + _saved()[SAVED_BASE - pid][1].get("description", "")
     wrapped = imgui.calc_text_size(text, False, max(width, 1.0)).y + imgui.get_style().item_spacing.y if text else 0
-    rows = 0 if pid is None else 4 if pid == -1 else 1 if pid < 0 else 2
+    rows = 0 if pid is None else 4 if pid == -1 else 2 if _is_saved(pid) else 1 if pid < 0 else 2
     if pid is not None and pid >= 0 and S.sprite(_split(pid)[0]):
         rows += hello_imgui.em_size(4) / row
     return wrapped + rows * row + imgui.get_style().item_spacing.y * 2 + 2
@@ -1995,7 +2111,35 @@ def _prefab_details() -> None:
                     "keeps its own id" if like else ""))
         else:
             imgui.text_colored(theme.colour("ERROR"), "No stock entry to start from.")
-    elif pid <= KIND_BASE:
+    elif _is_saved(pid):
+        saved = _saved()
+        if SAVED_BASE - pid >= len(saved):
+            pf["oid"] = None
+            return
+        name, doc = saved[SAVED_BASE - pid]
+        if doc.get("description"):
+            imgui.text_wrapped(doc["description"])
+        _muted(f"{len(doc['objects'])} objects saved together. Placed with new numbers for its squads, doors, "
+               "regions, patrol nodes and start points, so it doesn't share them with what's already in the level.")
+        if imgui.button("Delete prefab"):
+            imgui.open_popup("Delete prefab?")
+        if imgui.begin_popup_modal("Delete prefab?", None, imgui.WindowFlags_.always_auto_resize)[0]:
+            imgui.text(f"Delete the prefab \"{doc['name']}\" (prefabs/{name}.json)?\nObjects placed from it stay.")
+            if imgui.button("Delete"):
+                proj.delete_prefab(S.project, name)
+                pf["oid"] = None
+                S.message = f"Deleted the prefab {doc['name']}"
+                imgui.close_current_popup()
+            imgui.same_line()
+            if imgui.button("Cancel"):
+                imgui.close_current_popup()
+            imgui.end_popup()
+        if pf["oid"] is None:
+            return
+        imgui.same_line()
+    elif _is_type(pid):
+        _muted("An object type of the pack's own (or a dependency's): placed with a stock entry of its behaviour.")
+    elif _is_kind(pid):
         _muted("One of the pack's kinds (Kinds window): placed with its base's first stock entry.")
     elif _is_mod(pid):
         _muted("Another mod's enemy: a squad of it, with a region to keep to. Its size and moves are the mod's.")
@@ -2061,7 +2205,12 @@ def _place(pid: int, pos) -> None:
     pf = S.prefab
     placer = pre.Placer(h.level, S.schemas, S.behaviours, S.catalog())  # a game level's own ids are taken too
     try:
-        if pid <= KIND_BASE:
+        if _is_saved(pid):
+            name, doc = _saved()[SAVED_BASE - pid]
+            placer.saved(doc, pos, mesh=S.view.mesh if S.snap_floor else None)
+        elif _is_type(pid):
+            _place_pack_type(placer, _pack_types()[TYPE_BASE - pid][0], pos)
+        elif _is_kind(pid):
             name, kind = sorted(S.project.kinds.items())[KIND_BASE - pid]
             base = refs.parse(kind["base"], "objtype").number()
             examples = S.objtypes.get(base, {}).get("examples", [])
@@ -2095,13 +2244,15 @@ def _place(pid: int, pos) -> None:
     except ValueError as e:
         S.message = f"Can't place it: {e}"
         return
-    if S.snap_floor and S.view.mesh is not None:  # each object onto the floor under it (a squad spreads out)
+    # each object onto the floor under it (a squad spreads out); a saved prefab's keep their lifts (Placer.saved)
+    if S.snap_floor and S.view.mesh is not None and not _is_saved(pid):
         for o in placer.made:
             y = S.view.mesh.floor_height(o["pos"][0], o["pos"][2], below=o["pos"][1] + 60)
             if y is not None:
                 o["pos"][1] = obj.on_ground(y, S.schema(o))
-    what = ("kind" if pid <= KIND_BASE else _mod_types()[MOD_BASE - pid][0] if _is_mod(pid) else GROUPS[pid][0]
-            if pid < 0 else S.type_name(_split(pid)[0]))
+    what = (_saved()[SAVED_BASE - pid][1]["name"] if _is_saved(pid) else _pack_types()[TYPE_BASE - pid][0]
+            if _is_type(pid) else "kind" if _is_kind(pid) else _mod_types()[MOD_BASE - pid][0] if _is_mod(pid)
+            else GROUPS[pid][0] if pid < 0 else S.type_name(_split(pid)[0]))
     h.add(placer.made, f"place {what}")
     S.selection = {o["uid"] for o in placer.made}
     S.message = f"Placed {len(placer.made)} object{'s' if len(placer.made) > 1 else ''}"
@@ -2111,6 +2262,24 @@ def _place(pid: int, pos) -> None:
                       " (no obstacle in its region: a smart squad stands and fires; put a crate in it, then Add cover, "
                       "or draw a hole with the Region tool)")
     S.validate()
+
+
+def _place_pack_type(placer, ref: str, pos) -> None:
+    """One object of a pack's or a dependency project's type, as the agent's place makes it (packtypes.start)."""
+    try:
+        st = packtypes.start(S.project, ref, S.objtypes, S.schemas, S.behaviours)
+    except packtypes.PackTypeError as e:
+        raise ValueError(str(e)) from None
+    label = ref.rsplit("/", 1)[1]
+    if st["plain"]:
+        o = {"uid": placer.uid(label), "type": ref, "pos": [round(float(v)) for v in pos],
+             "size": packtypes.PLAIN_ENTRY, "name": label.replace("_", " ")}
+        placer.made.append(o)
+    else:
+        o = placer.single(st["base"], pos, st["example"], name=label.replace("_", " "))
+        o["type"] = ref
+    if st["schema"] is not None:
+        o["schema"] = st["schema"].key  # schema_for can't follow a pack type to its base: name it
 
 
 def _place_mod_squad(placer, pid: int, pos) -> None:
@@ -2743,6 +2912,7 @@ def run(project_path: str | None = None, screenshot: str | None = None, frames: 
         shortcuts()
         new_project_popup()
         settings_popup()
+        save_prefab_popup()
         layouts.save_popup(_say)
         if counter["n"] == 3 and os.environ.get("JFGSTUDIO_LAYOUT"):  # tests and screenshots: a saved layout
             layouts.load(os.environ["JFGSTUDIO_LAYOUT"])

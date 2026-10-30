@@ -129,6 +129,8 @@ class Session:
                             "entryLevel": v.get("entryLevel")} for k, v in p.planets.items()},
             "galaxies": {k: v.get("name") for k, v in p.galaxies.items()},
             "kinds": {k: {"name": v.get("name"), "base": v.get("base")} for k, v in p.kinds.items()},
+            "prefabs": {k: {"name": v["name"], "description": v.get("description", ""), "objects": len(v["objects"])}
+                        for k, v in p.prefabs.items()},
             "geometry": geometry, "music": music,
             "triggers": len(scripts.load_triggers(p)),
             "catalog": "available" if self._catalog else f"not available: {self._catalog_error}",
@@ -717,7 +719,8 @@ class Session:
         vertex colours instead of the surface kinds."""
         lv = self._level(level)
         png, legend = preview.render(self._mesh(level), lv.objects["objects"] + self.base_objects(lv), self.schemas,
-                                     self._behaviours(), _as_int(size, "size"), bool(colours))
+                                     self._behaviours(), _as_int(size, "size"), bool(colours),
+                                     paths=lv.level.get("paths", []))
         if out:
             Path(out).write_bytes(png)
             legend["saved"] = str(out)
@@ -1954,6 +1957,49 @@ class Session:
         self._history(lv).delete(set(uids))
         self._save()
         return {"deleted": list(uids)}
+
+    def save_prefab(self, level: str, uids: list[str], name: str, description: str = "") -> dict:
+        """Saves objects of a level (its own, or the game level's) as one of the project's prefabs
+        (prefabs/<name>.json), to place again with place_prefab or the editor's Prefabs window. Replaces a prefab of
+        the same name."""
+        lv = self._level(level)
+        objs = [self._object(lv, u) for u in uids]
+
+        def values(o, schema):
+            raw = None
+            if "stock" in o and self.catalog() is not None:
+                try:
+                    raw = self._catalog.stock_entry(o["stock"]["list"], o["stock"]["entry"])
+                except (IndexError, ValueError):
+                    raw = None
+            out = obj.decode_entry(raw, schema).get("fields", {}) if raw else {}
+            out.update(o.get("fields", {}))
+            return out
+        try:
+            mesh = self._mesh(level)
+        except AgentError:
+            mesh = None
+        try:
+            doc = prefabs.capture(objs, name, self.schemas, self._behaviours(), values=values, mesh=mesh,
+                                  description=description)
+            file = proj.save_prefab(self.p, doc)
+        except (ValueError, proj.ProjectError) as e:
+            raise AgentError(str(e)) from None
+        return {"prefab": file, "name": doc["name"], "objects": len(doc["objects"])}
+
+    def place_prefab(self, level: str, prefab: str, pos, on_floor: bool = True) -> list[dict]:
+        """Places one of the project's prefabs with its anchor at pos, as one undo step: new uids, and new numbers for
+        the squads, doors, regions, patrol nodes, cutscenes and start points it gives out (those it only names, such
+        as a door it didn't save, are kept). With on_floor, each object stands as high over the floor under it as it
+        did when saved."""
+        lv = self._level(level)
+        doc = self.p.prefabs.get(prefab) or self.p.prefabs.get(proj.prefab_name(str(prefab)))
+        if doc is None:
+            raise AgentError(f"no prefab {prefab!r} (prefabs: {', '.join(self.p.prefabs) or 'none'})")
+        at = self._pos(lv, pos, None, on_floor)
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
+        placer.saved(doc, at, mesh=self._mesh(level) if on_floor else None)
+        return self._add(lv, placer.made, f"place prefab {doc['name']}")
 
     def game_objects(self, level: str, type=None, include_removed: bool = False) -> dict:
         """A stock-level edit's game level objects (uids "stock:<list>:<index>"), with the project's changes on them:

@@ -3,10 +3,15 @@
 
 A new object either starts from a stock entry (`"stock": {list, entry}`: the build copies its bytes, so fields that
 are not decoded yet keep the game's values) or, for fully decoded types, from the schema's defaults alone.
+
+The project's own prefabs (prefabs/<name>.json: capture, Placer.saved) are objects saved together and placed again
+anywhere, with fresh uids and fresh numbers for what ties them together (NUMBERS).
 """
 
+import copy
 import itertools
 import math
+import re
 
 from jfgstudio import objects as obj
 from jfgstudio.project import Level
@@ -22,6 +27,14 @@ COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obsta
 COVER_STEP = 20  # the grid obstacles() looks on
 COVER_MAX = 12  # holes Placer.cover makes at most per region
 COVER_MIN = 40  # an obstacle narrower than this both ways is too small to hide behind: no hole (a trial gave 20s)
+# The numbers that tie a level's objects together, by their fields' "link" (schemas): the field that gives one out,
+# the lowest to give, and the value meaning none. A saved prefab's numbers that it gives out itself are renumbered
+# when it is placed; those it only names are kept (a squad saved without its door still locks that door's id).
+NUMBERS = {"squadronId": ("squadron", "squadronId", 1, None), "doorId": ("door", "doorId", 1, 0),
+           "region": ("regionpoint", "region", 1, None), "patrolNode": ("patrolpoint", "node", 1, None),
+           "cutscene": ("cutcamera", "id", 1, 0)}
+START_NUMBER = ("startpoint", "startPoint")  # given out too; an exit's startPoint names one in the level it leads to
+SAVED_DROP = 60  # a saved object's floor is looked for this far over where it would stand (as Drop to floor does)
 
 
 def winding(points) -> float:
@@ -139,6 +152,40 @@ def merge_boxes(boxes, gap: float = 0.0) -> list[tuple[float, float, float, floa
             if merged:
                 break
     return out
+
+
+def capture(objects: list[dict], name: str, schemas: dict, behaviours: dict | None = None, values=None, mesh=None,
+            description: str = "") -> dict:
+    """A prefab (prefabs/<name>.json) of objects: the level's own, or the game level's, which become copies of their
+    stock entries. Each pos is from the anchor (the middle of their footprint, at the lowest one's height). `values`:
+    (object, schema) -> its fields as the build writes them; the numbers tying it to others (NUMBERS, start points)
+    are written into its fields from there, so placing it can renumber them even when they come from its stock
+    entry. With the level's `mesh`, each object's height over the floor under it is kept as its lift."""
+    if not objects:
+        raise ValueError("select the objects to save as a prefab")
+    xs, ys, zs = ([float(o["pos"][i]) for o in objects] for i in range(3))
+    anchor = ((min(xs) + max(xs)) / 2, min(ys), (min(zs) + max(zs)) / 2)
+    out = []
+    for o in objects:
+        c = {k: copy.deepcopy(v) for k, v in o.items() if k not in ("game", "deleted", "group")}
+        stem = o.get("name") or "copy" if o["uid"].startswith("stock:") else o["uid"]
+        c["uid"] = re.sub(r"[^A-Za-z0-9_-]+", "_", stem).strip("_") or "obj"
+        s = obj.schema_for(o, schemas, behaviours)
+        if s is not None and values is not None:
+            have = values(o, s)
+            for f in s.fields:
+                if (f.link in NUMBERS or (s.key, f.name) == START_NUMBER) and f.name in have:
+                    c.setdefault("fields", {}).setdefault(f.name, have[f.name])
+        c["pos"] = [round(float(v) - a) for v, a in zip(o["pos"], anchor, strict=True)]
+        if mesh is not None:
+            floor = mesh.floor_height(float(o["pos"][0]), float(o["pos"][2]), below=float(o["pos"][1]) + SAVED_DROP)
+            if floor is not None:
+                c["lift"] = round(float(o["pos"][1]) - floor, 1)
+        out.append(c)
+    doc = {"format": 1, "name": name.strip() or "Prefab", "objects": out}
+    if description.strip():
+        doc["description"] = description.strip()
+    return doc
 
 
 TRIGGER_AT_ONCE = 3  # squadron +0x29: spawn at level start (a stock squad's 1 waits in its own level's zone)
@@ -349,6 +396,60 @@ class Placer:
             d["schema"] = "door"
         if mesh is not None:
             self.cover(mesh, squadron)
+        return self.made
+
+    def used(self, link: str) -> set:
+        """The numbers of a link (a schema field's "link": squadronId, region ...) the level's objects name in any
+        field of that link, and (in a stock-level edit) the game level's own."""
+        out = set()
+        for s in self.schemas.values():
+            for f in s.fields:
+                if f.link == link:
+                    out |= {o.get("fields", {}).get(f.name) for o in self._all() if self.key(o) == s.key}
+                    out |= self._game_values(s.key, f.name)
+        return out - {None}
+
+    def saved(self, doc: dict, pos, mesh=None) -> list[dict]:
+        """A prefab of the project's own (capture) with its anchor at pos: each object with a uid of its own, and the
+        numbers the prefab gives out (NUMBERS, start points) changed to ones free here, in every field naming them.
+        With the level's `mesh`, an object saved with a lift stands that high over the floor under it."""
+        objs = [copy.deepcopy(o) for o in doc["objects"]]
+        for o in objs:
+            o.setdefault("fields", {})
+        for link, (giver, field, start, none) in NUMBERS.items():
+            given = sorted({o["fields"][field] for o in objs if self.key(o) == giver and field in o["fields"]} - {none})
+            if not given:
+                continue
+            used, mapping = self.used(link), {}
+            for v in given:
+                mapping[v] = next(n for n in itertools.count(start) if n not in used)
+                used.add(mapping[v])
+            names = {(s.key, f.name) for s in self.schemas.values() for f in s.fields if f.link == link}
+            names.add((giver, field))
+            for o in objs:
+                for key, name in names:
+                    if self.key(o) == key and o["fields"].get(name) in mapping:
+                        o["fields"][name] = mapping[o["fields"][name]]
+        taken = set()
+        for o in objs:
+            if self.key(o) == START_NUMBER[0] and START_NUMBER[1] in o["fields"]:
+                used = {p.get("fields", {}).get(START_NUMBER[1]) for p in self._all() if self.key(p) == START_NUMBER[0]}
+                used |= self._game_values(*START_NUMBER) | taken
+                o["fields"][START_NUMBER[1]] = next(n for n in itertools.count(0) if n not in used)
+                taken.add(o["fields"][START_NUMBER[1]])
+        x, y, z = (float(v) for v in pos)
+        for o in objs:
+            dx, dy, dz = o["pos"]
+            lift = o.pop("lift", None)
+            o["pos"] = [round(x + dx), round(y + dy), round(z + dz)]
+            if mesh is not None and lift is not None:
+                floor = mesh.floor_height(o["pos"][0], o["pos"][2], below=o["pos"][1] - lift + SAVED_DROP)
+                if floor is not None:
+                    o["pos"][1] = round(floor + lift)
+            if not o["fields"]:
+                del o["fields"]
+            o["uid"] = self.uid(o.get("uid") or o.get("name") or "obj")
+            self.made.append(o)
         return self.made
 
     def exit_pair(self, pos) -> list[dict]:

@@ -10,6 +10,7 @@
     kinds/<name>.json, kinds/<name>/  object types made from stock ones, with their textures (pack:kind/<name>)
     baddies.json                    patches of the game's enemy animation tables (baddy_patches.py), optional
     objtypes/<name>.json            object types made from a stock definition (packtypes.py; pack:objtype/<name>)
+    prefabs/<name>.json             objects saved together, placed again from Prefabs (prefabs.py); not in the pack
     thumb.png (or thumb.dds)        the pack's picture on the game's mods page, optional (Studio's icon without it)
 
 Files are saved deterministically (sorted keys, one-space indent, LF, a final newline), so a load followed by a save
@@ -45,7 +46,12 @@ def _schema(name: str) -> dict:
 
 
 _SCHEMAS = {name: _schema(name) for name in ("project", "level", "objects", "planet", "kind", "galaxy", "baddies",
-                                                 "objtype")}
+                                                 "objtype", "prefab")}
+# A prefab's objects are objects.json's, each with its height over the floor it stood on when saved
+_PREFAB_ITEM = json.loads(json.dumps(_SCHEMAS["objects"]["properties"]["objects"]["items"]))
+_PREFAB_ITEM["properties"]["lift"] = {"type": "number", "description": "how high over the floor under it it stood when "
+                                      "saved: placed that high over the floor under it (Snap to floor)"}
+_SCHEMAS["prefab"]["properties"]["objects"]["items"] = _PREFAB_ITEM
 
 
 def dumps(doc: dict) -> str:
@@ -87,6 +93,7 @@ class Project:
     galaxies: dict[str, dict] = field(default_factory=dict)
     baddies: list[dict] = field(default_factory=list)  # baddies.json
     objtypes: dict[str, dict] = field(default_factory=dict)  # objtypes/<name>.json
+    prefabs: dict[str, dict] = field(default_factory=dict)  # prefabs/<name>.json (save_prefab writes them at once)
     # stock-level edits opened only to look at (the editor's): never saved until something in them changes
     viewing: set[str] = field(default_factory=set)
 
@@ -125,6 +132,8 @@ class Project:
             write_json(self.path / "galaxies" / f"{name}.json", galaxy)
         for name, t in self.objtypes.items():
             write_json(self.path / "objtypes" / f"{name}.json", t)
+        for name, doc in self.prefabs.items():
+            write_json(self.path / "prefabs" / f"{name}.json", doc)
         if self.baddies:
             write_json(self.path / "baddies.json", self.baddies)
         elif (self.path / "baddies.json").exists():  # every patch removed
@@ -208,12 +217,46 @@ def load(path: Path | str) -> Project:
             t = _read(f, "objtype", problems)
             if t is not None:
                 objtypes[f.stem] = t
+    prefabs = {}
+    if (path / "prefabs").is_dir():
+        for f in sorted((path / "prefabs").glob("*.json")):
+            if not NAME_RE.match(f.stem):
+                problems.append(f"{f}: prefab file names use lower case letters, digits, _ and -")
+                continue
+            doc = _read(f, "prefab", problems)
+            if doc is not None:
+                prefabs[f.stem] = doc
     baddies = []
     if (path / "baddies.json").exists():
         baddies = _read(path / "baddies.json", "baddies", problems) or []
     if problems:
         raise ProjectError(problems)
-    return Project(path, meta, levels, planets, kinds, galaxies, baddies, objtypes)
+    return Project(path, meta, levels, planets, kinds, galaxies, baddies, objtypes, prefabs)
+
+
+def prefab_name(display: str) -> str:
+    """The file name (prefabs/<name>.json) of a prefab called `display`: lower case, other characters as _."""
+    name = re.sub(r"[^a-z0-9_\-]+", "_", display.strip().lower()).strip("_-")
+    return name or "prefab"
+
+
+def save_prefab(project: Project, doc: dict) -> str:
+    """Writes a prefab (prefabs.capture) to prefabs/<prefab_name>.json at once, replacing one of that name; returns
+    the file name. A prefab is the project's, not the pack's: the build leaves it out."""
+    problems = [f"prefab: {'/'.join(str(p) for p in e.absolute_path) or '(top)'}: {e.message}"
+                for e in jsonschema.Draft202012Validator(_SCHEMAS["prefab"]).iter_errors(doc)]
+    if problems:
+        raise ProjectError(problems)
+    name = prefab_name(doc["name"])
+    project.prefabs[name] = doc
+    write_json(project.path / "prefabs" / f"{name}.json", doc)
+    return name
+
+
+def delete_prefab(project: Project, name: str) -> None:
+    """Removes a prefab and its file at once."""
+    project.prefabs.pop(name, None)
+    (project.path / "prefabs" / f"{name}.json").unlink(missing_ok=True)
 
 
 def create(path: Path | str, mod_id: str, name: str, author: str = "") -> Project:

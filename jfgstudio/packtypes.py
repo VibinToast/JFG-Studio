@@ -175,6 +175,23 @@ def example(types: dict, base: int, behaviour: int | None) -> list | None:
     return max(same, key=lambda v: v.get("uses", 0))["examples"][0]
 
 
+def start(project, type_ref: str, types: dict, schemas: dict, behaviours: dict) -> dict:
+    """How an object of a pack's or a dependency's type starts: {"base" (stock object id), "schema" (its behaviour's,
+    or None), "example" (a stock entry [list, entry] to copy, or None), "plain" (no entry to copy and no decoded
+    schema: the type's plain entry, its header alone)}. Behaviour 0 (no code), or one no stock list places (hitanim 49
+    comes from animation paths), takes the plain entry (decomp MSR "Unused props for the enemy test hub")."""
+    from jfgstudio import objects as obj
+    info = resolve(project, type_ref)
+    beh = info["behaviour"] if info["behaviour"] is not None else types.get(info["base"], {}).get("behaviour")
+    if info["behaviour"] is None:
+        schema = obj.schema_for_id(info["base"], schemas, behaviours)
+    else:
+        schema = next((s for s in schemas.values() if s.behaviour == beh), None)
+    ex = None if beh == 0 else example(types, info["base"], beh)
+    return {"base": info["base"], "schema": schema, "example": ex,
+            "plain": ex is None and not (schema and schema.status == "decoded")}
+
+
 # ---- a mod folder's own models, for the editor's Scene
 
 class _ModModel:

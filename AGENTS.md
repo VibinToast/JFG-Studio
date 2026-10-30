@@ -17,7 +17,7 @@ Neighbours in `JetForceGemini/`: the decomp (`Decomp/`, read-only; Studio import
 | `jfgstudio/cli.py` | `jfgstudio new / validate / settings / catalog / build / test / gui` |
 | `jfgstudio/project.py`, `schemas/project/` | the project folder format and its JSON schemas |
 | `jfgstudio/objects.py`, `schemas/objects/` | object-list entries and per-type field schemas (fields, named values, roles, categories) |
-| `jfgstudio/prefabs.py` | what the Prefabs window places: single objects and linked groups (squad, exit pair, region) |
+| `jfgstudio/prefabs.py` | what the Prefabs window places: single objects, linked groups (squad, exit pair, region) and the project's saved prefabs (`prefabs/`, renumbered as placed) |
 | `jfgstudio/agent.py`, `mcp_server.py`, `agent_guide.md` | `jfgstudio mcp`: Studio as tools for AI agents (one `Session` over edit/prefabs/validate/build; stdio MCP; the guide its first tool returns) |
 | `jfgstudio/placement.py` | objects against a level's geometry (buried, floating, sunk, over a pit), for re-imports |
 | `jfgstudio/preview.py` | a level from above with its objects, as a PNG (the agent's `level_preview`) |
