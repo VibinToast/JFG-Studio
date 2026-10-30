@@ -188,7 +188,7 @@ Describe things by what they do; the catalog's names are the player's (never wri
 | Flowing water, lava | `texscroll` | makes a surface's texture move |
 | A camera shot when a door opens | `cutcamera` (0x1AE) and the door's lock light `cutscene` = its `id` | the camera sits at its position looking along `yaw` / `pitch` (positive looks up) for `duration` frames (121 = 2 s); its own `id` per shot, not 0 |
 | A fixed-view room | `staticcamera` (0x0C) | the player's camera stays there for the whole level: rarely what you want |
-| Chest, keys | `chest`, `place_key_door` | rewards and gates; face a chest the way the player comes in (`facing` [x, z] of the doorway) |
+| Chest, keys | `chest`, `place_key_door` | rewards and gates; face a chest the way the player comes in (`facing` [x, z] of the doorway). A chest's `contents` is its own numbering, not a weapon number: give the name (`"grenades"`, `"cluster bombs"`; `describe_type chest` lists them) |
 | Breakable glass | `place_glass(level, a, b, bottom)` (0x12B) | a square pane: fits a square window opening in a wall; never in the open |
 | Drops | squadron `drop` | 20-22 health, 23 health upgrade, 1-16 a weapon's pickup (weapon n is drop n + 1) |
 

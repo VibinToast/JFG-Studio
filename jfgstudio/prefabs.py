@@ -27,6 +27,8 @@ COVER_RISE = 40  # an up-facing surface this far over a squad's ground: an obsta
 COVER_STEP = 20  # the grid obstacles() looks on
 COVER_MAX = 12  # holes Placer.cover makes at most per region
 COVER_MIN = 40  # an obstacle narrower than this both ways is too small to hide behind: no hole (a trial gave 20s)
+COVER_LINK = 10  # cells this far over the region's ground join obstacle pieces (a lumpy rock's dip); plain ground
+#                  between them keeps boulders and crates apart (five boulders became one hole, play-tested)
 COVER_THIN = 60  # an obstacle thinner than this one way (a net rack 180 x 20) is no cover either: members got stuck on
 #                  thin racks made holes (play-tested)
 # The numbers that tie a level's objects together, by their fields' "link" (schemas): the field that gives one out,
@@ -96,10 +98,11 @@ def hole_regions(objects, key) -> dict[int, int]:
             and o.get("fields", {}).get("flags", 0) & HOLE and "region" in o["fields"]}
 
 
-def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float, float]], int]:
+def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float, float]], int, int]:
     """The obstacles inside a region of (x, z) corners (blocks, crates, pillars: up-facing solid COVER_RISE or more
-    over `ground`), each as the box (x0, z0, x1, z1) around it, and how many touch the region's edge (left out: cut
-    the outline round them instead)."""
+    over `ground`), each as the box (x0, z0, x1, z1) around it, how many touch the region's edge (left out: cut the
+    outline round them instead), and how many pieces were joined into others. Pieces join only through raised
+    ground between them (over COVER_LINK: one lumpy rock), or where their boxes overlap."""
     from jfgstudio.gui.viewport import heights_at
     xs, zs = [p[0] for p in poly], [p[1] for p in poly]
     nx, nz = int((max(xs) - min(xs)) // COVER_STEP) + 1, int((max(zs) - min(zs)) // COVER_STEP) + 1
@@ -108,8 +111,10 @@ def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float
         return min(xs) + (i + 0.5) * COVER_STEP, min(zs) + (j + 0.5) * COVER_STEP
 
     cells = {(i, j) for i in range(nx) for j in range(nz) if inside(poly, *at(i, j))}
-    blocked = {c for c in cells if (heights_at(mesh.collision, *at(*c), facing=1) > ground + COVER_RISE).any()}
-    seen, boxes, edge = set(), [], 0
+    tops = {c: heights_at(mesh.collision, *at(*c), facing=1) for c in cells}
+    blocked = {c for c in cells if (tops[c] > ground + COVER_RISE).any()}
+    raised = {c for c in cells if (tops[c] > ground + COVER_LINK).any()}
+    seen, boxes, edge, joined = set(), [], 0, 0
     for c in sorted(blocked):
         if c in seen:
             continue
@@ -121,16 +126,19 @@ def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float
             for n in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
                 if n not in cells:
                     touches = True
-                elif n in blocked and n not in seen:
+                elif n in raised and n not in seen:
                     seen.add(n)
                     todo.append(n)
         if touches:
             edge += 1
             continue
+        group = [g for g in group if g in blocked]
         x0, z0 = at(min(g[0] for g in group), min(g[1] for g in group))
         x1, z1 = at(max(g[0] for g in group), max(g[1] for g in group))
         boxes.append((x0 - COVER_STEP / 2, z0 - COVER_STEP / 2, x1 + COVER_STEP / 2, z1 + COVER_STEP / 2))
-    return merge_boxes(boxes, COVER_STEP), edge
+    merged = merge_boxes(boxes)
+    joined += len(boxes) - len(merged)
+    return merged, edge, joined
 
 
 def region_ground(mesh, poly) -> float | None:
@@ -353,7 +361,8 @@ class Placer:
         to the corners of holes and inward corners of their region, where the hero can't see them; in a rectangle
         over open floor they stand and fire (decomp MSR mod #6). Obstacles a hole already covers are left. Returns
         {"region", "holes": made, "edge": obstacles touching the edge, "old": holes it had, "small": obstacles too
-        small to hide behind (under COVER_MIN across, or thinner than COVER_THIN), "convex"}. The ground the obstacles
+        small to hide behind (under COVER_MIN across, or thinner than COVER_THIN), "convex", "joined": obstacles
+        whose boxes overlapped and became one hole}. The ground the obstacles
         stand on is the region's own (region_ground), not the floor under the squadron."""
         region = squadron.get("fields", {}).get("region")
         corners = self.corners(region)
@@ -365,7 +374,7 @@ class Placer:
         if ground is None:
             ground = mesh.floor_height(sx, sz, sy + COVER_RISE)
         ground = sy if ground is None else ground
-        boxes, edge = obstacles(mesh, poly, ground)
+        boxes, edge, joined = obstacles(mesh, poly, ground)
         holes = self.holes_of(region)
         old = []  # the box round each hole the region has (another squad sharing the region made them, or a re-run)
         for h in holes:
@@ -385,7 +394,7 @@ class Placer:
             old.append(box)
             made += 1
         return {"region": region, "holes": made, "edge": edge, "old": len(holes), "small": small,
-                "convex": convex(poly)}
+                "convex": convex(poly), "joined": joined}
 
     def patrol_point(self, pos, example) -> dict:
         """A patrol point with the next free node number (they run 1..N with no gaps)."""

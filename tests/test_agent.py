@@ -831,3 +831,45 @@ class Server(AgentTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RunnerFindings(AgentTest):
+    """What an agent building a roofed cave level found (Corsair Reach 1.3)."""
+
+    def test_squads_share_a_region(self):
+        self.with_catalog()
+        first = self.s.place_squad("home", [0, -300], "0x29", members=2)
+        sq = next(o for o in first if o.get("schema") == "squadron" or o.get("type") == "stock:objtype/0x4F")
+        lv = self.s.p.levels["home"]
+        corners = lambda: [o for o in lv.objects["objects"] if o["type"] == "stock:objtype/0x5"]  # noqa: E731
+        before = len(corners())
+        second = self.s.place_squad("home", [0, -300], "0x29", members=2, region_of=sq["uid"])
+        sq2 = next(o for o in second if o.get("type") == "stock:objtype/0x4F")
+        self.assertEqual(sq2["fields"]["region"], sq["fields"]["region"])
+        self.assertEqual(len(corners()), before)
+        square = [[c["pos"][0], c["pos"][2]] for c in corners() if c["fields"]["region"] == sq["fields"]["region"]]
+        third = self.s.place_squad("home", [0, -300], "0x29", members=1, region=square[::-1])
+        self.assertEqual(next(o for o in third if o.get("type") == "stock:objtype/0x4F")["fields"]["region"],
+                         sq["fields"]["region"])
+        self.assertEqual(len(corners()), before)
+
+    def test_sentries_on_a_perch(self):
+        self.with_catalog()
+        nest = _block(-100, -900, 100, -700, 0, 400)
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + nest, (), KILL)
+        made = self.s.place_squad("home", [0, 450, -800], "0x29", members=2, spread=40)
+        members = [o for o in made if o.get("schema") == "squadmember"]
+        self.assertTrue(all(m["pos"][1] > 399 for m in members), [m["pos"] for m in members])
+
+    def test_surface_at_lists_every_floor(self):
+        roof = [[t[0], t[2], t[1]] for t in _quad(-300, -300, 300, 300, 900)] + _quad(-300, -300, 300, 300, 920)
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + roof, (), KILL)
+        at = self.s.surface_at("home", [[0, 0]])[0]
+        self.assertEqual(at["floor"], 920.0)  # the roof's top
+        self.assertEqual(at["floors"], [0.0, 920.0])
+        self.assertEqual(at["placeFloor"], 0.0)
+
+    def test_object_values(self):
+        out = self.s.object_values("gemini", "squad1")
+        self.assertEqual(out["values"]["squadronId"], 7)
+        self.assertIn("region", out["own"])

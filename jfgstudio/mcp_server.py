@@ -135,7 +135,9 @@ TOOLS = [
     _tool("geometry_info", "Bounds, triangles, surfaces and images of a geometry file or a level's track, against "
           "the game's limits.", lambda s, a: s.geometry_info(a["name"]),
           {"name": {"type": "string", "description": "a level or a geometry name"}}, ["name"]),
-    _tool("surface_at", "For points [x, z] of a level: the floor height and kind, water depth, kill floors.",
+    _tool("surface_at", "For points [x, z] of a level: the floor height and kind (the highest: under a roof, the "
+          "roof), water depth, kill floors; where there are several, every floor and placeFloor (what place with "
+          "[x, z] stands on: the lowest dry one with room).",
           lambda s, a: s.surface_at(a["level"], a["points"], a.get("below")),
           {"level": _LEVEL, "points": {"type": "array", "items": _XZ},
            "below": {"type": "number", "description": "only floors at or below this height (under a bridge)"}},
@@ -185,8 +187,12 @@ TOOLS = [
           lambda s, a: s.place_squad(a["level"], a["centre"], a["member_type"], a.get("members", 3), a.get("region"),
                                      a.get("door"), a.get("door_type"), a.get("door_pos"), a.get("door_fields"),
                                      a.get("spread", 150), a.get("name"), a.get("squadron_example"),
-                                     a.get("member_example"), a.get("face"), a.get("size")),
-          {"level": _LEVEL, "centre": _XZ, "member_type": _TYPE, "members": {"type": "integer"},
+                                     a.get("member_example"), a.get("face"), a.get("size"), a.get("region_of")),
+          {"level": _LEVEL, "member_type": _TYPE, "members": {"type": "integer"},
+           "centre": {**_POS, "description": "[x, z]: the lowest dry floor with room there; [x, y, z]: the floor at "
+                                             "or below y (a perch, a deck: sentries in a crow's nest)"},
+           "region_of": {"type": "string", "description": "another squadron's uid: share its region and holes "
+                                                          "(a region with the same corners is shared too)"},
            "region": {"type": "array", "items": _XZ, "description": "corners in order (default: a square 300 "
                                                                    "around the centre)"},
            "door": {"type": "string"}, "door_type": _TYPE, "door_pos": _POS, "door_fields": {"type": "object"},
@@ -199,10 +205,12 @@ TOOLS = [
           ["level", "centre", "member_type"]),
     _tool("place_tribal", "A Tribal to rescue (the player touches it): a reward for exploring. The level must be on "
           "a planet, whose region keeps the count apart from the game's own Tribals.",
-          lambda s, a: s.place_tribal(a["level"], a["pos"], a.get("type", "0x11C"), a.get("name")),
-          {"level": _LEVEL, "pos": _XZ, "type": {"type": "string", "description": "a Tribal type: 0x11C man (default), "
-                                                                             "0x11D woman, 0x11E boy, 0x11F girl, "
-                                                                             "0x120 baby"},
+          lambda s, a: s.place_tribal(a["level"], a["pos"], a.get("type", "0x11C"), a.get("name"), a.get("region")),
+          {"level": _LEVEL, "pos": _POS,
+           "region": {"type": "array", "items": _XZ, "description": "corners it keeps to, in order (a cell behind "
+                                                                   "glass, an alcove); default a square 240 across"},
+           "type": {"type": "string", "description": "a Tribal type: 0x11C man (default), 0x11D woman, 0x11E boy, "
+                                                     "0x11F girl, 0x120 baby"},
            "name": {"type": "string"}}, ["level", "pos"]),
     _tool("place_glass", "A breakable glass pane filling a square window opening in a wall: a and b are the "
           "opening's sides along the wall, bottom its sill height. The game's glass is square and nothing holds it, "
@@ -416,6 +424,14 @@ TOOLS = [
           lambda s, a: s.import_sky(a["path"], a.get("name")),
           {"path": {"type": "string"}, "name": {"type": "string", "description": "sky name (default: the file's)"}},
           ["path"]),
+    _tool("object_values", "Every field of an object as the game gets it: the stock entry it copies (a squadron's "
+          "health, aimSpread, speeds) with its own fields on top, which it sets itself, and named values.",
+          lambda s, a: s.object_values(a["level"], a["uid"]), {"level": _LEVEL, "uid": {"type": "string"}},
+          ["level", "uid"]),
+    _tool("track_textures", "A level's track texture list in the game's order: the numbers a texscroll's texture "
+          "field takes (index, width, height): match them to your materials' images by size and order.",
+          lambda s, a: s.track_textures(a["level"]), {"level": _LEVEL},
+          ["level"]),
     _tool("set_project", "The pack's settings the game's Mods page shows: name, version, description, "
           "shortDescription (one line for mod lists), tags (e.g. [\"Levels\", \"Enemies\"]), authors. null removes "
           "an optional one. Applied over project.json as it is on disk, so a hand edit is kept.",

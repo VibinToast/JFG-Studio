@@ -86,6 +86,7 @@ class Session:
         self._sizes: dict[int, dict | None] = {}
         self._slots: dict[int, list] = {}
         self._lost: dict[tuple, dict] = {}  # (geometry file, mtime) -> _track_report
+        self._track_textures = None  # track_textures.TrackTextures, made on first use
         self._squads: dict | None = None  # enemy -> the best stock squad of it (squad_examples)
         self._textures = None  # game_textures.Library, made on first use
         self._notes: list[str] = []  # what placing chose where there was a choice; added to the call's result
@@ -514,6 +515,16 @@ class Session:
                 at.update({"floor": round(floors[kind], 1), "kind": {"hidden": "collider"}.get(kind, kind)})
             else:
                 at["floor"] = None
+            from jfgstudio.gui.viewport import heights_at
+            every = sorted({round(float(h), 1) for h in heights_at(mesh.collision, x, z, facing=1)
+                            if below is None or h <= below + 1})
+            if len(every) > 1:  # a roof, deck or bridge over the ground: what [x, z] in place stands on
+                at["floors"] = every
+                before = len(self._notes)
+                placed = self._open_floor(mesh, x, z, ITEM_CLEARANCE, solid_ok=False) if below is None else None
+                del self._notes[before:]
+                if placed is not None:
+                    at["placeFloor"] = round(placed, 1)
             water = tops["water"]
             if water is not None and (at["floor"] is None or water > at["floor"]):
                 at["water"] = round(water, 1)
@@ -1331,13 +1342,16 @@ class Session:
     def place_squad(self, level: str, centre, member_type, members: int = 3, region=None, door=None,
                     door_type=None, door_pos=None, door_fields: dict | None = None, spread: float = 150,
                     name: str | None = None, squadron_example=None, member_example=None,
-                    face=None, size: int | None = None) -> list[dict]:
+                    face=None, size: int | None = None, region_of: str | None = None) -> list[dict]:
         """A squadron, its members around `centre` and the region they keep to; with `door` ("new" with door_type
         and door_pos, or an existing door's uid) a door it keeps locked until all of them are dead. Members face
         `face` ([x, z]; default: the level's start point 0, the way the player comes) until they have a target.
         A squad whose squadron spawns its own flying members is placed where they drop in from, so they cruise
         FLYER_CRUISE over the floor (under any roof). `size`: the members' size in percent (squadron +0x15); by
-        default the stock squad's, or 100 for another mod's type (the port multiplies it by that type's own scale)."""
+        default the stock squad's, or 100 for another mod's type (the port multiplies it by that type's own scale).
+        `region_of`: another squadron's uid, whose region (and its holes) this squad shares; a `region` with the
+        corners of a region already in the level shares it too. `centre` [x, y, z]: the squadron and members stand
+        on the floor at or below y (a perch, a deck), not the lowest floor there."""
         lv = self._level(level)
         members = _as_int(members, "members")
         if not 1 <= members <= 16:
@@ -1377,13 +1391,26 @@ class Session:
                 raise AgentError(f"{door!r} is not a door of {level}")
             door_id = existing.get("fields", {}).get("doorId") or placer.free("door", "doorId")
         cx, cz = float(centre[0]), float(centre[-1])
-        if region is None:
-            h = prefabs.REGION_HALF
-            region = [[cx - h, cz - h], [cx + h, cz - h], [cx + h, cz + h], [cx - h, cz + h]]
-        if len(region) < 3:
-            raise AgentError("region is at least three [x, z] corners, in order around it")
-        corners = [self._corner(lv, c, (cx, cz)) for c in region]
-        region_id = placer.polygon(corners)
+        cy = float(centre[1]) if len(centre) == 3 else None
+
+        def spot(x, z):  # a place for the squad: on the floor at or below the centre's height, when it gives one
+            return [x, cy, z] if cy is not None else [x, z]
+        region_id = None
+        if region_of is not None:
+            other = edit.find(lv, region_of)
+            if other is None or self._key(other) != "squadron" or "region" not in other.get("fields", {}):
+                raise AgentError(f"{region_of!r} is not a squadron of {level} with a region")
+            region_id = other["fields"]["region"]
+        elif region is not None:
+            region_id = self._same_region(lv, region)
+        if region_id is None:
+            if region is None:
+                h = prefabs.REGION_HALF
+                region = [[cx - h, cz - h], [cx + h, cz - h], [cx + h, cz + h], [cx - h, cz + h]]
+            if len(region) < 3:
+                raise AgentError("region is at least three [x, z] corners, in order around it")
+            corners = [self._corner(lv, c, (cx, cz)) for c in region]
+            region_id = placer.polygon(corners)
         # Never the catalog's name: that is the player's game data, and uids and names are written into the project.
         label = name or (m_kind.rsplit("/", 1)[1].replace("_", " ") if m_kind else "enemy")
         target = self._face_point(lv, face)
@@ -1402,7 +1429,7 @@ class Session:
             sq_fields["size"] = size
         if target is not None:
             sq_fields["heading"] = self._toward(sq_schema, (cx, cz), target)
-        sq_pos = self._pos(lv, [cx, cz], sq_schema, True)
+        sq_pos = self._pos(lv, spot(cx, cz), sq_schema, True)
         flight = self._flight(lv, sq_ex, sq_pos) if spawns_own else None
         if flight is not None:
             sq_pos[1] = flight.pop("y")
@@ -1413,11 +1440,11 @@ class Session:
         wet = []
         for k in range(0 if spawns_own else members):
             a = 2 * math.pi * k / members
-            spot = self._dry_spot(lv.name, cx + spread * math.sin(a), cz + spread * math.cos(a), cx, cz)
-            if spot is None:
-                spot = (cx + spread * math.sin(a), cz + spread * math.cos(a))
+            dry = self._dry_spot(lv.name, cx + spread * math.sin(a), cz + spread * math.cos(a), cx, cz)
+            if dry is None:
+                dry = (cx + spread * math.sin(a), cz + spread * math.cos(a))
                 wet.append(k)
-            at = self._pos(lv, list(spot), self.schemas["squadmember"], True)
+            at = self._pos(lv, spot(*dry), self.schemas["squadmember"], True)
             m_fields = {"squadron": squadron_id}
             if target is not None:
                 m_fields["yaw"] = self._toward(self.schemas["squadmember"], (at[0], at[2]), target)
@@ -1488,6 +1515,9 @@ class Session:
         except ValueError as e:
             raise AgentError(str(e)) from e
         made = self._add(lv, placer.made, "cover") if placer.made else []
+        if got.get("joined"):
+            made.append({"note": f"{got['joined']} obstacle(s) in region {got['region']} overlapped others and share "
+                                 "their hole: move them apart (or draw holes by hand) for a hole each"})
         if got["small"]:
             made.append({"warning": f"{got['small']} obstacle(s) in region {got['region']} are under "
                                     f"{prefabs.COVER_MIN} across or thinner than {prefabs.COVER_THIN}: too small to "
@@ -1509,6 +1539,18 @@ class Session:
         except AgentError:
             return False
         return found is not None and found[0]["roofed"] < 0.9
+
+    def _same_region(self, lv: proj.Level, region) -> int | None:
+        """The id of a region already in the level with these corners (within 2 units, either way round), or None."""
+        want = sorted((round(float(c[0])), round(float(c[-1]))) for c in region)
+        placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
+        ids = {o["fields"].get("region") for o in lv.objects["objects"] if self._key(o) == "regionpoint"}
+        for r in sorted(i for i in ids if i is not None):
+            have = sorted((o["pos"][0], o["pos"][2]) for o in placer.corners(r))
+            if len(have) == len(want) and all(abs(a[0] - b[0]) <= 2 and abs(a[1] - b[1]) <= 2
+                                              for a, b in zip(have, want, strict=True)):
+                return r
+        return None
 
     def _corner(self, lv: proj.Level, c, centre) -> list:
         """A region corner on the floor under it, or at the floor height of the region's centre where there is none
@@ -1559,11 +1601,12 @@ class Session:
         out.update({"y": round(y), "offsetY": max(-128, min(127, round((cruise - y) / 16)))})
         return out
 
-    def place_tribal(self, level: str, pos, type="0x11C", name: str | None = None) -> list[dict]:
+    def place_tribal(self, level: str, pos, type="0x11C", name: str | None = None, region=None) -> list[dict]:
         """A Tribal to rescue at `pos` ([x, z]): the player touches it and it's saved. One squad of one, copied from
         the game's own Tribal squads (they stand still, behaviour 9). The level must be on a planet: its region keeps
         the count apart from the game's own Tribals (the port's HUD count and stats screen, port request 14). Each
-        Tribal of a level needs its own number (squadron id & 15), so 16 at most per level."""
+        Tribal of a level needs its own number (squadron id & 15), so 16 at most per level. `region`: the corners
+        it keeps to (a cell behind glass, an alcove); default a square 240 across round it."""
         lv = self._level(level)
         oid, _, _ = self._type(type)
         if oid not in prefabs.TRIBAL_TYPES:
@@ -1573,8 +1616,9 @@ class Session:
         if len(taken) >= 16:
             raise AgentError("a level holds 16 Tribals at most (their numbers are squadron id & 15)")
         x, z = float(pos[0]), float(pos[-1])
-        made = self.place_squad(level, [x, z], f"0x{oid:X}", members=1, spread=0, name=name or "tribal",
-                                region=[[x - 120, z - 120], [x + 120, z - 120], [x + 120, z + 120], [x - 120, z + 120]])
+        made = self.place_squad(level, list(pos), f"0x{oid:X}", members=1, spread=0, name=name or "tribal",
+                                region=region or [[x - 120, z - 120], [x + 120, z - 120], [x + 120, z + 120],
+                                                  [x - 120, z + 120]])
         sq = next(o for o in made if o.get("schema") == "squadron")
         # Stand and wait, as the game's own Tribals (behaviour 9 in every set), whatever squad was copied.
         self.update_object(level, sq["uid"], fields={"behaviour": SENTRY, "alertBehaviour": SENTRY,
@@ -2093,6 +2137,51 @@ class Session:
         self._save()
         return {"deleted": list(uids)}
 
+    def _values(self, o: dict, schema) -> dict:
+        """An object's fields as the build writes them: its stock entry's (from the catalog), then its own."""
+        raw = None
+        if "stock" in o and self.catalog() is not None:
+            try:
+                raw = self._catalog.stock_entry(o["stock"]["list"], o["stock"]["entry"])
+            except (IndexError, ValueError):
+                raw = None
+        out = obj.decode_entry(raw, schema).get("fields", {}) if raw and schema is not None else {}
+        out.update(o.get("fields", {}))
+        return out
+
+    def object_values(self, level: str, uid: str) -> dict:
+        """Every field of an object as the game gets it: the stock entry it copies (a squadron's health, aimSpread,
+        speeds ...) with its own fields on top, which of them it sets itself, and named values."""
+        lv = self._level(level)
+        o = self._object(lv, uid)
+        schema = obj.schema_for(o, self.schemas, self._behaviours())
+        if schema is None:
+            raise AgentError(f"{uid}: its type has no field table (schema)")
+        values = self._values(o, schema)
+        named = {}
+        for f in schema.fields:
+            if f.enum and values.get(f.name) in f.enum:
+                named[f.name] = f.enum[values[f.name]]
+        return {"uid": uid, "schema": schema.key, "values": values, "own": sorted(o.get("fields", {})),
+                "named": named}
+
+    def track_textures(self, level: str) -> list[dict]:
+        """A level's track texture list (what a texscroll's `texture` numbers): each one's index, width and height,
+        in the order the game holds them."""
+        if self.catalog() is None:
+            raise AgentError(f"the catalog is not available ({self._catalog_error})")
+        from jfgstudio.track_textures import TrackTextures
+        lv = self._level(level)
+        track = lv.level["track"]
+        glb = None
+        if track.startswith("pack:"):
+            glb = self.p.geometry_path(track.split("/", 1)[1])
+            if not glb.exists():
+                raise AgentError(f"{glb.name} is not in the project's geometry folder")
+        if self._track_textures is None:
+            self._track_textures = TrackTextures(self._catalog)
+        return [{k: v for k, v in t.items() if k != "rgba"} for t in self._track_textures.of(track, glb)]
+
     def save_prefab(self, level: str, uids: list[str], name: str, description: str = "") -> dict:
         """Saves objects of a level (its own, or the game level's) as one of the project's prefabs
         (prefabs/<name>.json), to place again with place_prefab or the editor's Prefabs window. Replaces a prefab of
@@ -2100,16 +2189,7 @@ class Session:
         lv = self._level(level)
         objs = [self._object(lv, u) for u in uids]
 
-        def values(o, schema):
-            raw = None
-            if "stock" in o and self.catalog() is not None:
-                try:
-                    raw = self._catalog.stock_entry(o["stock"]["list"], o["stock"]["entry"])
-                except (IndexError, ValueError):
-                    raw = None
-            out = obj.decode_entry(raw, schema).get("fields", {}) if raw else {}
-            out.update(o.get("fields", {}))
-            return out
+        values = self._values
         try:
             mesh = self._mesh(level)
         except AgentError:

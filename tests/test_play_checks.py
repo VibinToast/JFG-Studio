@@ -168,3 +168,11 @@ class Layout(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CoverPieces(unittest.TestCase):
+    def test_boulders_apart_stay_apart(self):
+        boulders = [_block(x, -40, x + 80, 40, 0, 110) for x in (-250, -130, -10, 110)]  # 40 apart, ground between
+        mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + sum(boulders, []), (), KILL)
+        boxes, edge, joined = prefabs.obstacles(mesh, [(-300, -300), (300, -300), (300, 300), (-300, 300)], 0)
+        self.assertEqual((len(boxes), edge, joined), (4, 0, 0))
