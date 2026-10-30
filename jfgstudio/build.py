@@ -17,6 +17,7 @@ still names entry levels by number (until the planet registry, P4), so it uses t
 
 import io
 import json
+import math
 import struct
 import zipfile
 from dataclasses import dataclass, field
@@ -42,6 +43,8 @@ SETS = (
     (0x41, 0x42, "animseq", "raw"),
 )
 MODEL_TABLE, MODEL_DATA, OBJDEF_TABLE, OBJDEF_DATA = 0x26, 0x27, 0x2E, 0x2F
+POLY_LIST_DEFAULT, POLY_LIST_MAX = 90, 2000  # header polyList: the game's levels', the most set
+POLY_LIST_ROOM = 1.5  # times jfgformats' need (a box of +-30): the hero's own box isn't modelled
 SKY_DEF = 180  # dome3: a pack sky's definition is a copy of it (one model, scale 1.0, no texture scroll)
 
 
@@ -78,6 +81,7 @@ class _Builder:
         self.catalog = Catalog(image)
         self.schemas = obj.load_schemas()
         self.problems: list[str] = []
+        self.poly_need: dict[str, int] = {}  # track name -> the poly list its geometry needs (import_track)
         self._game_textures = None
 
     def game_textures(self):
@@ -366,6 +370,8 @@ class _Builder:
                 self.log(f"track {name}: {len(set(used))} of the game's level textures, named by number (the player's "
                          "own game shows them; the pack carries none)")
             result = self.tracks.import_track(data, str(ready), track_id=tid, log=self.log, stock_textures=True)
+            if result.get("polyListNeed"):  # decomp MSR 15: the hero's collision list must hold it (jfgformats 0.9.3)
+                self.poly_need[name] = result["polyListNeed"]
             art = [key for key, png in result.get("newTextures", {}).items() if self.game_textures().game_art(png)]
             if art:
                 raise BuildError([f"geometry/{glb.name}: {len(art)} image(s) are the game's own art but not level "
@@ -419,6 +425,12 @@ class _Builder:
                 out.append(e)
             track = refs.parse(level.level["track"])
             fields = dict(level.level["header"])
+            need = self.poly_need.get(track.name) if not track.is_stock else None
+            if need and "polyList" not in fields and need > POLY_LIST_DEFAULT:
+                # the hero's collision list (header +0xEA) sized to the geometry, with room for the hero's own box
+                fields["polyList"] = min(POLY_LIST_MAX, math.ceil(need * POLY_LIST_ROOM))
+                self.log(f"level {name}: polyList {fields['polyList']} (its geometry needs up to {need}; the game's "
+                         f"levels {POLY_LIST_DEFAULT})")
             planet = level.level.get("planet")
             if planet:  # the planet's region: the port numbers it (a fixup below), its levels are 0, 1, 2... in it
                 fields["regionIndex"] = self.region_levels(planet).index(name)

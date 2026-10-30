@@ -55,6 +55,7 @@ DOOR_CLEARANCE = 120  # doors, exits and start points placed by [x, z]: the lowe
 # Everything else placed by [x, z] also takes the lowest dry floor with room for it, not the highest surface (squad
 # members and Tribals landed on hut roofs, a hull's top, a crate stack and palm fronds, play-tested): this much room
 STAND_CLEARANCE = {"squadron": 90, "squadmember": 90, None: 90, "regionpoint": 0}
+POLY_LIST_DEFAULT = 90  # level header polyList (+0xEA) in the game's levels and the new-level template
 ITEM_CLEARANCE = 40  # pickups, crates, switches and the rest
 INSIDE_REACH = 600  # walls this close on every side, under the back of a floor: inside a solid block or hut
 OPEN_FLOOR_KEYS = ("door", "exit", "startpoint")
@@ -84,7 +85,7 @@ class Session:
         self._meshes: dict[str, tuple[float, object]] = {}
         self._sizes: dict[int, dict | None] = {}
         self._slots: dict[int, list] = {}
-        self._lost: dict[tuple, int] = {}
+        self._lost: dict[tuple, dict] = {}  # (geometry file, mtime) -> _track_report
         self._squads: dict | None = None  # enemy -> the best stock squad of it (squad_examples)
         self._textures = None  # game_textures.Library, made on first use
         self._notes: list[str] = []  # what placing chose where there was a choice; added to the call's result
@@ -529,32 +530,43 @@ class Session:
             out.append(at)
         return out
 
-    def _lost_collision(self) -> dict[str, int]:
-        """Levels whose own geometry would lose collision in the game (importer.lost_collision): needs the catalog to
-        run the game's track importer; checked once per file version."""
+    def _track_report(self, name: str) -> dict | None:
+        """What the game's track importer finds in a level's own geometry (needs the catalog; once per file
+        version): {"lost": triangles losing collision (importer.lost_collision), "need": tracks.poly_list_need (the
+        poly list the hero's collision fills, decomp MSR 15; None before jfgformats 0.9.3), "seams": edges between
+        segments}; None for a game track or a missing file."""
         if self.catalog() is None:
-            return {}
-        from jfgformats import models, tracks
+            return None
+        track = self.p.levels[name].level.get("track", "")
+        if not track.startswith("pack:track/"):
+            return None
+        path = self.p.geometry_path(track.split("/", 1)[1])
+        if not path.exists():
+            return None
+        key = (str(path), path.stat().st_mtime)
+        if key not in self._lost:
+            from jfgformats import models, tracks
+            try:
+                if self._model_data is None:
+                    self._model_data = models.ModelData(self._catalog.assets)
+                res = tracks.import_track(self._model_data, str(path), track_id=self._catalog.track_count(),
+                                          log=lambda _: None)
+                t = tracks.read_track(res["data"])
+                report = {"lost": importer.lost_collision(t), "need": None, "seams": res.get("seams")}
+                if hasattr(tracks, "poly_list_need"):
+                    report["need"] = tracks.poly_list_need(t, size=POLY_LIST_DEFAULT)
+            except Exception:  # noqa: BLE001 (the build reports a file the importer refuses)
+                report = {"lost": 0, "need": None, "seams": None}
+            self._lost[key] = report
+        return self._lost[key]
+
+    def _lost_collision(self) -> dict[str, int]:
+        """Levels whose own geometry would lose collision in the game (importer.lost_collision)."""
         out = {}
-        for name, lv in self.p.levels.items():
-            track = lv.level.get("track", "")
-            if not track.startswith("pack:track/"):
-                continue
-            path = self.p.geometry_path(track.split("/", 1)[1])
-            if not path.exists():
-                continue
-            key = (str(path), path.stat().st_mtime)
-            if key not in self._lost:
-                try:
-                    if self._model_data is None:
-                        self._model_data = models.ModelData(self._catalog.assets)
-                    res = tracks.import_track(self._model_data, str(path), track_id=self._catalog.track_count(),
-                                              log=lambda _: None)
-                    self._lost[key] = importer.lost_collision(tracks.read_track(res["data"]))
-                except Exception:  # noqa: BLE001 (the build reports a file the importer refuses)
-                    self._lost[key] = 0
-            if self._lost[key]:
-                out[name] = self._lost[key]
+        for name in self.p.levels:
+            r = self._track_report(name)
+            if r and r["lost"]:
+                out[name] = r["lost"]
         return out
 
     def lava_holes(self, level: str) -> list[list[int]]:
@@ -641,22 +653,21 @@ class Session:
                                        "meets the bank (or lay it on the floor)"}
         for key, found, problem in self._geometry_findings(mesh):
             out[key] = {"count": len(found), "at": found[:3], "problem": problem}
+        r = self._track_report(name) if name in self.p.levels else None
+        if r and r["need"]:
+            need = r["need"]
+            out["polyList"] = {"need": need["worst"], "at": need["at"], "missedAt90": need["missed"],
+                               "segmentsMet": need["segments"], "seams": r["seams"],
+                               "note": "the hero's collision list (header polyList, 90 in the game's levels) must "
+                                       "hold every triangle near him; the build raises it to fit. Long thin "
+                                       "triangles need the most (decomp MSR 15)"}
         return out
 
     def _geometry_findings(self, mesh) -> list[tuple[str, list, str]]:
-        """(key, places, problem) for geometry_checks' findings in a mesh: triangles across segment splits,
-        z-fighting, invisible walls in the open, water under floor."""
+        """(key, places, problem) for geometry_checks' findings in a mesh: z-fighting, invisible walls in the open,
+        water under floor."""
         from jfgstudio import geometry_checks as gc
         out = []
-        parts = getattr(mesh, "parts", None)
-        found = gc.straddlers(mesh.collision, np.concatenate([p[0] for p in parts]) if parts else None)
-        if found:
-            out.append(("straddlers", [f"{f['at']} (split {f['split']})" for f in found],
-                        "solid triangles reach across the importer's segment splits: the game holds each in the "
-                        "segment of its centre, so past the split a floor drops the hero (or sticks him \"falling\") "
-                        "and ground or a wall stops him like an invisible wall (play-tested). Cut big faces so no "
-                        "triangle crosses a split (the listed ones; tiles of 50-100 rarely do), or wait for the "
-                        "importer fix (decomp MSR 15)"))
         found = gc.coplanar(getattr(mesh, "visible", mesh.collision))
         if found:
             out.append(("zFighting", found, "faces in one plane overlap (either facing): they flicker. Move one off "
@@ -2553,7 +2564,7 @@ class Session:
                 except AgentError:
                     findings = []
                 for key, found, problem in findings:
-                    problems.append(val.Problem(val.WARNING, {"straddlers": "segment-split", "zFighting": "z-fighting",
+                    problems.append(val.Problem(val.WARNING, {"zFighting": "z-fighting",
                                                               "waterUnderFloor": "water-under-floor",
                                                               "openCollider": "invisible-wall"}[key],
                                                 f"levels/{name}/level.json",
@@ -2565,6 +2576,24 @@ class Session:
                                                 "the level has no sky (sky -1) but is open above: the player sees "
                                                 "black there. Set one (set_level sky): a game level's of the same "
                                                 "theme, as stock_levels lists them (fully roofed levels need none)"))
+            for name, lv in self.p.levels.items():  # the hero's poly list (decomp MSR 15): the build sizes it
+                r = self._track_report(name)
+                need = r["need"] if r else None
+                if not need or need["worst"] <= POLY_LIST_DEFAULT:
+                    continue
+                size = lv.level["header"].get("polyList")
+                if size is not None and size < need["worst"]:
+                    problems.append(val.Problem(val.WARNING, "poly-list", f"levels/{name}/level.json",
+                                                f"header polyList {size} is under what its geometry needs "
+                                                f"({need['worst']}, near {need['at']}): where the list is full the "
+                                                "hero has no floor and falls through (decomp MSR 15). Leave polyList "
+                                                "out (the build sizes it) or raise it"))
+                else:
+                    problems.append(val.Problem(val.INFO, "poly-list", f"levels/{name}/level.json",
+                                                f"its geometry fills the hero's collision list with up to "
+                                                f"{need['worst']} triangles near {need['at']} (the game's levels: 90); "
+                                                "the build raises the level's polyList to fit. Long thin triangles "
+                                                "cause it (their boxes meet every query): small tiles need far less"))
             for name, lost in self._lost_collision().items():
                 problems.append(val.Problem(val.ERROR, "collision", f"levels/{name}/level.json",
                                             f"{lost} colliding triangles of its geometry come after non-colliding "

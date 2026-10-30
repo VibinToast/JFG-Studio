@@ -1,8 +1,7 @@
-"""Checks of a level's own geometry that the game shows only in play (owner's play-tests of agent-built levels):
+"""Checks of a level's own geometry that the game shows only in play (owner's play-tests of agent-built levels).
+Falling through long thin floor triangles is the game's poly list filling up (decomp MSR 15): jfgformats
+tracks.poly_list_need measures it, and the build sizes each level's polyList to fit (build.py).
 
-- straddlers: triangles across a segment split. The importer puts each triangle in one segment by its centre
-  (jfgformats tracks.new_world_segments), and past the split it is lost: the hero fell through decks and sand,
-  stuck "falling", and met invisible walls where ground crossed a split (decomp MSR 15 is fixing the importer).
 - coplanar: faces in one plane that overlap (either facing): they flicker (z-fighting): two blocks' walls in one
   plane, a decal's front and back in one place.
 - water under floor: a water surface just under solid floor: the hero sank through the sand over a tide pool
@@ -17,9 +16,6 @@ import math
 
 import numpy as np
 
-SPLIT_REACH = 2  # a triangle reaching this far past a segment split, on the side away from its centre: lost there
-#                  (a deck piece reaching 31 past one dropped the hero; a ground triangle 55 past one was an invisible
-#                  wall, play-tested; the pack session walked the built track's BSP at each spot)
 COPLANAR_NORMAL = 0.999  # normals this close (either way) count as one plane
 COPLANAR_DISTANCE = 0.5  # and their planes this close
 WATER_UNDER = 30  # solid floor this far over a water surface: the hero sank through sand 8 over a pool's water
@@ -30,47 +26,6 @@ def _normals(t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
     length = np.linalg.norm(n, axis=1)
     return n / np.maximum(length, 1e-9)[:, None], length
-
-
-def straddlers(collision, everything=None) -> list[dict]:
-    """Solid triangles that reach across one of the importer's segment splits (jfgformats new_world_segments, run on
-    `everything`: the level's triangles, the collision when left out) more than SPLIT_REACH past it, on the side
-    away from their centre. The importer puts each triangle whole in the segment of its centre, but the BSP sends the
-    hero past the split to the next segment, which doesn't hold it: a floor there drops him, a wall or ground there
-    stops him like an invisible wall (play-tested). Each: {"at": its centre, "split": "x 444"}."""
-    t = np.asarray(collision, np.float64).reshape(-1, 3, 3)
-    if not len(t):
-        return []
-    _, area = _normals(t)
-    solid = t[area > 1e-6]
-    nodes = _splits(np.asarray(everything if everything is not None else collision, np.float64).reshape(-1, 3, 3))
-    if not nodes or not len(solid):
-        return []
-    out = []
-    for tri in solid:
-        c = tri.mean(axis=0)
-        node = 0
-        while node >= 0:
-            left, right, axis, _, value = nodes[node]
-            reach = value - tri[:, axis].min() if c[axis] >= value else tri[:, axis].max() - value
-            if reach > SPLIT_REACH:
-                out.append({"at": [round(float(v)) for v in c], "split": f"{'xyz'[axis]} {value}"})
-                break
-            node = left if c[axis] < value else right
-    return out
-
-
-def _splits(tris: np.ndarray) -> list | None:
-    """The importer's BSP split nodes [(left, right, axis, first right segment, value)] for these triangles, from
-    jfgformats tracks.new_world_segments (each triangle alone: a ledge's units barely move the splits)."""
-    from jfgstudio import formats
-    try:
-        formats.load()
-        from jfgformats import tracks
-    except Exception:  # noqa: BLE001 (no jfgformats: no check)
-        return None
-    groups = [({"triFlags": 0}, [(tuple(v),) for v in tri], [(0, 1, 2)], None) for tri in tris.tolist()]
-    return tracks.new_world_segments(groups)[1]
 
 
 def _plane_key(n, d):
