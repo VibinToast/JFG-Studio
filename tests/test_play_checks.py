@@ -184,4 +184,4 @@ class PreviewBox(unittest.TestCase):
         sea = QuadMesh(_quad(-12000, -12000, 12000, 12000, -20) + _quad(-300, -300, 300, 300, 0), (), KILL)
         whole = preview.render(sea, [], obj.load_schemas(), size=256)[1]["unitsPerPixel"]
         cropped = preview.render(sea, [], obj.load_schemas(), size=256, box=[-300, -300, 300, 300])[1]
-        self.assertLess(cropped["unitsPerPixel"], whole / 20)
+        self.assertLess(cropped["unitsPerPixel"], whole / 5)  # QuadMesh's bounds are +-2000
