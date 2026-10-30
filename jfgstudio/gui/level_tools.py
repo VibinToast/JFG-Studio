@@ -9,7 +9,7 @@ import math
 
 from imgui_bundle import imgui
 
-from jfgstudio import edit, geometry, refs, squads
+from jfgstudio import edit, geometry, refs, squads, weather
 from jfgstudio import prefabs as pre
 from jfgstudio.gui import theme
 from jfgstudio.gui import viewport as vp
@@ -170,11 +170,13 @@ def level_window() -> None:
                 if imgui.is_item_hovered():
                     theme.tip(tip)
 
+    if imgui.collapsing_header("Weather", imgui.TreeNodeFlags_.default_open if hd.get("weather", 0) > 0 else 0):
+        _weather_section(h, hd, set_header)
+
     if imgui.collapsing_header("Camera and effects"):
         for k, label, lo, hi, tip in (
                 ("fov", "Field of view", 20, 90, "degrees"),
                 ("lights", "Light slots", 0, 64, "rgbalights and object lights the level can have (stock 24)"),
-                ("weather", "Weather", -1, 16, "weather kind (0 = none)"),
                 ("dayLength", "Day length", 0, 255, "day/night cycle length, 0 = none"),
                 ("underWaterLights", "Underwater lights", 0, 255, "lights under water"),
                 ("regionIndex", "Region index", 0, 255, "saved-flag region index (0 = none)")):
@@ -187,6 +189,62 @@ def level_window() -> None:
             changed, v = imgui.checkbox(label, bool(hd.get(k, 0)))
             if changed:
                 set_header(k, int(v))
+
+
+def _weather_section(h, hd: dict, set_header) -> None:
+    """Snow or rain (the header's weather block, weather.py): off, a copy of a game level's, then each value."""
+    A = _app()
+    S = A.S
+    if not weather.supported():
+        A._muted("Needs the decomp at jfgformats 0.9.2 or later (MSR 14): this one names only the particle count.")
+        return
+
+    def set_block(block: dict, label: str) -> None:
+        h.do(edit.Command(label, [edit.Change(edit.LEVEL, ("header", k), hd.get(k), v) for k, v in block.items()
+                                  if hd.get(k) != v]))
+        S.validate()
+    on = hd.get("weather", 0) > 0
+    kinds = ["none", "snow", "rain"]
+    current = 0 if not on else 2 if hd.get("weatherType", 0) >= weather.RAIN else 1
+    changed, picked = imgui.combo("Weather", current, kinds)
+    if changed and picked != current:
+        set_block(weather.block(kinds[picked]), f"level weather {kinds[picked]}")
+    if imgui.is_item_hovered():
+        theme.tip("Snow or rain falling over the hero (one-player view only). Picking one copies a game level's")
+    names = {lv["id"]: lv["name"] for lv in (S.cat.levels() if S.catalog() else []) if "id" in lv}
+    table = weather.presets()
+    choices = [(lid, f"{lid}: {names.get(lid, 'level')} ({'rain' if b['weatherType'] else 'snow'})")
+               for lid, b in sorted(table.items())]
+    like = _combo("Copy a game level's", None, choices, "pick a level...")
+    if like not in (_UNCHANGED, -1, None):
+        set_block(weather.block(like), f"level weather like {like}")
+    if not on:
+        return
+    for k, label, lo, hi, tip in (
+            ("weather", "Particles", 1, 2000, "how many drops or flakes (the game's levels: 256 snow, 416-1552 rain)"),
+            ("weatherIntensity", "Intensity", 1, 255, f"the storm: rain from {weather.LIGHTNING} has lightning"),
+            ("weatherOpacity", "Opacity", 1, 255, f"how strong the drops look: from {weather.FLASH} the lightning "
+                                                  "flashes the screen")):
+        changed, v = imgui.slider_int(label, hd.get(k, 0), lo, hi)
+        if changed:
+            set_header(k, v, merge=True)
+        if imgui.is_item_hovered():
+            theme.tip(tip)
+    wind = [hd.get(k, 0) for k in ("weatherVelX", "weatherVelY", "weatherVelZ")]
+    changed, wind = imgui.drag_int3("Drift x y z", wind, 4.0, -4000, 4000)
+    if changed:
+        for k, v in zip(("weatherVelX", "weatherVelY", "weatherVelZ"), wind, strict=True):
+            if hd.get(k, 0) != v:
+                set_header(k, v, merge=True)
+    if imgui.is_item_hovered():
+        theme.tip("Wind and fall, in 1/256 of a unit a tick (the game's rain: about -300 x, -360 to -1100 y)")
+    if hd.get("weatherType", 0) >= weather.RAIN:
+        changed, keep = imgui.checkbox("Keep the level's fog", bool(hd.get("weatherFlags", 0) & weather.KEEP_FOG))
+        if changed:
+            set_header("weatherFlags", (hd.get("weatherFlags", 0) & ~weather.KEEP_FOG) | (weather.KEEP_FOG if keep
+                                                                                         else 0))
+        if imgui.is_item_hovered():
+            theme.tip("Off: the rain sets its own fog, as most of the game's rainy levels do")
 
 
 def add_music() -> None:

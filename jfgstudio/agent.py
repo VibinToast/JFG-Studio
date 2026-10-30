@@ -30,7 +30,7 @@ from jfgstudio import validate as val
 
 SQUADRON_ID = prefabs.SQUADRON_ID
 DOOR_LOCKED = 1  # a door's keyLock: locked until its squadrons are dead (or a switch opens it)
-LEVEL_KEYS = ("name", "track", "sky", "music", "planet", "ambient", "header", "playerBodies")
+LEVEL_KEYS = ("name", "track", "sky", "music", "planet", "ambient", "header", "playerBodies", "weather")
 SURFACES = ("solid", "ledge", "lava", "hidden", "water", "kill", "nocollide")  # TrackMesh's kinds; 4 are floor
 FLOOR_KINDS = ("solid", "ledge", "lava", "hidden")
 LIST_LIMIT = 150  # catalog types listed at once
@@ -979,10 +979,19 @@ class Session:
 
     def set_level(self, name: str, values: dict) -> dict:
         """Level settings: name, track, sky, music, planet, ambient, playerBodies ({"juno": object id, "vela": ...}: the
-        heroes in another body here), and header fields (merged by name)."""
+        heroes in another body here), weather (weather.block: "none", "snow", "rain", a stock level id to copy, or
+        the weather fields) and header fields (merged by name)."""
         level = self._level(name)
         if not isinstance(values, dict):
             raise AgentError("values is an object of level settings")
+        if "weather" in values:
+            from jfgstudio import weather
+            values = dict(values)
+            try:
+                block = weather.block(values.pop("weather"))
+            except weather.WeatherError as e:
+                raise AgentError(str(e)) from None
+            values["header"] = {**block, **(values.get("header") or {})}
         unknown = set(values) - set(LEVEL_KEYS)
         if unknown:
             raise AgentError(f"unknown level settings {sorted(unknown)}; known: {', '.join(LEVEL_KEYS)} "

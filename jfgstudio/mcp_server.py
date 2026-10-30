@@ -157,8 +157,12 @@ TOOLS = [
            "display_name": {"type": "string", "description": "the name the game shows (31 characters)"},
            "geometry": {"type": "string", "description": "a geometry name, or stock:track/<n>"},
            "planet": {"type": "string"}}, ["name", "display_name", "geometry"]),
-    _tool("set_level", "Change a level's settings: name, track, sky, music (pack:music/<name>), planet, ambient, and "
-          "header fields by name in \"header\" (fogNear, fogFar, fogR/G/B, tune ...). null removes one.",
+    _tool("set_level", "Change a level's settings: name, track, sky, music (pack:music/<name>), planet, ambient, "
+          "weather, and header fields by name in \"header\" (fogNear, fogFar, fogR/G/B, tune ...). null removes one. "
+          "weather: \"none\", \"snow\", \"rain\" (the game's own: levels 141 and 42), a stock level id to copy its "
+          "block (snow 141; rain 17, 25, 42, 43, 115, 136), or {\"like\": id, ...fields} with weather (particles), "
+          "weatherIntensity (1-255, rain lightning from 192), weatherOpacity (1-255, flashes from 128), "
+          "weatherVelX/Y/Z (drift), weatherFlags (1: rain keeps the level's fog). Rain shows in one-player only.",
           lambda s, a: s.set_level(a["level"], a["values"]), {"level": _LEVEL, "values": {"type": "object"}},
           ["level", "values"]),
     _tool("place", "Place one object, on the floor by default.",

@@ -363,6 +363,9 @@ def _check_level(project: Project, level, schemas) -> list[Problem]:
     for f in ("region", "regionIndex"):
         if header.get(f, 0) >= REGION_BLOCKS:
             out.append(Problem(ERROR, "header", lf, f"{f} {header[f]}: the game has {REGION_BLOCKS} (0-31)"))
+    from jfgstudio import weather
+    for message in weather.check(header):
+        out.append(Problem(ERROR, "weather", lf, message))  # the build refuses it too (validate_header)
 
     track = _ref(level.level["track"], "track", lf, None, out)
     if track and track.is_pack and not project.geometry_path(track.name).is_file():
