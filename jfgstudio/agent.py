@@ -644,16 +644,19 @@ class Session:
         return out
 
     def _geometry_findings(self, mesh) -> list[tuple[str, list, str]]:
-        """(key, places, problem) for geometry_checks' findings in a mesh: slivers, z-fighting, water under floor."""
+        """(key, places, problem) for geometry_checks' findings in a mesh: triangles across segment splits,
+        z-fighting, invisible walls in the open, water under floor."""
         from jfgstudio import geometry_checks as gc
         out = []
         parts = getattr(mesh, "parts", None)
-        found = gc.slivers(mesh.collision, np.concatenate([p[0] for p in parts]) if parts else None)
+        found = gc.straddlers(mesh.collision, np.concatenate([p[0] for p in parts]) if parts else None)
         if found:
-            out.append(("slivers", found, "floor triangles reach across a segment split (the importer splits a level "
-                        "into segments and the game tests a floor only in the one holding its centre): the hero falls "
-                        "through them there or sticks \"falling\" (play-tested). Cut big floor faces into tiles of "
-                        "300 or less (don't dissolve flat ground into big n-gons)"))
+            out.append(("straddlers", [f"{f['at']} (split {f['split']})" for f in found],
+                        "solid triangles reach across the importer's segment splits: the game holds each in the "
+                        "segment of its centre, so past the split a floor drops the hero (or sticks him \"falling\") "
+                        "and ground or a wall stops him like an invisible wall (play-tested). Cut big faces so no "
+                        "triangle crosses a split (the listed ones; tiles of 50-100 rarely do), or wait for the "
+                        "importer fix (decomp MSR 15)"))
         found = gc.coplanar(getattr(mesh, "visible", mesh.collision))
         if found:
             out.append(("zFighting", found, "faces in one plane overlap (either facing): they flicker. Move one off "
@@ -2550,7 +2553,7 @@ class Session:
                 except AgentError:
                     findings = []
                 for key, found, problem in findings:
-                    problems.append(val.Problem(val.WARNING, {"slivers": "floor-slivers", "zFighting": "z-fighting",
+                    problems.append(val.Problem(val.WARNING, {"straddlers": "segment-split", "zFighting": "z-fighting",
                                                               "waterUnderFloor": "water-under-floor",
                                                               "openCollider": "invisible-wall"}[key],
                                                 f"levels/{name}/level.json",

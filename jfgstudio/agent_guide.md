@@ -71,8 +71,9 @@ cover = jfg64.rock("cover", radius=95, squash=1.2, location=(x, y, jfg64.ground_
   Pass `below` (the room's floor + 100) for the floor. Studio's `surface_at` is the same: pass its `below`. Off the
   mesh it's None (a rock there raises an error naming it).
 - **Geometry the game handles badly** (`validate` and `geometry_info` find each; all play-tested):
-  `floor-slivers`: floor faces reaching across a segment split, so keep floor triangles in tiles of 300 or less
-  (never dissolve flat ground into big n-gons); `z-fighting`: faces in one plane overlapping, so set a wall a few
+  `segment-split`: triangles reaching across the importer's segment splits (the hero falls through or meets an
+  invisible wall there), so cut the listed faces so none crosses its split, and keep floors in small tiles (never
+  dissolve flat ground into big n-gons) until the importer cuts them itself (decomp MSR 15); `z-fighting`: faces in one plane overlapping, so set a wall a few
   units in and a decal's back 2 behind its front; `water-under-floor`: water just under solid floor (the hero sinks
   through it), so keep water inside its hollow, clear of the banks and the shore's sand; `invisible-wall`: a
   collider wall with floor or water going on past it, so end open ground and water at a barrier the player sees.

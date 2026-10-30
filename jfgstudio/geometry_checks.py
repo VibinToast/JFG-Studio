@@ -1,8 +1,8 @@
 """Checks of a level's own geometry that the game shows only in play (owner's play-tests of agent-built levels):
 
-- slivers: floor triangles across a segment split. The importer puts each triangle in one segment by its centre
-  (jfgformats tracks.new_world_segments), and the hero fell through sand made of slivers up to 1000 long, then
-  stuck "falling" on a dune. Floors in tiles of 300 at most rarely cross a split by much.
+- straddlers: triangles across a segment split. The importer puts each triangle in one segment by its centre
+  (jfgformats tracks.new_world_segments), and past the split it is lost: the hero fell through decks and sand,
+  stuck "falling", and met invisible walls where ground crossed a split (decomp MSR 15 is fixing the importer).
 - coplanar: faces in one plane that overlap (either facing): they flicker (z-fighting): two blocks' walls in one
   plane, a decal's front and back in one place.
 - water under floor: a water surface just under solid floor: the hero sank through the sand over a tide pool
@@ -17,8 +17,9 @@ import math
 
 import numpy as np
 
-SLIVER_REACH = 250  # a floor triangle reaching this far past a segment split, on the side away from its centre: the
-#                    hero fell through slivers reaching 600+ (play-tested); tiles of 300 reach 200 at most and played
+SPLIT_REACH = 2  # a triangle reaching this far past a segment split, on the side away from its centre: lost there
+#                  (a deck piece reaching 31 past one dropped the hero; a ground triangle 55 past one was an invisible
+#                  wall, play-tested; the pack session walked the built track's BSP at each spot)
 COPLANAR_NORMAL = 0.999  # normals this close (either way) count as one plane
 COPLANAR_DISTANCE = 0.5  # and their planes this close
 WATER_UNDER = 30  # solid floor this far over a water surface: the hero sank through sand 8 over a pool's water
@@ -31,28 +32,29 @@ def _normals(t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return n / np.maximum(length, 1e-9)[:, None], length
 
 
-def slivers(collision, everything=None) -> list[list[int]]:
-    """Floor triangles that reach across one of the importer's segment splits (jfgformats new_world_segments, run on
-    `everything`: the level's triangles, the collision when left out) more than SLIVER_REACH past it, on the side
-    away from their centre: the game tests a floor only in the segment holding its centre, so past the split the
-    hero falls through it. Their centres."""
+def straddlers(collision, everything=None) -> list[dict]:
+    """Solid triangles that reach across one of the importer's segment splits (jfgformats new_world_segments, run on
+    `everything`: the level's triangles, the collision when left out) more than SPLIT_REACH past it, on the side
+    away from their centre. The importer puts each triangle whole in the segment of its centre, but the BSP sends the
+    hero past the split to the next segment, which doesn't hold it: a floor there drops him, a wall or ground there
+    stops him like an invisible wall (play-tested). Each: {"at": its centre, "split": "x 444"}."""
     t = np.asarray(collision, np.float64).reshape(-1, 3, 3)
     if not len(t):
         return []
-    n, area = _normals(t)
-    floors = t[(n[:, 1] > 0.7) & (area > 1e-6)]
+    _, area = _normals(t)
+    solid = t[area > 1e-6]
     nodes = _splits(np.asarray(everything if everything is not None else collision, np.float64).reshape(-1, 3, 3))
-    if not nodes or not len(floors):
+    if not nodes or not len(solid):
         return []
     out = []
-    for tri in floors:
+    for tri in solid:
         c = tri.mean(axis=0)
         node = 0
         while node >= 0:
             left, right, axis, _, value = nodes[node]
             reach = value - tri[:, axis].min() if c[axis] >= value else tri[:, axis].max() - value
-            if reach > SLIVER_REACH:
-                out.append([round(float(v)) for v in c])
+            if reach > SPLIT_REACH:
+                out.append({"at": [round(float(v)) for v in c], "split": f"{'xyz'[axis]} {value}"})
                 break
             node = left if c[axis] < value else right
     return out

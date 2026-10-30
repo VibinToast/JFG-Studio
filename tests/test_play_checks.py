@@ -42,12 +42,13 @@ def _down(quads) -> list:
 
 
 class Geometry(unittest.TestCase):
-    def test_slivers_across_a_segment_split(self):
+    def test_triangles_across_a_segment_split(self):
         ground = _grid(30, 100)  # 1800 triangles: the importer splits them into segments
-        self.assertEqual(geometry_checks.slivers(np.array(ground, "f8")), [])
+        base = len(geometry_checks.straddlers(np.array(ground, "f8")))  # medians fall inside cells: some straddle
         sliver = [[(-1400, 1, -40), (1400, 1, -40), (1400, 1, -60)]]  # 2800 long, over every split along x
-        found = geometry_checks.slivers(np.array(ground + sliver, "f8"))
-        self.assertEqual(len(found), 1)
+        found = geometry_checks.straddlers(np.array(ground + sliver, "f8"))
+        self.assertGreater(len(found), base)
+        self.assertIn([467, 1, -47], [f["at"] for f in found])
 
     def test_coplanar_overlaps(self):
         a = _quad(0, 0, 100, 100, 0)
