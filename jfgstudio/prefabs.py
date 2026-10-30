@@ -116,6 +116,13 @@ def obstacles(mesh, poly, ground: float) -> tuple[list[tuple[float, float, float
     tops = {c: heights_at(mesh.collision, *at(*c), facing=1) for c in cells}
     blocked = {c for c in cells if ((tops[c] > ground + COVER_RISE) & (tops[c] < ground + COVER_TOP)).any()}
     raised = {c for c in cells if ((tops[c] > ground + COVER_LINK) & (tops[c] < ground + COVER_TOP)).any()}
+    # pillars up to the ceiling have no top: a cell whose point at cover height is inside something solid
+    from jfgstudio.gui.viewport import inside_solid
+    for c in cells - blocked:
+        x, z = at(*c)
+        if inside_solid(mesh.collision, (x, ground + COVER_RISE, z), reach=COVER_STEP * 20):
+            blocked.add(c)
+            raised.add(c)
     seen, boxes, edge, joined = set(), [], 0, 0
     for c in sorted(blocked):
         if c in seen:

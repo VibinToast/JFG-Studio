@@ -387,6 +387,41 @@ def raycast(triangles: np.ndarray, origin, direction) -> float | None:
     return float(t[hit].min()) if hit.any() else None
 
 
+def first_hit(triangles: np.ndarray, origin, direction) -> tuple[float, bool] | None:
+    """(distance, back) of the nearest of the triangles (n, 3, 3) along a ray, `back` when the ray meets the face's
+    back (its counter-clockwise front faces away from the ray's start); None when it meets none."""
+    if not len(triangles):
+        return None
+    o, d = np.asarray(origin, "f8"), np.asarray(direction, "f8")
+    a = triangles[:, 0].astype("f8")
+    e1, e2 = triangles[:, 1] - a, triangles[:, 2] - a
+    p = np.cross(d, e2)
+    det = np.einsum("ij,ij->i", e1, p)
+    ok = np.abs(det) > 1e-9
+    inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+    t_vec = o - a
+    u = np.einsum("ij,ij->i", t_vec, p) * inv
+    q = np.cross(t_vec, e1)
+    v = (q @ d) * inv
+    t = np.einsum("ij,ij->i", e2, q) * inv
+    hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 1e-3)
+    if not hit.any():
+        return None
+    i = int(np.flatnonzero(hit)[np.argmin(t[hit])])
+    normal = np.cross(e1[i], e2[i])
+    return float(t[i]), bool(normal @ d > 0)
+
+
+def inside_solid(triangles: np.ndarray, point, reach: float = 2000.0) -> bool:
+    """A point inside something closed (a pillar up to the ceiling, a block): along the four level directions the
+    nearest face is met from behind, within `reach`."""
+    for d in ((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 0.0, -1.0)):
+        hit = first_hit(triangles, point, d)
+        if hit is None or hit[0] > reach or not hit[1]:
+            return False
+    return True
+
+
 def _surface(mat: dict) -> str:
     """The game surface a material makes, from the same words and flags tracks.py reads."""
     name = mat.get("name", "").lower()

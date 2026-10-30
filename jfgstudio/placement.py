@@ -119,8 +119,14 @@ def check(mesh, objects: list[dict], schemas: dict, behaviours: dict | None = No
         if half is not None:
             if s.key == "refuel":
                 half = max(half, o.get("fields", {}).get("radius", 0))
+            points = RING
+            yaw_f = s.role("yaw")
+            if s.key == "door" and yaw_f is not None:  # a door spans its doorway: level along its width only (a
+                a = obj.angle_of(yaw_f, o.get("fields", {}).get(yaw_f.name, 0))  # stair starts just behind a reveal)
+                wx, wz = math.cos(a), -math.sin(a)
+                points = [(wx * k, wz * k) for k in (1, 0.5, -0.5, -1)]
             ring = [mesh.floor_height(x + dx * half, z + dz * half, y + RISE)
-                    for dx, dz in RING]
+                    for dx, dz in points]
             ring = [h for h in ring if h is not None]
             if ring and max(ring) - min(ring) > TILT:
                 finding.update({"problem": "on a slope", "by": round(max(ring) - min(ring), 1)})

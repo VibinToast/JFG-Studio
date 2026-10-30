@@ -889,3 +889,33 @@ class RunnerFindings(AgentTest):
         members = [o for o in made if o.get("schema") == "squadmember"]
         self.assertTrue(all(m["pos"][1] < 40 for m in members), [m["pos"] for m in members])
         self.assertTrue([o for o in made if o.get("schema") == "regioninfo" or "hole" in str(o.get("uid", ""))])
+
+    def test_pillars_to_the_ceiling(self):
+        self.with_catalog()
+
+        def pillar(x0, z0, x1, z1):  # four walls from floor to ceiling, facing out, no top
+            out = []
+            corners = [(x0, z0), (x0, z1), (x1, z1), (x1, z0)]
+            for k in range(4):
+                (ax, az), (bx, bz) = corners[k], corners[(k + 1) % 4]
+                p, q, r, t = (ax, 0, az), (bx, 0, bz), (bx, 400, bz), (ax, 400, az)
+                out += [[p, q, r], [p, r, t]]
+            return out
+        roof = [[t[0], t[2], t[1]] for t in _quad(-1000, -1000, 1000, 1000, 400)]
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + pillar(100, -50, 200, 50) + roof, (), KILL)
+        poly = [(-300, -300), (300, -300), (300, 300), (-300, 300)]
+        boxes, _, _ = prefabs.obstacles(self.mesh, poly, 0)
+        self.assertEqual(len(boxes), 1)
+        made = self.s.place_squad("home", [0, 0], "0x29", members=4, spread=150)  # one lands in the pillar
+        for m in (o for o in made if o.get("schema") == "squadmember"):
+            self.assertFalse(100 <= m["pos"][0] <= 200 and -50 <= m["pos"][2] <= 50, m["pos"])
+
+    def test_switch_where_asked_and_lone_lookout(self):
+        self.with_catalog()
+        out = self.s.place_switch_door("home", [300, 136, 0], door="new", door_type="0x1AD", door_pos=[0, -200])
+        switch = next(o for o in out if o.get("type") == "stock:objtype/0x48")
+        self.assertEqual(switch["pos"][1], 136)
+        crate = _block(-60, 200, 60, 320, 0, 100)
+        self.mesh = QuadMesh(_quad(-1000, -1000, 1000, 1000, 0) + crate, (), KILL)
+        made = self.s.place_squad("home", [0, 0], "0x29", members=1)
+        self.assertFalse([o for o in made if o.get("schema") == "regioninfo"])

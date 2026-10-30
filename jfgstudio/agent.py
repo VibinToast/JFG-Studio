@@ -1447,11 +1447,19 @@ class Session:
             if dry is None:
                 dry = (cx + spread * math.sin(a), cz + spread * math.cos(a))
                 wet.append(k)
-            at = self._pos(lv, spot(*dry), self.schemas["squadmember"], True)
-            if cy is None and at[1] > sq_pos[1] + MEMBER_RISE:  # on a block or crate: beside it, at the squad's ground
-                beside = self._ground_spot(lv, at[0], at[2], sq_pos[1])
+            try:
+                at = self._pos(lv, spot(*dry), self.schemas["squadmember"], True)
+            except AgentError:  # no floor there (inside a pillar standing on nothing): beside it instead
+                at = None
+            from jfgstudio.gui.viewport import inside_solid
+            if at is None or (cy is None and at[1] > sq_pos[1] + MEMBER_RISE) or inside_solid(
+                    self._mesh(lv.name).collision, (at[0], at[1] + 30, at[2]), reach=400):
+                # on a block or crate, or inside a pillar: beside it, at the squad's ground
+                beside = self._ground_spot(lv, dry[0], dry[1], sq_pos[1])
                 if beside is not None:
                     at = beside
+                elif at is None:
+                    at = list(sq_pos)
             m_fields = {"squadron": squadron_id}
             if target is not None:
                 m_fields["yaw"] = self._toward(self.schemas["squadmember"], (at[0], at[2]), target)
@@ -1476,7 +1484,8 @@ class Session:
             self._save()
             made.append(self._describe(existing))
         try:
-            made += self.add_cover(lv.name, squadron["uid"])
+            if members > 1 or spawns_own:  # a lone lookout stands at its post: it takes no cover
+                made += self.add_cover(lv.name, squadron["uid"])
         except AgentError as e:  # no geometry to look at yet
             made.append({"warning": f"no cover added ({e}): run add_cover once the level has geometry"})
         if spawns_own:
@@ -1671,6 +1680,7 @@ class Session:
     def _ground_spot(self, lv: proj.Level, x: float, z: float, ground: float) -> list[int] | None:
         """A dry place near (x, z) standing no more than MEMBER_RISE over `ground` (off the top of a block or crate
         it landed on: two squad members stood on 110-tall cover blocks, play-tested); None when there is none."""
+        from jfgstudio.gui.viewport import inside_solid
         member = self.schemas["squadmember"]
         for k in range(1, 25):
             r = 40 * ((k + 7) // 8)
@@ -1678,8 +1688,12 @@ class Session:
             px, pz = x + r * math.cos(a), z + r * math.sin(a)
             if not self._dry(lv.name, px, pz):
                 continue
-            at = self._pos(lv, [px, pz], member, True)
-            if at[1] <= ground + MEMBER_RISE:
+            try:
+                at = self._pos(lv, [px, pz], member, True)
+            except AgentError:
+                continue
+            if at[1] <= ground + MEMBER_RISE and not inside_solid(self._mesh(lv.name).collision,
+                                                                  (at[0], at[1] + 30, at[2]), reach=400):
                 return at
         return None
 
@@ -1877,7 +1891,8 @@ class Session:
         """A shootable switch (the game's target) that keeps a door locked until it is shot: `door` "new" (with
         door_type and door_pos) or a door's uid. Shot, it opens the door and sets a game flag of the pack's (103-127,
         the first one free; `flag` to choose), so the door stays open after a reload; `saved` false: no flag, the door
-        locks again when the level reloads. `switch_lift`: its height over the floor (on a wall, say)."""
+        locks again when the level reloads. `switch_lift`: its height over the floor (on a wall, say);
+        `switch_pos` [x, y, z]: exactly there (on a wall over an alcove's sill)."""
         lv = self._level(level)
         target_schema = self.schemas["target"]
         placer = prefabs.Placer(lv, self.schemas, self._behaviours(), self.catalog())
@@ -1912,7 +1927,8 @@ class Session:
         if switch_facing is not None:
             fields.update([self._facing(target_schema, switch_facing,
                                         (float(switch_pos[0]), float(switch_pos[-1])))])
-        placer.single(0x48, self._pos(lv, switch_pos, target_schema, True, switch_lift), name="door switch",
+        placer.single(0x48, self._pos(lv, switch_pos, target_schema, len(switch_pos) != 3, switch_lift),
+                      name="door switch",
                       fields=fields)
         if door == "new":
             d_oid, d_schema, _ = self._type(door_type)
